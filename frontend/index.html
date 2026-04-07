@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mate Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/main.css">
+    <style>
+        /* Force light theme colors based on snapshots */
+        body.light-mode {
+            background-color: #f0f2f5;
+            color: #1a1d1e;
+        }
+        body.light-mode #sidebar {
+            background-color: #ffffff !important;
+            border-right: 1px solid #e5e7eb;
+        }
+        body.light-mode .sidebar-item {
+            color: #4b5563;
+        }
+        body.light-mode .sidebar-item:hover {
+            color: #111827;
+            background-color: #f3f4f6;
+        }
+        body.light-mode .sidebar-item.active {
+            background-color: #eff6ff !important;
+            color: #2563eb !important;
+        }
+        body.light-mode .sidebar-group-label {
+            color: #9ca3af;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 1.5rem 1.5rem 0.5rem;
+        }
+        body.light-mode main header {
+            background-color: transparent;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        body.light-mode #view-title {
+            color: #111827;
+        }
+        /* Auth Overlay */
+        body.light-mode #auth-overlay { background-color: rgba(240,242,245,0.85); backdrop-filter: blur(12px); }
+        #auth-overlay { background-color: rgba(10,13,22,0.8); backdrop-filter: blur(12px); }
+    </style>
+</head>
+<body class="flex h-screen light-mode">
+
+    <!-- Design System Ambient Background -->
+    <div class="ambient-blobs pointer-events-none">
+        <div class="blob w-[900px] h-[1400px] bg-blue-600/10 top-[-20%] left-1/2 -translate-x-1/2"></div>
+    </div>
+    <div class="grid-overlay pointer-events-none"></div>
+
+    <!-- Auth Overlay -->
+    <section id="auth-overlay" class="fixed inset-0 z-[100] flex items-center justify-center hidden">
+        <div class="bg-white p-10 rounded-3xl border border-slate-200 w-full max-w-md shadow-2xl flex flex-col items-center">
+            <div class="flex flex-col items-center mb-10 w-full">
+                <div class="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-blue-200">
+                    <i class="fas fa-robot text-white text-3xl"></i>
+                </div>
+                <h2 class="text-4xl font-bold text-slate-900 tracking-tight mb-1">Mate</h2>
+                <p class="text-slate-500 text-sm font-medium">Meet Your Partner</p>
+            </div>
+            
+            <form id="auth-form" class="space-y-5 w-full">
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-500 uppercase ml-1">Account</label>
+                    <input type="text" id="username" placeholder="Enter your account" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-900">
+                </div>
+                <div class="space-y-1">
+                    <label class="text-xs font-bold text-slate-500 uppercase ml-1">Password</label>
+                    <input type="password" id="password" placeholder="Enter your password" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-900">
+                </div>
+                <div id="auth-hint" class="text-blue-500 text-xs text-center hidden font-bold">FIRST TIME SETUP — ENTER YOUR CREDENTIALS TO CREATE AN ACCOUNT</div>
+                <div id="auth-error" class="text-red-500 text-xs text-center hidden font-bold">Access Denied</div>
+                <button id="auth-submit-btn" type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-100 transition-all active:scale-[0.98]">Login</button>
+            </form>
+        </div>
+    </section>
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="w-64 flex flex-col hidden overflow-y-auto shrink-0 transition-all">
+        <div class="p-8 pb-4">
+            <div class="flex items-center gap-3 text-blue-600 mb-8">
+                <i class="fas fa-robot text-3xl"></i>
+                <span class="text-2xl font-bold text-slate-900 tracking-tight">Mate</span>
+            </div>
+        </div>
+        
+        <nav id="main-nav" class="flex-1 pb-10">
+            <div class="sidebar-group-label">Dashboard</div>
+            <button data-tab="dashboard" class="sidebar-item w-full flex items-center gap-3 px-6 py-3 transition-all font-bold text-sm">
+                <i class="fas fa-th-large w-5 text-center"></i> Dashboard
+            </button>
+
+            <div class="sidebar-group-label">Chat</div>
+            <button data-tab="chat" class="sidebar-item w-full flex items-center gap-3 px-6 py-3 transition-all font-bold text-sm">
+                <i class="fas fa-comments w-5 text-center"></i> Chat
+            </button>
+
+            <div class="sidebar-group-label">Agent</div>
+            <button data-tab="agents" class="sidebar-item w-full flex items-center gap-3 px-6 py-3 transition-all font-bold text-sm">
+                <i class="fas fa-user-tie w-5 text-center"></i> Agents
+            </button>
+
+            <div class="sidebar-group-label">Agent Tools</div>
+            <button data-tab="mcps" class="sidebar-item w-full flex items-center gap-3 px-6 py-3 transition-all font-bold text-sm">
+                <i class="fas fa-plug w-5 text-center"></i> MCPs
+            </button>
+            <button data-tab="apis" class="sidebar-item w-full flex items-center gap-3 px-6 py-3 transition-all font-bold text-sm">
+                <i class="fas fa-code w-5 text-center"></i> APIs
+            </button>
+            <button data-tab="skills" class="sidebar-item w-full flex items-center gap-3 px-6 py-3 transition-all font-bold text-sm">
+                <i class="fas fa-bolt w-5 text-center"></i> Skills
+            </button>
+
+            <div class="sidebar-group-label">Regular Work</div>
+            <button data-tab="cronjobs" class="sidebar-item w-full flex items-center gap-3 px-6 py-3 transition-all font-bold text-sm">
+                <i class="fas fa-clock w-5 text-center"></i> Reminders
+            </button>
+            <button data-tab="tasks" class="sidebar-item w-full flex items-center gap-3 px-6 py-3 transition-all font-bold text-sm">
+                <i class="fas fa-tasks w-5 text-center"></i> Tasks
+            </button>
+
+            <div class="sidebar-group-label">Control</div>
+            <button data-tab="users" class="sidebar-item w-full flex items-center gap-3 px-6 py-3 transition-all font-bold text-sm">
+                <i class="fas fa-users w-5 text-center"></i> Users
+            </button>
+            <button data-tab="gateways" class="sidebar-item w-full flex items-center gap-3 px-6 py-3 transition-all font-bold text-sm">
+                <i class="fas fa-network-wired w-5 text-center"></i> Channels
+            </button>
+            <button data-tab="sessions" class="sidebar-item w-full flex items-center gap-3 px-6 py-3 transition-all font-bold text-sm">
+                <i class="fas fa-history w-5 text-center"></i> Sessions
+            </button>
+
+            <div class="sidebar-group-label">Settings</div>
+            <button data-tab="config" class="sidebar-item w-full flex items-center gap-3 px-6 py-3 transition-all font-bold text-sm">
+                <i class="fas fa-sliders-h w-5 text-center"></i> Config
+            </button>
+            <button data-tab="logs" class="sidebar-item w-full flex items-center gap-3 px-6 py-3 transition-all font-bold text-sm">
+                <i class="fas fa-terminal w-5 text-center"></i> Logs
+            </button>
+        </nav>
+
+        <div class="mt-auto p-6 border-t border-slate-100">
+            <button onclick="App.logout()" class="text-slate-400 hover:text-red-500 transition-colors flex items-center gap-3 w-full px-4 py-3 rounded-xl hover:bg-red-50 font-bold text-sm">
+                <i class="fas fa-power-off w-5 text-center"></i> Logout
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main View -->
+    <main id="main-view" class="flex-1 flex flex-col overflow-hidden hidden">
+        <header class="h-20 flex items-center justify-between px-10">
+            <h2 id="view-title" class="text-2xl font-bold tracking-tight">Overview</h2>
+            <div id="header-actions" class="flex items-center gap-4"></div>
+        </header>
+
+        <div id="content-area" class="flex-1 overflow-y-auto custom-scrollbar p-10">
+            <div id="view-dashboard" class="main-tab-view hidden"></div>
+            <div id="view-users" class="main-tab-view hidden"></div>
+            <div id="view-tasks" class="main-tab-view hidden h-full"></div>
+            <div id="view-gateways" class="main-tab-view hidden"></div>
+            <div id="view-sessions" class="main-tab-view hidden"></div>
+            <div id="view-information" class="main-tab-view hidden"></div>
+            <div id="view-cronjobs" class="main-tab-view hidden"></div>
+            <div id="view-agents" class="main-tab-view hidden"></div>
+            <div id="view-mcps" class="main-tab-view hidden"></div>
+            <div id="view-logs" class="main-tab-view hidden"></div>
+            <div id="view-apis" class="main-tab-view hidden"></div>
+            <div id="view-skills" class="main-tab-view hidden"></div>
+            <div id="view-chat" class="main-tab-view hidden h-full flex"></div>
+            <div id="view-config" class="main-tab-view hidden"></div>
+            <div id="view-docs" class="main-tab-view hidden"></div>
+        </div>
+    </main>
+
+    <!-- Modals -->
+    <div id="modal-container" class="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm hidden">
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div class="px-8 py-5 border-b border-slate-100 flex items-center justify-between">
+                <h3 id="modal-title" class="text-lg font-bold text-slate-900">System Action</h3>
+                <button onclick="UI.closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="p-8">
+                <div class="space-y-2">
+                    <label class="text-xs font-bold text-slate-500 uppercase block ml-1">Name</label>
+                    <input type="text" id="modal-input" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-900">
+                </div>
+                <div class="mt-8 flex gap-3">
+                    <button onclick="UI.closeModal()" class="flex-1 px-4 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-50 transition-all">CANCEL</button>
+                    <button id="modal-confirm" class="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all">CONFIRM</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cronjob Modal -->
+    <div id="cron-modal" class="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm hidden">
+        <div class="bg-white w-full max-w-lg overflow-hidden rounded-[2.5rem] shadow-2xl border border-slate-200">
+            <div class="px-10 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900">Schedule Proactive Message</h3>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Send messages automatically</p>
+                </div>
+                <button onclick="UI.closeCronModal()" class="text-slate-400 hover:text-rose-500 transition-colors"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <div class="p-10 space-y-6">
+                <div class="grid grid-cols-2 gap-6">
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Target Channel</label>
+                        <select id="cron-channel" class="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-blue-500/20 outline-none">
+                            <option value="dc">Discord</option><option value="tg">Telegram</option><option value="line">Line</option>
+                        </select>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Recipient ID</label>
+                        <input type="text" id="cron-recipient" placeholder="Platform User/Group ID" class="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-mono text-slate-900 focus:ring-2 focus:ring-blue-500/20 outline-none">
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between px-1">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Schedule & Message</label>
+                        <span class="text-[9px] font-mono text-blue-500 bg-blue-50 px-2 py-0.5 rounded">Standard Cron Syntax</span>
+                    </div>
+                    
+                    <div class="relative group">
+                        <!-- Cron parts labels for guidance -->
+                        <div class="flex gap-4 mb-2 px-6 text-[8px] font-black text-slate-300 uppercase tracking-tighter">
+                            <span class="w-4">min</span>
+                            <span class="w-4">hr</span>
+                            <span class="w-4">day</span>
+                            <span class="w-4">mon</span>
+                            <span class="w-4">week</span>
+                            <span class="ml-2 text-blue-400">--- your message content ---</span>
+                        </div>
+                        <textarea id="cron-full-input" rows="4" placeholder="* * * * * Type your message here..." 
+                            class="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-5 font-mono text-sm text-blue-600 focus:ring-2 focus:ring-blue-500/20 outline-none resize-none shadow-inner"></textarea>
+                    </div>
+
+                    <!-- Helper Quick Examples -->
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="document.getElementById('cron-full-input').value='0 * * * * Hello every hour!'" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 text-[9px] font-bold transition-all">Hourly</button>
+                        <button onclick="document.getElementById('cron-full-input').value='0 9 * * * Good morning!'" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 text-[9px] font-bold transition-all">Daily 9AM</button>
+                        <button onclick="document.getElementById('cron-full-input').value='30 18 * * 1-5 Office update...'" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 text-[9px] font-bold transition-all">Work Days 6:30PM</button>
+                    </div>
+                </div>
+
+                <div class="pt-4 flex gap-4">
+                    <button onclick="UI.closeCronModal()" class="flex-1 px-4 py-4 rounded-xl text-xs font-bold text-slate-400 hover:bg-slate-50 transition-all uppercase tracking-widest">Cancel</button>
+                    <button onclick="UI.saveCronjobLine()" class="flex-1 px-4 py-4 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all uppercase tracking-widest">Save Task</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#2563eb",
+                        "accent": "#2563eb",
+                        "accent-high": "#1d4ed8"
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/tasks.js"></script>
+    <script src="js/apis.js"></script>
+    <script src="js/skills.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

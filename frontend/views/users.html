@@ -1,0 +1,80 @@
+<div id="users-explorer" class="flex gap-10 h-[calc(100vh-160px)]">
+    <!-- Left: Identity Map List -->
+    <div class="w-96 flex flex-col bg-white p-0 overflow-hidden border border-slate-100 rounded-[2rem] shadow-xl">
+        <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div>
+                <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Identity Map</span>
+                <p id="users-count-label" class="text-[10px] text-slate-400 font-medium mt-0.5">— identities</p>
+            </div>
+            <button onclick="App.refresh()" class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center hover:scale-110 transition-transform shadow-lg shadow-blue-200">
+                <i class="fas fa-sync-alt text-xs"></i>
+            </button>
+        </div>
+        <div id="identity-list" class="flex-1 overflow-y-auto divide-y divide-slate-50 custom-scrollbar">
+            <div class="text-center py-20 text-slate-300">
+                <i class="fas fa-id-card text-4xl mb-4 block"></i>
+                <p class="font-bold text-sm">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: User Profile Detail -->
+    <div class="flex-1 flex flex-col bg-white p-0 overflow-hidden border border-slate-100 rounded-[2rem] shadow-xl">
+        <div id="user-placeholder" class="flex-1 flex flex-col items-center justify-center opacity-20 uppercase tracking-[0.5em] font-headline text-slate-400">
+            <i class="fas fa-user text-6xl mb-8"></i>
+            <p>Select Identity</p>
+        </div>
+
+        <div id="user-content" class="flex-1 flex-col hidden overflow-hidden">
+            <!-- Fixed Header -->
+            <div class="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+                <div class="flex items-center gap-6">
+                    <div id="user-channel-icon" class="w-16 h-16 rounded-2xl bg-sky-500 text-white flex items-center justify-center text-2xl shadow-xl"></div>
+                    <div>
+                        <h2 id="user-detail-name" class="text-3xl font-headline font-bold text-slate-900 uppercase tracking-tighter">—</h2>
+                        <div id="user-status-badge" class="mt-1"></div>
+                    </div>
+                </div>
+                <div id="user-detail-actions" class="flex gap-3"></div>
+            </div>
+
+            <!-- Scrollable Body -->
+            <div class="flex-1 overflow-y-auto p-10 space-y-8 bg-slate-50/30 custom-scrollbar">
+                <!-- Identity Info -->
+                <div class="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+                    <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Identity</span>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div class="flex items-center gap-4">
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest w-24 shrink-0">Session ID</span>
+                            <span id="user-session-id" class="font-mono text-xs text-slate-600 break-all"></span>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest w-24 shrink-0">Hashed ID</span>
+                            <span id="user-hashed-id" class="font-mono text-xs text-slate-600 break-all"></span>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest w-24 shrink-0">Channel</span>
+                            <span id="user-channel-label" class="text-xs text-slate-600"></span>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest w-24 shrink-0">Joined</span>
+                            <span id="user-created-at" class="text-xs text-slate-600"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profile Info -->
+                <div id="user-profile-section" class="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+                    <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Profile</span>
+                    </div>
+                    <div id="user-profile-body" class="p-6 space-y-4">
+                        <p class="text-[11px] text-slate-400 italic">No profile linked yet.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

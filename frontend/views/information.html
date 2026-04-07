@@ -1,0 +1,35 @@
+<!-- Sub-navigation Header -->
+<div class="mb-8 flex items-center justify-between">
+    <div class="flex p-1 bg-white rounded-2xl border border-slate-100 shadow-sm">
+        <button onclick="App.switchSubTab('information', 'identities')" data-subtab="identities" class="tab-btn active px-6 py-2 rounded-xl text-xs font-bold transition-all">
+            Identity Map
+        </button>
+        <button onclick="App.switchSubTab('information', 'user_states')" data-subtab="user_states" class="tab-btn px-6 py-2 rounded-xl text-xs font-bold transition-all text-slate-400 hover:text-slate-600">
+            System Persistence
+        </button>
+    </div>
+</div>
+
+<!-- Main Table Area -->
+<div class="flex-1 bg-white border border-slate-100 rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col h-[calc(100vh-220px)]">
+    <div class="px-8 py-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-2 h-2 rounded-full bg-blue-600"></div>
+            <span class="text-xs font-black text-slate-500 uppercase tracking-widest">Database Record Stream</span>
+        </div>
+        <button onclick="App.refresh()" class="text-blue-600 text-[10px] font-bold hover:text-blue-700 transition-all uppercase flex items-center gap-2">
+            <i class="fas fa-sync-alt"></i> Sync Data
+        </button>
+    </div>
+
+    <div class="flex-1 overflow-x-auto overflow-y-auto custom-scrollbar">
+        <table class="w-full text-left">
+            <thead id="info-thead" class="sticky top-0 z-10 bg-white/90 backdrop-blur-md">
+                <!-- Head by JS -->
+            </thead>
+            <tbody id="info-tbody" class="divide-y divide-slate-50 text-slate-900">
+                <tr><td colspan="6" class="text-center py-20 text-slate-300 italic">Syncing with PostgreSQL...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>

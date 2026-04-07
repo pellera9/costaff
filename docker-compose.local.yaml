@@ -1,0 +1,105 @@
+services:
+  bot-telegram:
+    build: .
+    container_name: mateclaw-bot-telegram
+    restart: always
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+      - ADK_API_BASE_URL=http://mateclaw-agent:8080
+      - ADK_APP_NAME=mateclaw_agent
+    command: python src/bot/telegram_bot.py
+    depends_on:
+      - mateclaw-agent
+
+  bot-discord:
+    build: .
+    container_name: mateclaw-bot-discord
+    restart: always
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+      - ADK_API_BASE_URL=http://mateclaw-agent:8080
+      - ADK_APP_NAME=mateclaw_agent
+    command: python src/bot/discord_bot.py
+    depends_on:
+      - mateclaw-agent
+
+  bot-line:
+    build: .
+    container_name: mateclaw-bot-line
+    restart: always
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+      - ADK_API_BASE_URL=http://mateclaw-agent:8080
+      - ADK_APP_NAME=mateclaw_agent
+    command: python src/bot/line_bot.py
+    depends_on:
+      - mateclaw-agent
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: mateclaw-postgres
+    restart: always
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-mate}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-mate_pass}
+      - POSTGRES_DB=${POSTGRES_DB:-mate_db}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+
+  mcp-mateclaw:
+    build: .
+    container_name: mateclaw-mcp-mateclaw
+    restart: always
+    ports:
+      - "${MCP_MATECLAW_PORT:-8081}:8081"
+    volumes:
+      - ./data:/app/data
+      - ./mcp_servers:/app/mcp_servers
+      - ./src:/app/src
+    env_file:
+      - .env
+    environment:
+      - MCP_TRANSPORT=sse
+      - PYTHONUNBUFFERED=1
+      - ADK_API_BASE_URL=http://mateclaw-agent:8080
+      - PYTHONPATH=/app
+    command: python mcp_servers/mateclaw/server.py
+
+  mateclaw-agent:
+    build:
+      context: .
+      dockerfile: agents/mateclaw_agent/Dockerfile
+    container_name: mateclaw-agent
+    restart: on-failure
+    ports:
+      - "${MATECLAW_AGENT_PORT:-18080}:8080"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    environment:
+      - MCP_SERVER_URLS=${MCP_SERVER_URLS}
+      - ADK_SESSION_SERVICE_URI=${ADK_SESSION_SERVICE_URI:-sqlite+aiosqlite:////app/data/mateclaw_agent.db}
+    command: ["adk", "web", "--host", "0.0.0.0", "--port", "8080", "."]
+    depends_on:
+      - mcp-mateclaw

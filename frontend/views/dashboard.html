@@ -1,0 +1,52 @@
+<!-- Section: Hardware Infrastructure -->
+<div class="mb-4 p-4 md:p-6">
+    <div class="flex items-center justify-between mb-4 asymmetric-header">
+        <div>
+            <h2 class="text-3xl font-headline font-bold tracking-tight uppercase text-slate-900">System Health</h2>
+            <p class="text-xs text-blue-600 font-bold tracking-widest mt-1 opacity-60 uppercase">Real-time Node Pulse</p>
+        </div>
+        <div id="dashboard-last-update" class="text-[10px] font-mono text-slate-400 uppercase">SYNC_PENDING</div>
+    </div>
+    
+    <div id="os-stats-grid" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <!-- Bento Cards by JS -->
+    </div>
+</div>
+
+<!-- Section: Ecosystem Metrics -->
+<div class="mb-4 p-4 md:p-6">
+    <div class="asymmetric-header mb-4">
+        <h3 class="text-lg font-headline font-bold text-slate-400 uppercase tracking-widest">Ecosystem Metrics</h3>
+    </div>
+    <div id="stats-grid" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <!-- Bento Cards by JS -->
+    </div>
+</div>
+
+<!-- Section: License -->
+<div class="mb-4 p-4 md:p-6">
+    <div class="asymmetric-header mb-4">
+        <h3 class="text-lg font-headline font-bold text-slate-400 uppercase tracking-widest">License</h3>
+    </div>
+    <div id="license-card" class="bg-white border border-slate-100 rounded-[2rem] shadow-xl p-6">
+        <p class="text-slate-300 italic text-xs">Loading license info...</p>
+    </div>
+</div>
+
+<!-- Section: Process Matrix -->
+<div class="p-4 md:p-6">
+    <div class="card-linear overflow-hidden bg-white border border-slate-100 rounded-[2rem] shadow-xl p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-headline font-bold text-slate-900 uppercase tracking-widest">Runtime Monitor</h3>
+            <span class="status-badge badge-live"><span class="badge-dot"></span>Live Data Stream</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead id="status-thead"></thead>
+                <tbody id="status-table">
+                    <!-- Rows by JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

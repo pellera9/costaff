@@ -1,0 +1,163 @@
+<div class="h-full flex flex-col gap-6">
+    <!-- Task Controls -->
+    <div class="flex justify-between items-center">
+        <p class="text-slate-500 font-medium">Manage and schedule automated agent tasks.</p>
+        <button onclick="Tasks.openModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-100 transition-all active:scale-95">
+            <i class="fas fa-plus"></i> NEW TASK
+        </button>
+    </div>
+
+    <!-- Kanban Board -->
+    <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-6 overflow-hidden">
+        <!-- Backlog -->
+        <div class="flex flex-col gap-4 bg-slate-50 rounded-2xl p-4 border border-slate-100 overflow-hidden">
+            <div class="flex items-center justify-between px-2">
+                <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-slate-400"></span> BACKLOG
+                </h3>
+                <span id="count-backlog" class="bg-slate-200 text-slate-600 text-xs font-bold px-2 py-0.5 rounded-full">0</span>
+            </div>
+            <div id="list-backlog" class="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-1">
+                <!-- Task Cards -->
+            </div>
+        </div>
+
+        <!-- Doing -->
+        <div class="flex flex-col gap-4 bg-blue-50/50 rounded-2xl p-4 border border-blue-100/50 overflow-hidden">
+            <div class="flex items-center justify-between px-2">
+                <h3 class="font-bold text-blue-800 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-blue-500"></span> DOING
+                </h3>
+                <span id="count-doing" class="bg-blue-200 text-blue-600 text-xs font-bold px-2 py-0.5 rounded-full">0</span>
+            </div>
+            <div id="list-doing" class="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-1">
+                <!-- Task Cards -->
+            </div>
+        </div>
+
+        <!-- Done -->
+        <div class="flex flex-col gap-4 bg-green-50/50 rounded-2xl p-4 border border-green-100/50 overflow-hidden">
+            <div class="flex items-center justify-between px-2">
+                <h3 class="font-bold text-green-800 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span> DONE
+                </h3>
+                <span id="count-done" class="bg-green-200 text-green-600 text-xs font-bold px-2 py-0.5 rounded-full">0</span>
+            </div>
+            <div id="list-done" class="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-1">
+                <!-- Task Cards -->
+            </div>
+        </div>
+
+        <!-- Failed -->
+        <div class="flex flex-col gap-4 bg-red-50/50 rounded-2xl p-4 border border-red-100/50 overflow-hidden">
+            <div class="flex items-center justify-between px-2">
+                <h3 class="font-bold text-red-800 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-red-500"></span> FAILED
+                </h3>
+                <span id="count-failed" class="bg-red-200 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">0</span>
+            </div>
+            <div id="list-failed" class="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-1">
+                <!-- Task Cards -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Task Details & History Modal -->
+<div id="task-details-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-6">
+    <div class="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
+        <div class="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <div>
+                <h3 id="detail-title" class="text-xl font-bold text-slate-900">Task Details</h3>
+                <p id="detail-id" class="text-slate-400 text-[10px] font-mono mt-1 uppercase tracking-wider"></p>
+            </div>
+            <button onclick="Tasks.closeDetails()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+            <!-- Config Section -->
+            <div class="mb-8">
+                <h4 class="text-xs font-black text-slate-400 mb-4 tracking-widest uppercase flex items-center gap-2">
+                    <i class="fas fa-cog text-blue-500"></i> Configuration
+                </h4>
+                <div class="bg-slate-50 rounded-2xl p-6 space-y-4">
+                    <div>
+                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Requirement Spec</span>
+                        <p id="detail-spec" class="text-sm text-slate-700 leading-relaxed"></p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Schedule</span>
+                            <p id="detail-cron" class="text-sm font-bold text-blue-600"></p>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Reporting</span>
+                            <p id="detail-channel" class="text-sm font-bold text-purple-600"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Execution Logs -->
+            <div>
+                <h4 class="text-xs font-black text-slate-400 mb-4 tracking-widest uppercase flex items-center justify-between">
+                    <span class="flex items-center gap-2"><i class="fas fa-history text-green-500"></i> Execution History</span>
+                </h4>
+                <div id="detail-logs" class="space-y-3">
+                    <!-- Logs will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Task Modal -->
+<div id="task-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-6">
+    <div class="bg-white rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div class="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <div>
+                <h3 class="text-xl font-bold text-slate-900">Task Configuration</h3>
+                <p class="text-slate-500 text-sm">Define agent requirements and schedule.</p>
+            </div>
+            <button onclick="Tasks.closeModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+        <form id="task-form" class="p-8 space-y-6">
+            <input type="hidden" name="task_id" id="task-id-input">
+            <div class="grid grid-cols-2 gap-4">
+                <div class="col-span-2">
+                    <label class="block text-xs font-bold text-slate-400 mb-2 tracking-widest uppercase">Task Title</label>
+                    <input type="text" name="title" required placeholder="Daily News Summary" class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 transition-all">
+                </div>
+                <div class="col-span-2">
+                    <label class="block text-xs font-bold text-slate-400 mb-2 tracking-widest uppercase">Spec / Requirement</label>
+                    <textarea name="spec" required rows="4" placeholder="Fetch top news from Yahoo Finance and summarize..." class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 transition-all resize-none"></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-2 tracking-widest uppercase">Cron Schedule (Optional)</label>
+                    <input type="text" name="cron" placeholder="0 17 * * *" class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 transition-all">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-2 tracking-widest uppercase">Callback Channel</label>
+                    <select name="channel" class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 transition-all">
+                        <option value="">No Callback</option>
+                        <option value="discord">Discord</option>
+                        <option value="line">Line</option>
+                        <option value="telegram">Telegram</option>
+                    </select>
+                </div>
+                <div class="col-span-2">
+                    <label class="block text-xs font-bold text-slate-400 mb-2 tracking-widest uppercase">Recipient ID</label>
+                    <input type="text" name="recipient" placeholder="Channel ID or User ID" class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 transition-all">
+                </div>
+            </div>
+            <div class="pt-4 flex gap-4">
+                <button type="button" onclick="Tasks.closeModal()" class="flex-1 px-6 py-4 rounded-xl font-bold text-slate-400 hover:bg-slate-50 transition-all">CANCEL</button>
+                <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-xl font-bold shadow-lg shadow-blue-100 transition-all active:scale-95">SAVE TASK</button>
+            </div>
+        </form>
+    </div>
+</div>

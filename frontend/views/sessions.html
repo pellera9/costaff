@@ -1,0 +1,63 @@
+<!-- Sub-navigation Header -->
+<div class="mb-8 flex items-center justify-between">
+    <div class="flex p-1 bg-white rounded-2xl border border-slate-100 shadow-sm">
+        <button onclick="App.switchSubTab('sessions', 'explorer')" data-subtab="explorer" class="tab-btn active px-6 py-2 rounded-xl text-xs font-bold transition-all">
+            Chat History
+        </button>
+        <button onclick="App.switchSubTab('sessions', 'history')" data-subtab="history" class="tab-btn px-6 py-2 rounded-xl text-xs font-bold transition-all text-slate-400 hover:text-slate-600">
+            Event Logs
+        </button>
+        <button onclick="App.switchSubTab('sessions', 'states')" data-subtab="states" class="tab-btn px-6 py-2 rounded-xl text-xs font-bold transition-all text-slate-400 hover:text-slate-600">
+            User Data
+        </button>
+    </div>
+
+    <!-- Filter for Table Views (Hidden in Explorer) -->
+    <div id="session-table-filter" class="hidden relative w-64 animate-in fade-in slide-in-from-right-4">
+        <i class="fas fa-filter absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 text-[10px]"></i>
+        <input type="text" id="db-filter-input" oninput="UI.filterDBTable()" placeholder="SEARCH RECORDS..." 
+            class="w-full bg-white border border-slate-100 rounded-xl pl-10 pr-4 py-2.5 text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500/20 shadow-sm transition-all">
+    </div>
+</div>
+
+<!-- Chat Explorer (Two-column layout) -->
+<div id="sessions-explorer" class="flex gap-8 h-[calc(100vh-220px)]">
+    <!-- Sidebar: Session List -->
+    <div class="w-80 flex flex-col bg-white border border-slate-100 rounded-[2rem] shadow-xl overflow-hidden">
+        <div class="p-6 border-b border-slate-100 bg-slate-50/50">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Sessions</span>
+        </div>
+        <div id="chat-session-list" class="flex-1 overflow-y-auto divide-y divide-slate-50">
+            <!-- Loaded via JS -->
+            <div class="p-10 text-center text-slate-400 text-xs italic">Syncing history...</div>
+        </div>
+    </div>
+
+    <!-- Main Content: Message Logs -->
+    <div class="flex-1 flex flex-col bg-white border border-slate-100 rounded-[2rem] shadow-xl overflow-hidden relative">
+        <div class="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+            <span id="chat-header" class="text-xs font-bold text-slate-900 uppercase tracking-widest">Message Log</span>
+            <i class="fas fa-history text-slate-300"></i>
+        </div>
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-8 space-y-6 bg-slate-50/30">
+            <div class="h-full flex flex-col items-center justify-center text-slate-300">
+                <i class="fas fa-comment-alt text-5xl mb-4 opacity-20"></i>
+                <p class="text-xs font-bold uppercase tracking-widest">Select a session to view details</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Table Views (Events & States) -->
+<div id="sessions-table-view" class="hidden bg-white border border-slate-100 rounded-[2rem] shadow-xl overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+            <thead id="sessions-thead" class="bg-slate-50/50 border-b border-slate-100">
+                <!-- Head by JS -->
+            </thead>
+            <tbody id="sessions-tbody" class="divide-y divide-slate-50 text-slate-900">
+                <!-- Body by JS -->
+            </tbody>
+        </table>
+    </div>
+</div>

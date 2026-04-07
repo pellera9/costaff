@@ -1,0 +1,99 @@
+<div class="flex gap-10 h-[calc(100vh-160px)]">
+    <!-- List Panel -->
+    <div class="w-96 flex flex-col card-linear bg-white p-0 overflow-hidden border border-slate-100 rounded-[2rem] shadow-xl">
+        <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div class="flex items-center gap-3">
+                <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Skills</span>
+                <span id="skill-count" class="bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-0.5 rounded-full">0</span>
+            </div>
+            <button onclick="Skills.selectItem(null)" class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center hover:scale-110 transition-transform shadow-lg shadow-blue-200">
+                <i class="fas fa-plus text-xs"></i>
+            </button>
+        </div>
+        <div id="skill-list" class="flex-1 overflow-y-auto divide-y divide-slate-50 custom-scrollbar">
+            <!-- List by JS -->
+        </div>
+    </div>
+
+    <!-- Detail Panel -->
+    <div id="skill-content-wrapper" class="flex-1 card-linear bg-white p-0 flex flex-col overflow-hidden border border-slate-100 rounded-[2rem] shadow-xl">
+        <div id="skill-placeholder" class="flex-1 flex flex-col items-center justify-center opacity-20 uppercase tracking-[0.5em] font-headline text-slate-400">
+            <i class="fas fa-bolt text-6xl mb-8"></i>
+            <p>Select a Skill</p>
+        </div>
+
+        <div id="skill-content" class="flex-1 flex flex-col hidden overflow-hidden">
+            <!-- FIXED HEADER -->
+            <div class="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+                <div>
+                    <h2 id="skill-header" class="text-3xl font-headline font-bold text-slate-900 uppercase tracking-tighter">--</h2>
+                    <span id="skill-type-badge" class="text-[10px] text-blue-600 font-bold uppercase tracking-widest">Agent Capability</span>
+                </div>
+                <div id="skill-detail-actions"></div>
+            </div>
+
+            <!-- SCROLLABLE BODY -->
+            <form id="skill-form" class="flex-1 overflow-y-auto p-10 space-y-10 bg-slate-50/30 custom-scrollbar">
+                <input type="hidden" id="skill-edit-id" value="">
+
+                <div class="grid grid-cols-2 gap-10">
+                    <div class="space-y-3">
+                        <label class="text-[10px] font-bold text-blue-600 uppercase tracking-widest ml-1">Skill Name *</label>
+                        <input type="text" id="skill-name" placeholder="e.g. PrivAI File Manager" required
+                            class="w-full bg-white border border-slate-100 rounded-xl px-5 py-4 text-slate-900 font-bold outline-none focus:ring-2 focus:ring-blue-500/20 transition-all">
+                    </div>
+                    <div class="space-y-3">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Internal ID</label>
+                        <input type="text" id="skill-field-id" readonly placeholder="Auto-generated"
+                            class="w-full bg-transparent border-none text-slate-400 font-mono text-sm outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-10">
+                    <div class="space-y-3">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Assign to User <span class="text-blue-400 normal-case font-normal">— hold ⌘/Ctrl for multiple</span></label>
+                        <select id="skill-user-id" multiple
+                            class="w-full bg-white border border-slate-100 rounded-xl px-5 py-4 text-sm text-slate-900 focus:ring-2 focus:ring-blue-500/20 transition-all min-h-[100px] outline-none">
+                            <option value="__global__">Global — all users</option>
+                        </select>
+                    </div>
+                    <div class="space-y-3">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Assign to Agent <span class="text-blue-400 normal-case font-normal">— hold ⌘/Ctrl for multiple</span></label>
+                        <select id="skill-agent-ids" multiple
+                            class="w-full bg-white border border-slate-100 rounded-xl px-5 py-4 text-sm text-slate-900 focus:ring-2 focus:ring-blue-500/20 transition-all min-h-[100px] outline-none">
+                            <option value="__all__">All Agents</option>
+                            <option value="mateclaw_agent">mateclaw_agent</option>
+                            <option value="coding_agent">coding_agent</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Description</label>
+                    <input type="text" id="skill-description" placeholder="Brief summary of what this skill does"
+                        class="w-full bg-white border border-slate-100 rounded-xl px-5 py-4 text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20 transition-all">
+                </div>
+
+                <div class="space-y-3">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Tags <span class="text-blue-400 normal-case font-normal">— comma-separated</span></label>
+                    <input type="text" id="skill-tags" placeholder="e.g. file, storage, privai"
+                        class="w-full bg-white border border-slate-100 rounded-xl px-5 py-4 text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20 transition-all">
+                </div>
+
+                <div class="space-y-3">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                        Usage Instructions <span class="text-blue-400 normal-case font-normal">— Agent reads this (Markdown supported)</span>
+                    </label>
+                    <textarea id="skill-usage" rows="10" placeholder="## How to use this skill&#10;&#10;1. Call `get_file_list` API to retrieve files&#10;2. Filter by file type if needed&#10;3. Return results to user"
+                        class="w-full bg-slate-900 text-blue-400 border-none rounded-2xl p-8 font-mono text-sm shadow-inner outline-none resize-none"></textarea>
+                </div>
+
+                <div class="pt-10 border-t border-slate-100 flex justify-end">
+                    <button type="button" onclick="Skills.submitForm()" class="px-12 py-4 bg-blue-600 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-200">
+                        Save Skill
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

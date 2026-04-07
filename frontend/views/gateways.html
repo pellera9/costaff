@@ -1,0 +1,51 @@
+<div class="flex gap-10 h-[calc(100vh-180px)]">
+    <!-- List Panel -->
+    <div class="w-96 flex flex-col card-linear bg-white p-0 overflow-hidden border border-slate-100 rounded-[2rem] shadow-xl">
+        <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div>
+                <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">Available Channels</span>
+                <p class="text-[10px] text-slate-400 font-medium mt-0.5">Connection status</p>
+            </div>
+        </div>
+        <div id="gateways-list" class="flex-1 overflow-y-auto">
+            <!-- List by JS -->
+        </div>
+    </div>
+
+    <!-- Detail Panel -->
+    <div id="gateway-content-wrapper" class="flex-1 card-linear bg-white p-0 flex flex-col overflow-hidden border border-slate-100 rounded-[2rem] shadow-xl">
+        <div id="gateway-placeholder" class="flex-1 flex flex-col items-center justify-center opacity-20 uppercase tracking-[0.5em] font-headline text-center px-10 text-slate-400">
+            <i class="fas fa-network-wired text-6xl mb-8"></i>
+            <p>Select a Channel</p>
+        </div>
+
+        <div id="gateway-content" class="flex-1 flex flex-col hidden">
+            <div class="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div class="flex items-center gap-6">
+                    <div id="gateway-icon-large" class="w-16 h-16 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-3xl shadow-xl shadow-blue-200">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div>
+                        <h2 id="gateway-detail-name" class="text-3xl font-headline font-bold text-slate-900 tracking-tighter uppercase">--</h2>
+                        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Channel Settings</span>
+                    </div>
+                </div>
+                <div id="gateway-detail-actions"></div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-10 bg-slate-50/30">
+                <div class="max-w-2xl space-y-10">
+                    <div id="gateway-config-form" class="space-y-8">
+                        <!-- Dynamic fields -->
+                    </div>
+
+                    <div class="pt-10 border-t border-slate-100 flex items-center justify-end">
+                        <button onclick="UI.saveGatewayConfig()" class="px-12 py-4 bg-blue-600 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-200">
+                            Save Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

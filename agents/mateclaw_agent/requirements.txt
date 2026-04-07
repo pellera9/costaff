@@ -1,0 +1,7 @@
+google-adk
+a2a-sdk
+litellm
+python-dotenv
+httpx
+aiosqlite
+asyncpg

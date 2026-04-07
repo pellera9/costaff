@@ -1,0 +1,129 @@
+<div class="flex gap-10 h-[calc(100vh-160px)]">
+    <!-- List Panel -->
+    <div class="w-96 flex flex-col card-linear bg-white p-0 overflow-hidden border border-slate-100 rounded-[2rem] shadow-xl">
+        <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+            <div class="flex items-center gap-3">
+                <span class="text-xs font-bold text-slate-500 uppercase tracking-widest">APIs</span>
+                <span id="api-count" class="bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-0.5 rounded-full">0</span>
+            </div>
+            <button onclick="Apis.selectItem(null)" class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center hover:scale-110 transition-transform shadow-lg shadow-blue-200">
+                <i class="fas fa-plus text-xs"></i>
+            </button>
+        </div>
+        <div id="api-list" class="flex-1 overflow-y-auto divide-y divide-slate-50 custom-scrollbar">
+            <!-- List by JS -->
+        </div>
+    </div>
+
+    <!-- Detail Panel -->
+    <div id="api-content-wrapper" class="flex-1 card-linear bg-white p-0 flex flex-col overflow-hidden border border-slate-100 rounded-[2rem] shadow-xl">
+        <div id="api-placeholder" class="flex-1 flex flex-col items-center justify-center opacity-20 uppercase tracking-[0.5em] font-headline text-slate-400">
+            <i class="fas fa-code text-6xl mb-8"></i>
+            <p>Select or Add an API</p>
+        </div>
+
+        <div id="api-content" class="flex-1 flex flex-col hidden overflow-hidden">
+            <!-- FIXED HEADER -->
+            <div class="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+                <div>
+                    <h2 id="api-header" class="text-3xl font-headline font-bold text-slate-900 uppercase tracking-tighter">--</h2>
+                    <span id="api-type-badge" class="text-[10px] text-blue-600 font-bold uppercase tracking-widest">External API</span>
+                </div>
+                <div id="api-detail-actions"></div>
+            </div>
+
+            <!-- SCROLLABLE BODY -->
+            <div class="flex-1 overflow-y-auto p-10 space-y-10 bg-slate-50/30 custom-scrollbar">
+                
+                <!-- cURL Import (new only) -->
+                <div id="api-curl-section" class="bg-blue-50/50 p-6 rounded-2xl border border-blue-100/50">
+                    <label class="block text-[10px] font-bold text-blue-600 mb-4 tracking-widest uppercase ml-1">Import from cURL</label>
+                    <div class="flex gap-4">
+                        <textarea id="api-curl-input" rows="2" placeholder="curl -X 'GET' 'https://...' -H 'Authorization: Bearer ...'"
+                            class="flex-1 bg-white border border-slate-100 rounded-xl px-5 py-4 text-xs font-mono text-slate-700 focus:ring-2 focus:ring-blue-500/20 outline-none resize-none"></textarea>
+                        <button type="button" onclick="Apis.importCurl()"
+                            class="px-8 bg-blue-600 text-white rounded-xl font-bold text-xs hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 whitespace-nowrap">
+                            <i class="fas fa-magic mr-2"></i> FILL
+                        </button>
+                    </div>
+                </div>
+
+                <form id="api-form" class="space-y-10">
+                    <input type="hidden" id="api-edit-id">
+
+                    <div class="grid grid-cols-2 gap-10">
+                        <div class="space-y-3">
+                            <label class="text-[10px] font-bold text-blue-600 uppercase tracking-widest ml-1">API Name *</label>
+                            <input type="text" id="api-name" placeholder="e.g. GitHub Issues" required
+                                class="w-full bg-white border border-slate-100 rounded-xl px-5 py-4 text-slate-900 font-bold outline-none focus:ring-2 focus:ring-blue-500/20 transition-all">
+                        </div>
+                        <div class="space-y-3">
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Internal ID</label>
+                            <input type="text" id="api-field-id" readonly placeholder="Auto-generated"
+                                class="w-full bg-transparent border-none text-slate-400 font-mono text-sm outline-none">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-10">
+                        <div class="space-y-3">
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Assign to User <span class="text-blue-400 normal-case font-normal">— hold ⌘/Ctrl for multiple</span></label>
+                            <select id="api-user-id" multiple
+                                class="w-full bg-white border border-slate-100 rounded-xl px-5 py-4 text-sm text-slate-900 focus:ring-2 focus:ring-blue-500/20 transition-all min-h-[100px] outline-none">
+                                <option value="__global__">Global — all users</option>
+                            </select>
+                        </div>
+                        <div class="space-y-3">
+                            <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Assign to Agent <span class="text-blue-400 normal-case font-normal">— hold ⌘/Ctrl for multiple</span></label>
+                            <select id="api-agent-ids" multiple
+                                class="w-full bg-white border border-slate-100 rounded-xl px-5 py-4 text-sm text-slate-900 focus:ring-2 focus:ring-blue-500/20 transition-all min-h-[100px] outline-none">
+                                <option value="__all__">All Agents</option>
+                                <option value="mateclaw_agent">mateclaw_agent</option>
+                                <option value="coding_agent">coding_agent</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-10">
+                        <div class="space-y-3">
+                            <label class="text-[10px] font-bold text-blue-600 uppercase tracking-widest ml-1">Method *</label>
+                            <select id="api-method" class="w-full bg-white border border-slate-100 rounded-xl px-5 py-4 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-blue-500/20 outline-none">
+                                <option value="GET">GET</option>
+                                <option value="POST">POST</option>
+                                <option value="PUT">PUT</option>
+                                <option value="PATCH">PATCH</option>
+                                <option value="DELETE">DELETE</option>
+                            </select>
+                        </div>
+                        <div class="col-span-2 space-y-3">
+                            <label class="text-[10px] font-bold text-blue-600 uppercase tracking-widest ml-1">URL *</label>
+                            <input type="url" id="api-url" placeholder="https://api.example.com/endpoint" required
+                                class="w-full bg-white border border-slate-100 rounded-xl px-5 py-4 font-mono text-blue-600 outline-none focus:ring-2 focus:ring-blue-500/20 transition-all">
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                            Headers (JSON) <span class="text-blue-400 normal-case font-normal">— values encrypted at rest</span>
+                        </label>
+                        <textarea id="api-headers" rows="4" placeholder='{"Authorization": "Bearer YOUR_TOKEN"}'
+                            class="w-full bg-slate-900 text-blue-400 border-none rounded-2xl p-8 font-mono text-sm shadow-inner outline-none resize-none"></textarea>
+                    </div>
+
+                    <div class="space-y-3">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                            Description <span class="text-blue-400 normal-case font-normal">— Agent reads this to understand how to use the API</span>
+                        </label>
+                        <textarea id="api-description" rows="4" placeholder="e.g. Query GitHub issues. Use params: owner (string), repo (string), state (open|closed)"
+                            class="w-full bg-white border border-slate-100 rounded-xl px-5 py-4 text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/20 transition-all resize-none"></textarea>
+                    </div>
+
+                    <div class="pt-10 border-t border-slate-100 flex justify-end">
+                        <button type="button" onclick="Apis.save()" class="px-12 py-4 bg-blue-600 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-blue-700 transition-all shadow-xl shadow-blue-200">
+                            Save API
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

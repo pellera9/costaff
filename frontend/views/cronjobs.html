@@ -1,0 +1,138 @@
+<div class="flex-1 flex flex-col p-8 overflow-hidden">
+    <!-- Header Section -->
+    <div class="flex justify-between items-end mb-8">
+        <div>
+            <h2 class="text-5xl font-headline font-bold text-slate-900 tracking-tighter uppercase">Scheduled Reminders</h2>
+            <p class="text-blue-600 font-bold tracking-[0.2em] text-[10px] mt-2 opacity-60 uppercase">Notification Control Center</p>
+        </div>
+        <div class="flex gap-3">
+            <button onclick="UI.renderCronjobs()" class="p-2.5 bg-white text-slate-400 hover:text-slate-900 rounded-xl border border-slate-100 transition-all shadow-sm">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+            <button onclick="UI.openCronModal()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-600/20 flex items-center gap-2">
+                <i class="fas fa-plus"></i> Create Task
+            </button>
+        </div>
+    </div>
+
+    <!-- Content Grid -->
+    <div class="flex-1 grid grid-cols-1 xl:grid-cols-4 gap-8 overflow-hidden">
+        <!-- Main Table Section -->
+        <div class="xl:col-span-3 flex flex-col overflow-hidden">
+            <div class="card-linear flex-1 flex flex-col border border-slate-100 rounded-[2rem] bg-white overflow-hidden shadow-2xl">
+                <div class="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-blue-600/10 text-blue-500 flex items-center justify-center border border-blue-500/20">
+                            <i class="fas fa-list-ul text-xs"></i>
+                        </div>
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-widest">Active Schedules</span>
+                    </div>
+                    <div class="px-3 py-1 rounded-full bg-slate-100 text-[10px] font-bold text-slate-500 border border-slate-200">
+                        AUTO-REFRESH ENABLED
+                    </div>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto custom-scrollbar">
+                    <table class="w-full text-left border-separate border-spacing-0">
+                        <thead id="cron-thead" class="sticky top-0 z-10 bg-white/80 backdrop-blur-md"></thead>
+                        <tbody id="cron-tbody" class="text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="flex flex-col gap-6">
+            <!-- Next Execution Card -->
+            <div class="rounded-[2.5rem] p-10 bg-blue-600 shadow-2xl shadow-blue-200 relative overflow-hidden">
+                <!-- Decorative background icon -->
+                <i class="fas fa-clock absolute -right-6 -bottom-6 text-white opacity-10 text-9xl transform -rotate-12"></i>
+
+                <div class="relative z-10">
+                    <div class="text-[10px] font-black text-blue-100 uppercase tracking-[0.2em] mb-4">Next Scheduled Task</div>
+                    <div id="next-cron-time" class="text-3xl font-black text-white tabular-nums tracking-tighter mb-2">STANDBY</div>
+                    <div id="next-cron-msg" class="text-sm text-white/80 font-bold line-clamp-2 mb-8">No active schedules detected.</div>
+
+                    <div class="space-y-4 pt-6 border-t border-white/20">
+                        <div class="flex items-center gap-3 text-white">
+                            <i class="fas fa-check-circle text-xs text-blue-200"></i>
+                            <span class="text-[10px] font-black uppercase tracking-widest">Scheduler Online</span>
+                        </div>
+                        <div class="flex items-center gap-3 text-white/60">
+                            <i class="fas fa-bolt text-[10px] animate-pulse text-yellow-300"></i>
+                            <span class="text-[10px] font-black uppercase tracking-widest">Auto-Sync Active</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-8 rounded-[2.5rem] border border-dashed border-slate-200 bg-white/50 flex flex-col items-center justify-center text-center space-y-3">
+                <i class="fas fa-shield-alt text-slate-200 text-3xl"></i>
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-tight">Secure Backend<br>Execution Engine</p>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Create Cronjob Modal -->
+<div id="cron-modal" class="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm hidden">
+    <div class="bg-white border border-slate-100 rounded-[2.5rem] w-full max-w-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
+        <div class="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <div>
+                <h3 class="text-xl font-bold text-slate-900">Create Scheduled Task</h3>
+                <p class="text-xs text-slate-500 mt-1 uppercase tracking-widest font-bold">Add new automated agent action</p>
+            </div>
+            <button onclick="UI.closeCronModal()" class="w-10 h-10 rounded-xl hover:bg-slate-100 text-slate-400 transition-all flex items-center justify-center"><i class="fas fa-times"></i></button>
+        </div>
+        
+        <div class="p-8 space-y-8">
+            <div class="grid grid-cols-2 gap-6">
+                <div class="space-y-2">
+                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Target Channel</label>
+                    <select id="cron-channel" class="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 text-sm font-bold">
+                        <option value="telegram">Telegram</option>
+                        <option value="discord">Discord</option>
+                        <option value="line">Line</option>
+                    </select>
+                </div>
+                <div class="space-y-2">
+                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Recipient ID</label>
+                    <input type="text" id="cron-recipient" placeholder="User or Chat ID" class="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 text-sm font-mono">
+                </div>
+            </div>
+            
+            <div class="space-y-4">
+                <div class="flex items-center justify-between px-1">
+                    <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Task Definition (* * * * * message)</label>
+                    <span class="text-[9px] font-mono text-blue-500 bg-blue-50 px-2 py-0.5 rounded">CRONTAB FORMAT</span>
+                </div>
+                
+                <div class="relative">
+                    <!-- Visual Guidance Labels -->
+                    <div class="flex gap-4 mb-2 px-6 text-[8px] font-black text-slate-300 uppercase tracking-tighter">
+                        <span class="w-4">min</span>
+                        <span class="w-4">hr</span>
+                        <span class="w-4">day</span>
+                        <span class="w-4">mon</span>
+                        <span class="w-4">week</span>
+                        <span class="ml-2 text-blue-400">--- your message content ---</span>
+                    </div>
+                    <textarea id="cron-full-input" rows="4" placeholder="* * * * * Type your message here..." class="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-5 outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 font-mono text-sm shadow-inner resize-none"></textarea>
+                </div>
+
+                <!-- Helper Quick Examples -->
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="document.getElementById('cron-full-input').value='0 * * * * Daily check-in!'" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 text-[9px] font-bold transition-all">Hourly</button>
+                    <button onclick="document.getElementById('cron-full-input').value='0 9 * * * Good morning!'" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 text-[9px] font-bold transition-all">Daily 9AM</button>
+                    <button onclick="document.getElementById('cron-full-input').value='30 18 * * 1-5 Shift report...'" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 text-[9px] font-bold transition-all">Work Days 6:30PM</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-4">
+            <button onclick="UI.closeCronModal()" class="px-6 py-2.5 rounded-xl font-bold text-sm text-slate-400 hover:bg-slate-100 transition-all">Cancel</button>
+            <button onclick="UI.saveCronjobLine()" id="cron-save-btn" class="px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-600/20 uppercase tracking-widest">Save Task</button>
+        </div>
+    </div>
+</div>

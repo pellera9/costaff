@@ -1,0 +1,64 @@
+<div class="flex gap-10 h-[calc(100vh-160px)]">
+    <!-- Left: Controls Panel -->
+    <div class="w-80 flex flex-col gap-4 shrink-0 h-full">
+        <div class="card-linear bg-white border border-slate-100 rounded-[2rem] shadow-xl p-6 space-y-4">
+            <div class="border-b border-slate-50 pb-3">
+                <h2 class="text-2xl font-headline font-bold text-slate-900 uppercase tracking-tighter">Log Monitor</h2>
+                <p class="text-[10px] text-blue-600 font-bold tracking-widest mt-1 uppercase opacity-60">System Telemetry</p>
+            </div>
+
+            <!-- Source -->
+            <div class="space-y-1.5">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Active Source</label>
+                <select id="log-service-select" onchange="UI.renderLogs()" class="w-full bg-slate-50 border border-slate-100 rounded-xl text-slate-900 font-bold text-xs h-10 px-4 outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer transition-all">
+                    <!-- Options by JS -->
+                </select>
+            </div>
+
+            <!-- Filter -->
+            <div class="space-y-1.5">
+                <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Stream Filter</label>
+                <div class="relative">
+                    <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 text-[10px]"></i>
+                    <input type="text" id="log-filter" oninput="UI.filterLogs()" placeholder="GREP PATTERN..." class="w-full bg-slate-50 border border-slate-100 rounded-xl pl-10 pr-4 h-10 text-xs text-slate-900 font-mono placeholder:text-slate-300 outline-none focus:ring-2 focus:ring-blue-500/20 transition-all">
+                </div>
+            </div>
+
+            <!-- Options -->
+            <div class="space-y-2">
+                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Auto Scroll</span>
+                    <input type="checkbox" id="log-autoscroll" checked class="w-3.5 h-3.5 rounded-md accent-blue-600 cursor-pointer">
+                </div>
+                
+                <button onclick="UI.renderLogs()" class="w-full py-3 bg-white border border-slate-100 text-slate-400 hover:text-blue-600 hover:border-blue-100 hover:bg-blue-50 rounded-xl font-bold text-[10px] transition-all shadow-sm flex items-center justify-center gap-2">
+                    <i class="fas fa-sync-alt"></i> REFRESH FEED
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Right: Terminal Area -->
+    <div class="flex-1 flex flex-col card-linear bg-slate-950 rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-800">
+        <div class="px-8 py-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+            <div class="flex items-center gap-3">
+                <div class="flex gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500/20 border border-rose-500/40"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500/20 border border-amber-500/40"></span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500/20 border border-emerald-500/40"></span>
+                </div>
+                <span class="text-[9px] font-black text-white/20 uppercase tracking-[0.3em] ml-4">Terminal Console :: STDOUT</span>
+            </div>
+            <button onclick="UI.downloadLogs()" class="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white transition-all border border-blue-500/30">
+                <i class="fas fa-download text-[10px]"></i>
+                <span class="text-[9px] font-black uppercase tracking-widest">Download Log</span>
+            </button>
+        </div>
+        
+        <div id="log-output" class="flex-1 p-10 overflow-y-auto custom-scrollbar font-mono text-[13px] leading-relaxed selection:bg-blue-500/30">
+            <!-- Logs stream here -->
+            <div class="text-slate-600/40 italic">Select a service above to start streaming logs...</div>
+        </div>
+    </div>
+</div>

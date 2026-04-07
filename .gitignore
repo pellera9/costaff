@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+build/
+dist/
+*.egg-info/
+
+# Databases
+*.db
+*.sqlite3
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Project specific
+data/
+outputs/
+chart_images/
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Build / packaging artifacts
+build/
+dist/
+mateclaw_cli.egg-info/
+*.egg-info/
+
+# IDE / local tooling
+.claude/
+
+# Backup files
+*.bak
+*.backup
+
+# Temporary output files
+*.pdf
+*.html~
+
+# mate / mateclaw project runtime folder (never commit)
+.mate/
+.mateclaw/
+
+# License tools (internal, never commit — lives in mateclaw-license repo)
+tools/
+
+# Landing page (separate repo: MateClawAI/MateClawAI.github.io)
+landing/
+
+# License files (customer-specific, never commit)
+mate-license.yaml
+
+# License signing key (NEVER commit private key)
+*.pem
+mate_private_key*
+
+# License issuance registry (internal record, never commit)
+tools/license_registry.json
