@@ -276,13 +276,16 @@ async def _deliver_response(msg: Message, final_res: str):
     raw_paths = list(dict.fromkeys(tag_paths + abs_paths + rel_paths))
     all_paths = [r for p in raw_paths if (r := _resolve_path(p))]
 
-    # 2. Clean response text
+    # 2. Clean response text — replace path references with attachment hint only when files exist
+    attachment_hint = "（詳見附件）" if all_paths else ""
     clean_res = re.sub(
         rf"[\[\(](?:FILE|檔案)[:：]\s*[^\]\)\s]+\.(?:{FILE_EXTS})[\]\)]",
-        "", final_res, flags=re.IGNORECASE
+        attachment_hint, final_res, flags=re.IGNORECASE
     )
-    clean_res = re.sub(rf"`?/app/data/[\w./-]+\.(?:{FILE_EXTS})`?", "", clean_res, flags=re.IGNORECASE)
-    clean_res = re.sub(rf"`[\w/-]+\.(?:{FILE_EXTS})`", "", clean_res, flags=re.IGNORECASE)
+    clean_res = re.sub(rf"`?/app/data/[\w./-]+\.(?:{FILE_EXTS})`?", attachment_hint, clean_res, flags=re.IGNORECASE)
+    clean_res = re.sub(rf"`[\w/-]+\.(?:{FILE_EXTS})`", attachment_hint, clean_res, flags=re.IGNORECASE)
+    # Collapse duplicate hints that appear consecutively
+    clean_res = re.sub(r"（詳見附件）(\s*（詳見附件）)+", "（詳見附件）", clean_res)
     clean_res = clean_res.strip()
 
     if clean_res:

@@ -13,6 +13,31 @@ logger = logging.getLogger(__name__)
 ADK_URL = os.getenv("ADK_API_BASE_URL", "http://localhost:8000")
 TIMEOUT = 1800.0  # 30 minutes — long-running agent tasks (code execution, multi-agent chains)
 
+# Per-session asyncio locks: prevents concurrent /run requests on the same session,
+# which would trigger ADK's stale-session optimistic concurrency check (500 error).
+_session_locks: dict[str, asyncio.Lock] = {}
+_session_locks_meta: dict[str, int] = {}  # reference count for cleanup
+_locks_registry_lock = asyncio.Lock()
+
+
+async def _get_session_lock(sid: str) -> asyncio.Lock:
+    async with _locks_registry_lock:
+        if sid not in _session_locks:
+            _session_locks[sid] = asyncio.Lock()
+            _session_locks_meta[sid] = 0
+        _session_locks_meta[sid] += 1
+        return _session_locks[sid]
+
+
+async def _release_session_lock(sid: str) -> None:
+    async with _locks_registry_lock:
+        if sid in _session_locks_meta:
+            _session_locks_meta[sid] -= 1
+            if _session_locks_meta[sid] <= 0:
+                _session_locks.pop(sid, None)
+                _session_locks_meta.pop(sid, None)
+
+
 async def ensure_session(app: str, uid: str, sid: str) -> bool:
     """
     Guarantees a session exists for the user in ADK.
@@ -57,16 +82,16 @@ async def delete_session(app: str, uid: str, sid: str) -> bool:
             return False
 
 async def run_adk_prompt(
-    app: str, 
-    uid: str, 
-    sid: str, 
-    prompt: Optional[str] = None, 
+    app: str,
+    uid: str,
+    sid: str,
+    prompt: Optional[str] = None,
     parts: Optional[List[dict]] = None
 ) -> str:
     """
     Submits a message to the ADK Agent and parses the stream of events for text output.
-    Implements a 'nudge' mechanism: if the Agent does not provide a verbal response after
-    processing tool calls, it automatically sends a follow-up prompt to complete the turn.
+    Serializes concurrent requests on the same session via a per-session asyncio Lock to
+    prevent ADK stale-session 500 errors caused by optimistic concurrency conflicts.
 
     Args:
         app (str): Target application.
@@ -80,6 +105,21 @@ async def run_adk_prompt(
     """
     await ensure_session(app, uid, sid)
 
+    lock = await _get_session_lock(sid)
+    try:
+        async with lock:
+            return await _run_adk_prompt_inner(app, uid, sid, prompt, parts)
+    finally:
+        await _release_session_lock(sid)
+
+
+async def _run_adk_prompt_inner(
+    app: str,
+    uid: str,
+    sid: str,
+    prompt: Optional[str],
+    parts: Optional[List[dict]],
+) -> str:
     msg_parts = parts if parts else ([{"text": prompt}] if prompt else [])
     payload = {
         "appName": app,
@@ -107,7 +147,7 @@ async def run_adk_prompt(
 
                     # Nudge: The agent used tools but stayed silent
                     logger.warning(f"Attempt {attempt + 1}: No text found for session {sid}. Nudging...")
-                    payload["newMessage"] = {"role": "user", "parts": [{"text": "Please continue and provide a verbal response."}]}
+                    payload["newMessage"] = {"role": "user", "parts": [{"text": "任務已完成，請用繁體中文向用戶說明結果摘要（1-2句即可）。"}]}
                     continue
 
                 logger.error(f"ADK Run Error ({res.status_code}): {res.text}")

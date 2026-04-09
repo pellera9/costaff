@@ -1988,6 +1988,79 @@ def agent_disable(name: str = typer.Argument(...)):
     ConfigManager.update_external_agents_env()
     console.print(f"[green]Agent '{name}' disabled.[/green]")
 
+@agent_app.command("restart")
+def agent_restart(name: str = typer.Argument(..., help="Agent name to restart")):
+    """Restart a local agent's containers without rebuilding."""
+    conf = ConfigManager.get_config()
+    if name not in conf.get("external_agents", {}):
+        console.print(f"[red]Error: Agent '{name}' not found.[/red]"); raise typer.Exit(1)
+    agent_conf = conf["external_agents"][name]
+    if agent_conf.get("type") != "github" or not agent_conf.get("fragment_path"):
+        console.print(f"[red]Error: Agent '{name}' is not a local agent (no compose fragment).[/red]"); raise typer.Exit(1)
+
+    fragment_path = agent_conf["fragment_path"]
+    container_names = agent_conf.get("container_names", [f"mateclaw-ext-{name}"])
+    main_compose = os.path.join(_project_root, ".mateclaw", "docker-compose.yaml")
+    load_dotenv(PATHS["env"], override=True)
+
+    console.print(f"Stopping agent [bold]{name}[/bold]...")
+    for svc in container_names:
+        subprocess.run(
+            DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path, "stop", svc],
+            check=False, cwd=_project_root,
+        )
+
+    console.print(f"Starting agent [bold]{name}[/bold]...")
+    result = subprocess.run(
+        DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path,
+                                   "up", "-d", "--force-recreate"] + container_names,
+        check=False, cwd=_project_root,
+    )
+    if result.returncode == 0:
+        console.print(f"[green]Agent '{name}' restarted.[/green]")
+    else:
+        console.print(f"[red]Failed to restart agent '{name}'.[/red]"); raise typer.Exit(1)
+
+@agent_app.command("rebuild")
+def agent_rebuild(
+    name: str = typer.Argument(..., help="Agent name to rebuild"),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Build without Docker layer cache"),
+):
+    """Rebuild Docker images and restart a local agent from source."""
+    conf = ConfigManager.get_config()
+    if name not in conf.get("external_agents", {}):
+        console.print(f"[red]Error: Agent '{name}' not found.[/red]"); raise typer.Exit(1)
+    agent_conf = conf["external_agents"][name]
+    if agent_conf.get("type") != "github" or not agent_conf.get("fragment_path"):
+        console.print(f"[red]Error: Agent '{name}' is not a local agent (no compose fragment).[/red]"); raise typer.Exit(1)
+
+    fragment_path = agent_conf["fragment_path"]
+    container_names = agent_conf.get("container_names", [f"mateclaw-ext-{name}"])
+    source_path = agent_conf.get("source_path", "(unknown)")
+    main_compose = os.path.join(_project_root, ".mateclaw", "docker-compose.yaml")
+    load_dotenv(PATHS["env"], override=True)
+
+    console.print(f"Building [bold]{name}[/bold] from [cyan]{source_path}[/cyan]...")
+    build_cmd = DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path, "build"]
+    if no_cache:
+        build_cmd.append("--no-cache")
+    build_cmd.extend(container_names)
+
+    build_result = subprocess.run(build_cmd, cwd=_project_root)
+    if build_result.returncode != 0:
+        console.print(f"[red]Build failed for agent '{name}'.[/red]"); raise typer.Exit(1)
+
+    console.print(f"Starting rebuilt containers for [bold]{name}[/bold]...")
+    up_result = subprocess.run(
+        DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path,
+                                   "up", "-d", "--force-recreate"] + container_names,
+        cwd=_project_root,
+    )
+    if up_result.returncode == 0:
+        console.print(f"[green]Agent '{name}' rebuilt and restarted.[/green]")
+    else:
+        console.print(f"[red]Failed to start agent '{name}' after build.[/red]"); raise typer.Exit(1)
+
 @app.command()
 def chat(app_name: str = typer.Option(None)):
     """Interactive CLI Chat."""

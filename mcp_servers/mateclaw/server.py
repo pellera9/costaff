@@ -42,7 +42,7 @@ logger = logging.getLogger("mateclaw-agent-engine")
 tz = pytz.timezone(os.getenv("TIMEZONE", "UTC"))
 
 # Port is configurable via MCP_MATECLAW_PORT env var (default: 8081)
-mcp = FastMCP("Mateclaw", host="0.0.0.0", port=int(os.getenv("MCP_MATECLAW_PORT", "8081")))
+mcp = FastMCP("Mateclaw", host="0.0.0.0", port=int(os.getenv("MCP_MATECLAW_PORT", "8081")), stateless_http=True)
 scheduler = AsyncIOScheduler(timezone=tz)
 
 # --- Header Encryption Helpers ---
@@ -444,7 +444,10 @@ async def send_message_now(channel: str, recipient: str, subject: str = None, bo
     elif "dc" in chan or "discord" in chan: chan = "discord"
     elif "line" in chan: chan = "line"
 
-    msg = body or "No content."
+    if not body or not body.strip():
+        return "Error: body is required. Please provide the message content before calling send_message_now."
+
+    msg = body
     if chan == "telegram": success = send_telegram_notification(recipient, msg, session_id=session_id)
     elif chan == "discord": success = send_discord_notification(recipient, msg, session_id=session_id)
     elif chan == "line": success = await send_line_notification(recipient, msg)
@@ -917,37 +920,35 @@ async def startup():
 if __name__ == "__main__":
     async def main():
         await startup()
-        if os.getenv("MCP_TRANSPORT") == "sse":
-            import uvicorn
-            from starlette.middleware.base import BaseHTTPMiddleware
-            from starlette.responses import Response as StarletteResponse
+        import uvicorn
+        from starlette.middleware.base import BaseHTTPMiddleware
+        from starlette.responses import Response as StarletteResponse
 
-            starlette_app = mcp.sse_app()
+        starlette_app = mcp.streamable_http_app()
+        logger.info("MCP transport: streamable-http (endpoint: /mcp)")
 
-            mcp_secret = os.getenv("MCP_SECRET_KEY")
-            if mcp_secret:
-                class BearerMiddleware(BaseHTTPMiddleware):
-                    async def dispatch(self, request, call_next):
-                        auth = request.headers.get("authorization", "")
-                        if auth != f"Bearer {mcp_secret}":
-                            return StarletteResponse("Unauthorized", status_code=401)
-                        return await call_next(request)
+        mcp_secret = os.getenv("MCP_SECRET_KEY")
+        if mcp_secret:
+            class BearerMiddleware(BaseHTTPMiddleware):
+                async def dispatch(self, request, call_next):
+                    auth = request.headers.get("authorization", "")
+                    if auth != f"Bearer {mcp_secret}":
+                        return StarletteResponse("Unauthorized", status_code=401)
+                    return await call_next(request)
 
-                starlette_app = BearerMiddleware(starlette_app)
-                logger.info("MCP Bearer token authentication enabled.")
-            else:
-                logger.warning("MCP_SECRET_KEY not set — MCP server running without authentication.")
-
-            config = uvicorn.Config(
-                starlette_app,
-                host="0.0.0.0",
-                port=int(os.getenv("MCP_MATE_PORT", "8081")),
-                log_level="info",
-            )
-            server = uvicorn.Server(config)
-            await server.serve()
+            starlette_app = BearerMiddleware(starlette_app)
+            logger.info("MCP Bearer token authentication enabled.")
         else:
-            await mcp.run_stdio_async()
+            logger.warning("MCP_SECRET_KEY not set — MCP server running without authentication.")
+
+        config = uvicorn.Config(
+            starlette_app,
+            host="0.0.0.0",
+            port=int(os.getenv("MCP_MATE_PORT", "8081")),
+            log_level="info",
+        )
+        server = uvicorn.Server(config)
+        await server.serve()
 
     try:
         asyncio.run(main())

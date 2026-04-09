@@ -55,7 +55,6 @@ services:
     env_file:
       - .env
     environment:
-      - MCP_TRANSPORT=sse
       - PYTHONUNBUFFERED=1
       - ADK_API_BASE_URL=http://mateclaw-agent:8080
       - PYTHONPATH=/app

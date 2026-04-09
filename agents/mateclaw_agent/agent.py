@@ -78,7 +78,23 @@ else:
     logger.info(f"Using Gemini model provider: {selected_model}")
 
 # --- Sub-Agents (RemoteA2aAgent via A2A) ---
-# Loaded dynamically from EXTERNAL_AGENTS_CONFIG env var (JSON dict: name -> {a2a_url, description})
+# Loaded dynamically from EXTERNAL_AGENTS_CONFIG env var (JSON dict: name -> {a2a_url})
+# Description is fetched from each agent's own agent card at startup.
+def _fetch_agent_card_description(a2a_url: str, agent_name: str) -> str:
+    """Fetch the agent's description from its agent card. Falls back to a generic label."""
+    import httpx
+    try:
+        resp = httpx.get(f"{a2a_url}/.well-known/agent-card.json", timeout=5.0)
+        if resp.status_code == 200:
+            card = resp.json()
+            description = card.get("description", "").strip()
+            if description:
+                logger.info(f"Fetched description for '{agent_name}' from agent card")
+                return description
+    except Exception as e:
+        logger.warning(f"Could not fetch agent card for '{agent_name}' from {a2a_url}: {e}")
+    return f"Sub-agent: {agent_name}"
+
 sub_agents = []
 raw_agents = os.getenv("EXTERNAL_AGENTS_CONFIG", "").strip()
 if raw_agents:
@@ -91,9 +107,10 @@ if raw_agents:
                 logger.warning(f"Skipping agent '{agent_name}': no a2a_url")
                 continue
             try:
+                description = _fetch_agent_card_description(a2a_url, agent_name)
                 remote_agent = RemoteA2aAgent(
                     name=agent_name.replace("-", "_"),
-                    description=agent_cfg.get("description", f"Sub-agent: {agent_name}"),
+                    description=description,
                     agent_card=f"{a2a_url}{AGENT_CARD_WELL_KNOWN_PATH}",
                     use_legacy=False,
                 )
@@ -108,7 +125,15 @@ if raw_agents:
 root_agent = LlmAgent(
     model=selected_model,
     name="mateclaw_agent",
-    description="Mateclaw Agent: High-efficiency proactive personal AI assistant (Ace 2)",
+    description=(
+        "Mateclaw Agent: a personal AI assistant for scheduling, reminders, profile management, "
+        "and general knowledge. "
+        "Responsible for: answering questions with general knowledge; managing user profile and identity; "
+        "creating and managing reminders and scheduled messages; managing Kanban tasks for recurring "
+        "automated work; calling user-registered external APIs; discovering and invoking registered Skills; "
+        "orchestrating sub-agents for tasks requiring code execution, data analysis, or report generation. "
+        "Communicates with users via Telegram, Discord, or Line."
+    ),
     instruction=AGENT_INSTRUCTION,
     tools=tools,
     sub_agents=sub_agents,
