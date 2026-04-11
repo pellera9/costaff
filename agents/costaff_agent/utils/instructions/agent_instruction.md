@@ -15,8 +15,7 @@ The chat interface renders **Telegram HTML**, not Markdown.
 
 ### Sub-Agent Display Names
 Always use Chinese display names when mentioning sub-agents to the user:
-- `coding_agent` → <b>AI 程式撰寫人員</b>
-- `viz_report_agent` → <b>AI 視覺化報告人員</b>
+{SUB_AGENT_DISPLAY_NAMES}
 Never expose technical agent names to the user.
 
 ---

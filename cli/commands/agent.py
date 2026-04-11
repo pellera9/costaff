@@ -28,6 +28,7 @@ def agent_add(
     url: Optional[str] = typer.Option(None, "--url", help="Remote A2A endpoint URL"),
     local: Optional[str] = typer.Option(None, "--local", help="Local project path (CoStaff Agent Convention)"),
     github: Optional[str] = typer.Option(None, "--github", help="GitHub repository URL to clone and deploy"),
+    env: Optional[list[str]] = typer.Option(None, "--env", "-e", help="Set environment variables (e.g. KEY=VALUE)"),
     description: str = typer.Option("", "--description", "-d", help="Short description"),
 ):
     """Add an external agent (URL, Local, or GitHub mode)."""
@@ -44,6 +45,14 @@ def agent_add(
     if name in conf.get("external_agents", {}):
         console.print(f"[red]Error: Agent '{name}' already exists. Use 'costaff agent remove {name}' first.[/red]")
         raise typer.Exit(1)
+
+    # Parse provided env vars
+    predefined_envs = {}
+    if env:
+        for e in env:
+            if "=" in e:
+                k, v = e.split("=", 1)
+                predefined_envs[k.strip()] = v.strip()
 
     if github:
         target_src = os.path.join(_project_root, ".costaff", "src", name)
@@ -64,7 +73,7 @@ def agent_add(
 
     if local:
         try:
-            entry = _deploy_local_agent(name, local, conf)
+            entry = _deploy_local_agent(name, local, conf, predefined_envs=predefined_envs)
         except Exception as e:
             console.print(f"[red]Deploy failed: {e}[/red]")
             raise typer.Exit(1)

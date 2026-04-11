@@ -52,7 +52,7 @@ def _next_available_port(conf: dict) -> int:
     raise RuntimeError("No available ports in range 18100-18199")
 
 
-def _deploy_local_agent(name: str, source_path: str, conf: dict) -> dict:
+def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs: dict = None) -> dict:
     """Build and start a local-path agent following CoStaff Agent Convention."""
     import yaml as _yaml
     from dotenv import load_dotenv
@@ -75,6 +75,12 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict) -> dict:
     port = manifest.get("port", 8081)
     description = manifest.get("description", "")
     version = manifest.get("version", "")
+
+    # Handle predefined envs first
+    if predefined_envs:
+        for k, v in predefined_envs.items():
+            set_key(PATHS["env"], k, v)
+        load_dotenv(PATHS["env"], override=True)
 
     # Check env_required
     load_dotenv(PATHS["env"])

@@ -79,23 +79,44 @@ else:
 
 # --- Sub-Agents (RemoteA2aAgent via A2A) ---
 # Loaded dynamically from EXTERNAL_AGENTS_CONFIG env var (JSON dict: name -> {a2a_url})
-# Description is fetched from each agent's own agent card at startup.
-def _fetch_agent_card_description(a2a_url: str, agent_name: str) -> str:
-    """Fetch the agent's description from its agent card. Falls back to a generic label."""
+# Metadata is fetched from each agent's own agent card at startup.
+def _fetch_agent_card_metadata(a2a_url: str, agent_name: str) -> dict:
+    """Fetch metadata from agent card. Tries multiple well-known paths and includes retries."""
     import httpx
-    try:
-        resp = httpx.get(f"{a2a_url}/.well-known/agent-card.json", timeout=5.0)
-        if resp.status_code == 200:
-            card = resp.json()
-            description = card.get("description", "").strip()
-            if description:
-                logger.info(f"Fetched description for '{agent_name}' from agent card")
-                return description
-    except Exception as e:
-        logger.warning(f"Could not fetch agent card for '{agent_name}' from {a2a_url}: {e}")
-    return f"Sub-agent: {agent_name}"
+    import time
+    metadata = {"description": f"Sub-agent: {agent_name}", "display_name": agent_name}
+    
+    # Paths to try
+    paths = ["/.well-known/agent.json", "/.well-known/agent-card.json"]
+    
+    # 3 attempts with exponential backoff
+    for attempt in range(3):
+        for path in paths:
+            try:
+                url = f"{a2a_url.rstrip('/')}{path}"
+                resp = httpx.get(url, timeout=5.0)
+                if resp.status_code == 200:
+                    card = resp.json()
+                    desc = card.get("description", "").strip()
+                    if desc: metadata["description"] = desc
+                    # Check for display_name in capabilities
+                    display_name = card.get("capabilities", {}).get("display_name", "").strip()
+                    if display_name:
+                        metadata["display_name"] = display_name
+                        logger.info(f"Fetched display_name '{display_name}' for '{agent_name}' from {path}")
+                    return metadata
+            except Exception as e:
+                pass
+        
+        if attempt < 2:
+            logger.info(f"Retrying fetch for '{agent_name}' in 3s... (attempt {attempt+1})")
+            time.sleep(3)
+            
+    logger.warning(f"Could not fetch agent card for '{agent_name}' from {a2a_url} after retries.")
+    return metadata
 
 sub_agents = []
+agent_display_mappings = []
 raw_agents = os.getenv("EXTERNAL_AGENTS_CONFIG", "").strip()
 if raw_agents:
     try:
@@ -107,19 +128,24 @@ if raw_agents:
                 logger.warning(f"Skipping agent '{agent_name}': no a2a_url")
                 continue
             try:
-                description = _fetch_agent_card_description(a2a_url, agent_name)
+                meta = _fetch_agent_card_metadata(a2a_url, agent_name)
                 remote_agent = RemoteA2aAgent(
                     name=agent_name.replace("-", "_"),
-                    description=description,
+                    description=meta["description"],
                     agent_card=f"{a2a_url}{AGENT_CARD_WELL_KNOWN_PATH}",
                     use_legacy=False,
                 )
                 sub_agents.append(remote_agent)
+                agent_display_mappings.append(f"- `{(agent_name.replace('-', '_'))}` → <b>{meta['display_name']}</b>")
                 logger.info(f"Registered sub-agent '{agent_name}': {a2a_url}")
             except Exception as e:
                 logger.warning(f"Failed to load agent '{agent_name}': {e}")
     except json.JSONDecodeError as e:
         logger.error(f"EXTERNAL_AGENTS_CONFIG is not valid JSON: {e}")
+
+# Construct dynamic instruction
+display_names_block = "\n".join(agent_display_mappings) if agent_display_mappings else "- (No external agents registered)"
+instruction = AGENT_INSTRUCTION.replace("{SUB_AGENT_DISPLAY_NAMES}", display_names_block)
 
 # Define the root agent
 root_agent = LlmAgent(
@@ -134,7 +160,7 @@ root_agent = LlmAgent(
         "orchestrating sub-agents for tasks requiring code execution, data analysis, or report generation. "
         "Communicates with users via Telegram, Discord, or Line."
     ),
-    instruction=AGENT_INSTRUCTION,
+    instruction=instruction,
     tools=tools,
     sub_agents=sub_agents,
 )
