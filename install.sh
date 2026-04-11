@@ -2,14 +2,14 @@
 set -e
 
 # =============================================================================
-# Mate Agent - Installer
+# CoStaff - Installer
 # Supports: macOS (12+), Ubuntu (20.04 / 22.04 / 24.04)
 # Usage: curl -fsSL https://YOUR_DOMAIN/install.sh | bash
 # =============================================================================
 
-REPO_URL="https://github.com/YOUR_USERNAME/mateclaw-agent.git"  # TODO: update before release
-MATE_DIR="$HOME/.mateclaw-agent"
-VENV_DIR="$MATE_DIR/.venv"
+REPO_URL="https://github.com/YOUR_USERNAME/costaff-agent.git"  # TODO: update before release
+COSTAFF_DIR="$HOME/.costaff-agent"
+VENV_DIR="$COSTAFF_DIR/.venv"
 PYTHON_VERSION="3.11"
 
 # --- Colors ---
@@ -151,32 +151,32 @@ install_ubuntu() {
 # =============================================================================
 # Common: Clone & Install CLI
 # =============================================================================
-install_mateclaw() {
+install_costaff() {
     # Clone repo
-    step "Downloading Mateclaw Agent..."
-    if [ -d "$MATE_DIR/.git" ]; then
-        warn "Mateclaw Agent already exists at $MATE_DIR — pulling latest changes..."
-        git -C "$MATE_DIR" pull --ff-only
+    step "Downloading CoStaff Agent..."
+    if [ -d "$COSTAFF_DIR/.git" ]; then
+        warn "CoStaff Agent already exists at $COSTAFF_DIR — pulling latest changes..."
+        git -C "$COSTAFF_DIR" pull --ff-only
     else
-        git clone "$REPO_URL" "$MATE_DIR"
+        git clone "$REPO_URL" "$COSTAFF_DIR"
     fi
-    success "Mateclaw Agent downloaded to $MATE_DIR"
+    success "CoStaff Agent downloaded to $COSTAFF_DIR"
 
     # Create venv & install CLI
-    step "Installing Mateclaw CLI..."
+    step "Installing CoStaff CLI..."
     $PYTHON_BIN -m venv "$VENV_DIR"
     "$VENV_DIR/bin/pip" install --upgrade pip -q
-    "$VENV_DIR/bin/pip" install -e "$MATE_DIR" -q
-    success "Mateclaw CLI installed."
+    "$VENV_DIR/bin/pip" install -e "$COSTAFF_DIR" -q
+    success "CoStaff CLI installed."
 
     # Add to PATH
     step "Configuring PATH..."
     EXPORT_LINE="export PATH=\"$VENV_DIR/bin:\$PATH\""
     if ! grep -qF "$VENV_DIR/bin" "$SHELL_RC" 2>/dev/null; then
         echo "" >> "$SHELL_RC"
-        echo "# Mateclaw Agent CLI" >> "$SHELL_RC"
+        echo "# CoStaff Agent CLI" >> "$SHELL_RC"
         echo "$EXPORT_LINE" >> "$SHELL_RC"
-        success "Added mateclaw to PATH in $SHELL_RC"
+        success "Added costaff to PATH in $SHELL_RC"
     else
         success "PATH already configured."
     fi
@@ -195,7 +195,7 @@ print_manual_steps() {
 
     if [ ${#MANUAL_STEPS[@]} -gt 0 ]; then
         echo ""
-        echo -e "${YELLOW}${BOLD}Before running 'mateclaw onboard', please complete these manual steps:${RESET}"
+        echo -e "${YELLOW}${BOLD}Before running 'costaff onboard', please complete these manual steps:${RESET}"
         echo ""
         for i in "${!MANUAL_STEPS[@]}"; do
             echo -e "  ${BOLD}$((i+1)).${RESET} ${MANUAL_STEPS[$i]}"
@@ -203,13 +203,13 @@ print_manual_steps() {
         echo ""
         echo -e "  ${BOLD}$((${#MANUAL_STEPS[@]}+1)).${RESET} Reload your shell: ${BOLD}source $SHELL_RC${RESET}"
         echo ""
-        echo -e "  Then run: ${GREEN}${BOLD}mateclaw onboard${RESET}"
+        echo -e "  Then run: ${GREEN}${BOLD}costaff onboard${RESET}"
     else
         echo ""
         echo -e "  Run the following to get started:"
         echo ""
         echo -e "    ${BOLD}source $SHELL_RC${RESET}"
-        echo -e "    ${GREEN}${BOLD}mateclaw onboard${RESET}"
+        echo -e "    ${GREEN}${BOLD}costaff onboard${RESET}"
         echo ""
     fi
 
@@ -226,9 +226,9 @@ run_onboard() {
         return
     fi
 
-    echo -e "${BOLD}Starting mateclaw onboard...${RESET}\n"
+    echo -e "${BOLD}Starting costaff onboard...${RESET}\n"
     source "$SHELL_RC" 2>/dev/null || true
-    mateclaw onboard
+    costaff onboard
 }
 
 # =============================================================================
@@ -236,7 +236,7 @@ run_onboard() {
 # =============================================================================
 main() {
     echo ""
-    echo -e "${BOLD}  Mateclaw Agent Installer${RESET}"
+    echo -e "${BOLD}  CoStaff Agent Installer${RESET}"
     echo -e "  ─────────────────────"
     echo ""
 
@@ -247,7 +247,7 @@ main() {
         ubuntu) install_ubuntu ;;
     esac
 
-    install_mateclaw
+    install_costaff
     print_manual_steps
     run_onboard
 }

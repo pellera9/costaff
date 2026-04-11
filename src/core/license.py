@@ -1,5 +1,5 @@
 """
-Mate Agent License Manager
+CoStaff License Manager
 Validates Ed25519-signed YAML license files and enforces plan limits.
 """
 import os
@@ -125,7 +125,7 @@ class LicenseInfo:
 class LicenseManager:
     _license: Optional[LicenseInfo] = None
 
-    DEFAULT_PATH = os.path.join(os.path.expanduser("~"), ".mate", "mate-license.yaml")
+    DEFAULT_PATH = os.path.join(os.path.expanduser("~"), ".costaff", "costaff-license.yaml")
 
     @classmethod
     def load(cls, path: Optional[str] = None) -> Optional[LicenseInfo]:
@@ -134,7 +134,7 @@ class LicenseManager:
         Returns LicenseInfo on success, None if no license file found.
         Raises ValueError on invalid, expired, or machine-mismatched license.
         """
-        license_path = path or os.getenv("MATE_LICENSE_PATH") or cls.DEFAULT_PATH
+        license_path = path or os.getenv("COSTAFF_LICENSE_PATH") or cls.DEFAULT_PATH
 
         if not os.path.exists(license_path):
             logger.info("No license file found. Running on OSS Plan.")
@@ -265,20 +265,29 @@ class LicenseManager:
     @classmethod
     def check_execution_limit(cls, user_id: str, db) -> None:
         """
-        Checks monthly successful Kanban Task execution count against the license limit.
+        Checks monthly successful execution count against the license limit.
         - Raises ExecutionWarning at 80% usage (non-blocking, caller sends notification).
         - Raises ValueError at 100% usage (blocking, caller must abort execution).
-        Only counts TaskLog entries with status == 'done'; failed executions are free.
+        Counts: completed ProjectTasks + successful RegularWorkLogs this month.
+        Failed executions are not counted.
         """
-        from src.core.models import TaskLog
+        from src.core.models import ProjectTask, RegularWorkLog
         limit = cls.get().monthly_executions
         month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-        used = db.query(TaskLog).filter(
-            TaskLog.user_id == user_id,
-            TaskLog.status == "done",
-            TaskLog.created_at >= month_start,
+        task_count = db.query(ProjectTask).filter(
+            ProjectTask.user_id == user_id,
+            ProjectTask.status == "done",
+            ProjectTask.updated_at >= month_start,
         ).count()
+
+        work_count = db.query(RegularWorkLog).filter(
+            RegularWorkLog.user_id == user_id,
+            RegularWorkLog.status == "success",
+            RegularWorkLog.created_at >= month_start,
+        ).count()
+
+        used = task_count + work_count
 
         if used >= limit:
             plan = cls.get().plan.upper()

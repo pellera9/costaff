@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
-APP_NAME = os.getenv("ADK_APP_NAME", "mate_agent")
-SALT = os.getenv("ID_SALT", "default_secret_mate_salt")
+APP_NAME = os.getenv("ADK_APP_NAME", "costaff_agent")
+SALT = os.getenv("ID_SALT", "default_secret_costaff_salt")
 
 if not ACCESS_TOKEN or not CHANNEL_SECRET:
     logger.warning("LINE credentials missing. Line bot will not function correctly.")
@@ -46,10 +46,10 @@ def _require_approval() -> bool:
     """
     import json as _json
     project_root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    license_path = os.path.join(project_root, ".mateclaw", "mateclaw-license.yaml")
+    license_path = os.path.join(project_root, ".costaff", "costaff-license.yaml")
     if not os.path.exists(license_path):
         return False  # OSS: approval gate not available
-    config_path = os.path.join(project_root, ".mateclaw", "config.json")
+    config_path = os.path.join(project_root, ".costaff", "config.json")
     try:
         with open(config_path, "r") as f:
             return _json.load(f).get("require_approval", True)

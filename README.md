@@ -1,4 +1,4 @@
-# Mateclaw
+# CoStaff
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Docker Support](https://img.shields.io/badge/docker-supported-blue.svg)](https://www.docker.com/)
@@ -9,9 +9,9 @@
 
 [繁體中文](./README_zhtw.md) | **English**
 
-**Mateclaw** is a self-hosted, privacy-first AI agent platform built on **Google ADK (Agent Development Kit)** and **Model Context Protocol (MCP)**. It connects your preferred chat platforms — **Telegram, Discord, and Line** — while exposing a full-featured web dashboard for operators to manage agents, tools, users, and sessions.
+**CoStaff** is a self-hosted, privacy-first AI agent platform built on **Google ADK (Agent Development Kit)** and **Model Context Protocol (MCP)**. It connects your preferred chat platforms — **Telegram, Discord, and Line** — while exposing a full-featured web dashboard for operators to manage agents, tools, users, and sessions.
 
-External agents (such as [`mateclaw-coding-agent`](https://github.com/MateClawAI/mateclaw-coding-agent) and [`mateclaw-viz-report-agent`](https://github.com/MateClawAI/mateclaw-viz-report-agent)) integrate via the **A2A protocol**, extending the platform's capabilities without modifying the core.
+External agents (such as [`costaff-coding-agent`](https://github.com/CoStaffAI/costaff-coding-agent) and [`costaff-viz-report-agent`](https://github.com/CoStaffAI/costaff-viz-report-agent)) integrate via the **A2A protocol**, extending the platform's capabilities without modifying the core.
 
 ---
 
@@ -31,7 +31,7 @@ External agents (such as [`mateclaw-coding-agent`](https://github.com/MateClawAI
 
 ## Features
 
-- **Multi-Agent Orchestration** — The primary Mateclaw Agent delegates tasks to external agents via A2A protocol; add any `mateclaw.agent.json`-compatible agent with a single CLI command
+- **Multi-Agent Orchestration** — The primary CoStaff Agent delegates tasks to external agents via A2A protocol; add any `costaff.agent.json`-compatible agent with a single CLI command
 - **Per-Agent Tool Assignment** — Assign which MCPs, APIs, and Skills each agent can access; changes apply with a targeted restart, no full redeploy needed
 - **Dynamic MCP Layer** — Core MCPs are always present; add external MCPs (streamable HTTP or SSE) from the dashboard at runtime
 - **API & Skill Registry** — Register external REST APIs and reusable prompt templates in the database, assigned per-agent and per-user
@@ -54,10 +54,10 @@ graph TD
     User_DC((Discord)) <--> Bot_DC[Discord Bot]
     User_LN((Line)) <--> Bot_LN[Line Bot]
 
-    Bot_TG & Bot_DC & Bot_LN <--> MateclawAgent[Mateclaw Agent\nGoogle ADK]
+    Bot_TG & Bot_DC & Bot_LN <--> CoStaffAgent[CoStaff Agent\nGoogle ADK]
 
-    MateclawAgent <--> MCP_Core[Core MCP]
-    MateclawAgent <--> MCP_Ext[External MCPs\nStreamable HTTP / SSE]
+    CoStaffAgent <--> MCP_Core[Core MCP]
+    CoStaffAgent <--> MCP_Ext[External MCPs\nStreamable HTTP / SSE]
 
     MCP_Core <--> DB[(PostgreSQL / SQLite)]
     MCP_Core <--> Scheduler[APScheduler]
@@ -66,19 +66,19 @@ graph TD
 
     Dashboard[Web Dashboard] <--> API[FastAPI Backend]
     API <--> DB
-    API -->|restart| MateclawAgent
+    API -->|restart| CoStaffAgent
 ```
 
 ---
 
 ## Web Dashboard
 
-The dashboard (`mateclaw dashboard`) is a browser-based operator console with dark/light mode:
+The dashboard (`cst dashboard`) is a browser-based operator console with dark/light mode:
 
 | Module | Description |
 |--------|-------------|
 | **Dashboard** | Live system stats (CPU, memory, disk) and service health overview |
-| **Chat** | Talk to the Mateclaw Agent directly from the browser with full conversation history |
+| **Chat** | Talk to the CoStaff Agent directly from the browser with full conversation history |
 | **Agents** | View internal/external agent status; configure per-agent MCP assignments with Apply & Restart |
 | **MCPs** | Manage MCP extensions — add/remove external MCPs at runtime |
 | **APIs** | Register external REST API configs and assign them per-agent or per-user |
@@ -95,27 +95,27 @@ The dashboard (`mateclaw dashboard`) is a browser-based operator console with da
 
 ## External Agents
 
-Mateclaw supports deploying and managing external agents that communicate via the **A2A protocol**.
+CoStaff supports deploying and managing external agents that communicate via the **A2A protocol**.
 
-Any project containing a `mateclaw.agent.json` manifest can be registered and deployed:
+Any project containing a `costaff.agent.json` manifest can be registered and deployed:
 
 ```bash
 # Deploy a local agent project
-mateclaw agent deploy --local /path/to/my-agent
+cst agent deploy --local /path/to/my-agent
 
 # Add a remote URL agent
-mateclaw agent add my-agent --url http://my-agent.example.com
+cst agent add my-agent --url http://my-agent.example.com
 
 # List all agents
-mateclaw agent list
+cst agent list
 ```
 
 **First-party agents:**
 
 | Agent | Repository | Role |
 |-------|------------|------|
-| Coding Agent | [mateclaw-coding-agent](https://github.com/MateClawAI/mateclaw-coding-agent) | Sandboxed Python code execution |
-| Viz Report Agent | [mateclaw-viz-report-agent](https://github.com/MateClawAI/mateclaw-viz-report-agent) | Chart generation & HTML/PDF reports |
+| Coding Agent | [costaff-coding-agent](https://github.com/CoStaffAI/costaff-coding-agent) | Sandboxed Python code execution |
+| Viz Report Agent | [costaff-viz-report-agent](https://github.com/CoStaffAI/costaff-viz-report-agent) | Chart generation & HTML/PDF reports |
 
 ---
 
@@ -157,7 +157,7 @@ pip install -e .
 ### 2. Run the Setup Wizard
 
 ```bash
-mateclaw onboard
+cst onboard
 ```
 
 The wizard configures:
@@ -167,18 +167,18 @@ The wizard configures:
 - Admin credentials for the web dashboard
 - Identity hashing salt
 
-All configuration is saved to `.mateclaw/` in the current directory.
+All configuration is saved to `.costaff/` in the current directory.
 
 ### 3. Start the Platform
 
 ```bash
-mateclaw start
+cst start
 ```
 
 ### 4. Open the Dashboard
 
 ```bash
-mateclaw dashboard
+cst dashboard
 ```
 
 Opens the web UI at `http://localhost:8501`.
@@ -189,22 +189,22 @@ Opens the web UI at `http://localhost:8501`.
 
 | Command | Description |
 |---------|-------------|
-| `mateclaw onboard` | Interactive setup wizard |
-| `mateclaw start` | Build and start all services |
-| `mateclaw start --no-build` | Start without rebuilding images |
-| `mateclaw stop` | Stop all services |
-| `mateclaw restart` | Restart all services |
-| `mateclaw ps` | Show status of running services |
-| `mateclaw dashboard` | Open the web dashboard |
-| `mateclaw chat` | CLI-based chat with the agent |
-| `mateclaw agent deploy --local <path>` | Deploy a local agent project |
-| `mateclaw agent add <name> --url <url>` | Register a remote URL agent |
-| `mateclaw agent list` | List all registered agents |
-| `mateclaw agent remove <name>` | Remove a registered agent |
-| `mateclaw config show` | Display current configuration |
-| `mateclaw database backup` | Backup the database |
-| `mateclaw database restore` | Restore from a backup |
-| `mateclaw version` | Show CLI version |
+| `cst onboard` | Interactive setup wizard |
+| `cst start` | Build and start all services |
+| `cst start --no-build` | Start without rebuilding images |
+| `costaff stop` | Stop all services |
+| `costaff restart` | Restart all services |
+| `costaff ps` | Show status of running services |
+| `cst dashboard` | Open the web dashboard |
+| `costaff chat` | CLI-based chat with the agent |
+| `cst agent deploy --local <path>` | Deploy a local agent project |
+| `cst agent add <name> --url <url>` | Register a remote URL agent |
+| `cst agent list` | List all registered agents |
+| `cst agent remove <name>` | Remove a registered agent |
+| `costaff config show` | Display current configuration |
+| `costaff database backup` | Backup the database |
+| `costaff database restore` | Restore from a backup |
+| `costaff version` | Show CLI version |
 
 ---
 

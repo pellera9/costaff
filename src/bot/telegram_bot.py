@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 # Basic Bot Configuration
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-APP_NAME = os.getenv("ADK_APP_NAME", "mate_agent")
-SALT = os.getenv("ID_SALT", "default_secret_mate_salt")
+APP_NAME = os.getenv("ADK_APP_NAME", "costaff_agent")
+SALT = os.getenv("ID_SALT", "default_secret_costaff_salt")
 
 # PrivAI Configuration for handling direct file/photo uploads from Telegram
 PRIVAI_URL = os.getenv("PRIVAI_API_BASE_URL", "https://api.bcm.apmic.ai").rstrip("/")
@@ -54,10 +54,10 @@ def _require_approval() -> bool:
     OSS installations (no license file) always return False — no approval gate.
     """
     project_root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    license_path = os.path.join(project_root, ".mateclaw", "mateclaw-license.yaml")
+    license_path = os.path.join(project_root, ".costaff", "costaff-license.yaml")
     if not os.path.exists(license_path):
         return False  # OSS: approval gate not available
-    config_path = os.path.join(project_root, ".mateclaw", "config.json")
+    config_path = os.path.join(project_root, ".costaff", "config.json")
     try:
         with open(config_path, "r") as f:
             return json.load(f).get("require_approval", True)
@@ -102,7 +102,7 @@ async def safe_reply(msg: Message, text: str):
         logger.warning(f"HTML reply failed, sending plain text: {e}")
         await msg.answer(text)
 
-async def upload_to_mate(file_content: io.BytesIO, filename: str, user_id: str, sid: str = None, app_name: str = "mate_agent") -> str:
+async def upload_to_costaff(file_content: io.BytesIO, filename: str, user_id: str, sid: str = None, app_name: str = "costaff_agent") -> str:
     """
     Directly uploads a file received from Telegram to the PrivAI cloud server.
     """
@@ -186,7 +186,7 @@ async def cmd_reset(msg: Message):
 @dp.message(Command("help"))
 async def cmd_help(msg: Message):
     """Displays a list of available slash commands."""
-    txt = ("<b>Mate Agent 指令：</b>\n"
+    txt = ("<b>CoStaff 指令：</b>\n"
            "/start - 開始/身份檢查\n"
            "/reset - 重設對話\n"
            "/profile - 查看個人資料\n"
@@ -350,7 +350,7 @@ async def handle_msg(msg: Message):
         with open(fpath, "wb") as f:
             f.write(buf.read())
         uploaded_file_paths.append(fpath)
-        await upload_to_mate(buf, fname, uid, sid=sid, app_name=APP_NAME)
+        await upload_to_costaff(buf, fname, uid, sid=sid, app_name=APP_NAME)
 
     if msg.document:
         doc = msg.document
@@ -363,7 +363,7 @@ async def handle_msg(msg: Message):
         with open(fpath, "wb") as f:
             f.write(buf.read())
         uploaded_file_paths.append(fpath)
-        await upload_to_mate(buf, fname, uid, sid=sid, app_name=APP_NAME)
+        await upload_to_costaff(buf, fname, uid, sid=sid, app_name=APP_NAME)
 
     # Inject uploaded file paths into the agent message
     if uploaded_file_paths:

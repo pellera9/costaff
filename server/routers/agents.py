@@ -1,0 +1,158 @@
+import re
+import threading
+
+import httpx
+from fastapi import APIRouter, HTTPException, Depends
+
+from managers.auth import AuthManager
+from managers.config import ConfigManager
+from managers.docker import DockerManager
+from models.requests import ExternalAgentAddRequest, ExternalAgentUpdateRequest
+
+router = APIRouter()
+
+
+@router.get("/api/agents")
+def get_available_agents(auth: bool = Depends(AuthManager.verify_token)):
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            return client.get("http://localhost:18080/list-apps").json()
+    except Exception:
+        return []
+
+
+@router.get("/api/external-agents")
+def list_external_agents(auth: bool = Depends(AuthManager.verify_token)):
+    conf = ConfigManager.get_config()
+    result = []
+    for name, agent in conf.get("external_agents", {}).items():
+        # Skip legacy migrated entries that have no public_port (old compose-managed coding-agent)
+        if agent.get("type") == "github" and not agent.get("public_port"):
+            continue
+        health = False
+        if agent.get("enabled"):
+            # GitHub agents: use localhost:<public_port> (Docker internal URL not reachable from host)
+            # URL agents: use a2a_url directly
+            health_url = None
+            if agent.get("type") == "github" and agent.get("public_port"):
+                health_url = f"http://localhost:{agent['public_port']}/.well-known/agent.json"
+            elif agent.get("type") == "url" and agent.get("a2a_url"):
+                health_url = f"{agent['a2a_url']}/.well-known/agent.json"
+            if health_url:
+                try:
+                    with httpx.Client(timeout=3.0) as client:
+                        r = client.get(health_url)
+                        health = r.status_code == 200
+                except Exception:
+                    pass
+        result.append({
+            "name": name,
+            "type": agent.get("type", "url"),
+            "a2a_url": agent.get("a2a_url", ""),
+            "description": agent.get("description", ""),
+            "enabled": agent.get("enabled", True),
+            "mcp_configurable": agent.get("mcp_configurable", False),
+            "health": health,
+            "version": agent.get("version"),
+            "container_names": agent.get("container_names", []),
+        })
+    return result
+
+
+@router.post("/api/external-agents")
+def add_external_agent(req: ExternalAgentAddRequest, auth: bool = Depends(AuthManager.verify_token)):
+    name = req.name.strip().lower().replace(" ", "-")
+    if not re.match(r'^[a-z0-9][a-z0-9_-]*$', name):
+        raise HTTPException(400, "Agent name must be lowercase alphanumeric with hyphens/underscores.")
+    conf = ConfigManager.get_config()
+    if name in conf.get("external_agents", {}):
+        raise HTTPException(400, f"Agent '{name}' already exists.")
+    conf.setdefault("external_agents", {})[name] = {
+        "type": "url",
+        "a2a_url": req.a2a_url,
+        "description": req.description or "",
+        "enabled": True,
+    }
+    ConfigManager.save_config(conf)
+    ConfigManager.update_external_agents_env()
+    threading.Thread(target=DockerManager.run_action, args=("costaff-agent", "restart"), daemon=True).start()
+    return {"status": "ok", "name": name}
+
+
+@router.patch("/api/external-agents/{name}")
+def update_external_agent(name: str, req: ExternalAgentUpdateRequest, auth: bool = Depends(AuthManager.verify_token)):
+    conf = ConfigManager.get_config()
+    if name not in conf.get("external_agents", {}):
+        raise HTTPException(404, f"Agent '{name}' not found.")
+    agent = conf["external_agents"][name]
+    if req.a2a_url is not None:
+        agent["a2a_url"] = req.a2a_url
+    if req.description is not None:
+        agent["description"] = req.description
+    if req.enabled is not None:
+        agent["enabled"] = req.enabled
+        if name == "coding-agent":
+            conf["coding_agent_enabled"] = req.enabled
+    ConfigManager.save_config(conf)
+    ConfigManager.update_external_agents_env()
+    threading.Thread(target=DockerManager.run_action, args=("costaff-agent", "restart"), daemon=True).start()
+    return {"status": "ok"}
+
+
+@router.delete("/api/external-agents/{name}")
+def remove_external_agent(name: str, auth: bool = Depends(AuthManager.verify_token)):
+    conf = ConfigManager.get_config()
+    if name not in conf.get("external_agents", {}):
+        raise HTTPException(404, f"Agent '{name}' not found.")
+    if conf["external_agents"][name].get("type") == "github":
+        raise HTTPException(400, "GitHub-deployed agents must be removed via CLI: costaff agent remove")
+    del conf["external_agents"][name]
+    ConfigManager.save_config(conf)
+    ConfigManager.update_external_agents_env()
+    threading.Thread(target=DockerManager.run_action, args=("costaff-agent", "restart"), daemon=True).start()
+    return {"status": "ok"}
+
+
+@router.get("/api/dashboard/ai-team")
+def dashboard_ai_team(auth: bool = Depends(AuthManager.verify_token)):
+    """Returns active regular works with their last execution output + recent diary entries."""
+    import logging
+    from sqlalchemy import text
+    from managers.database import DatabaseManager
+    from utils.helpers import _serialize_row
+
+    logger = logging.getLogger(__name__)
+    engine = DatabaseManager.get_engine()
+    if not engine:
+        return {"works": [], "diary": []}
+    try:
+        with engine.connect() as conn:
+            # Active regular works with last log output
+            works_res = conn.execute(text(
+                "SELECT id, title, cron, agent_id, channel, recipient, status, last_run "
+                "FROM regular_works ORDER BY created_at ASC"
+            ))
+            works = []
+            for r in works_res:
+                w = _serialize_row(dict(r._mapping))
+                # Attach last successful log output
+                log = conn.execute(text(
+                    "SELECT output, status, created_at FROM regular_work_logs "
+                    "WHERE regular_work_id = :id ORDER BY created_at DESC LIMIT 1"
+                ), {"id": w["id"]}).fetchone()
+                w["last_output"] = log[0] if log else None
+                w["last_status"] = log[1] if log else None
+                w["last_ran_at"] = _serialize_row({"t": log[2]})["t"] if log else None
+                works.append(w)
+
+            # Recent diary entries
+            diary_res = conn.execute(text(
+                "SELECT id, agent_name, date, type, done, blocker, next, created_at "
+                "FROM diary ORDER BY date DESC, created_at DESC LIMIT 20"
+            ))
+            diary = [_serialize_row(dict(r._mapping)) for r in diary_res]
+
+        return {"works": works, "diary": diary}
+    except Exception as e:
+        logger.error(f"dashboard ai-team error: {e}")
+        return {"works": [], "diary": []}

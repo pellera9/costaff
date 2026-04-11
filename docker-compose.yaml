@@ -1,99 +1,105 @@
 services:
   bot-telegram:
     build: .
+    container_name: costaff-bot-telegram
     restart: always
     volumes:
-      - mateclaw_data:/app/data
+      - costaff_data:/app/data
     env_file:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONPATH=/app
-      - ADK_API_BASE_URL=http://mateclaw-agent:8080
-      - ADK_APP_NAME=mateclaw_agent
+      - ADK_API_BASE_URL=http://costaff-agent:8080
+      - ADK_APP_NAME=costaff_agent
     command: python src/bot/telegram_bot.py
     depends_on:
-      - mateclaw-agent
+      - costaff-agent
 
   bot-discord:
     build: .
+    container_name: costaff-bot-discord
     restart: always
     volumes:
-      - mateclaw_data:/app/data
+      - costaff_data:/app/data
     env_file:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONPATH=/app
-      - ADK_API_BASE_URL=http://mateclaw-agent:8080
-      - ADK_APP_NAME=mateclaw_agent
+      - ADK_API_BASE_URL=http://costaff-agent:8080
+      - ADK_APP_NAME=costaff_agent
     command: python src/bot/discord_bot.py
     depends_on:
-      - mateclaw-agent
+      - costaff-agent
 
   bot-line:
     build: .
+    container_name: costaff-bot-line
     restart: always
     volumes:
-      - mateclaw_data:/app/data
+      - costaff_data:/app/data
     env_file:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONPATH=/app
-      - ADK_API_BASE_URL=http://mateclaw-agent:8080
-      - ADK_APP_NAME=mateclaw_agent
+      - ADK_API_BASE_URL=http://costaff-agent:8080
+      - ADK_APP_NAME=costaff_agent
     command: python src/bot/line_bot.py
     depends_on:
-      - mateclaw-agent
+      - costaff-agent
 
-  mcp-mateclaw:
+  mcp-costaff:
     build: .
+    container_name: costaff-mcp-costaff
     restart: always
     volumes:
-      - mateclaw_data:/app/data
+      - costaff_data:/app/data
     env_file:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
-      - ADK_API_BASE_URL=http://mateclaw-agent:8080
+      - ADK_API_BASE_URL=http://costaff-agent:8080
       - PYTHONPATH=/app
       - MCP_SECRET_KEY=${MCP_SECRET_KEY}
       - API_HEADERS_KEY=${API_HEADERS_KEY}
-    command: python mcp_servers/mateclaw/server.py
+    command: python mcp_servers/server.py
 
-  mateclaw-agent:
+  costaff-agent:
     build:
       context: .
-      dockerfile: agents/mateclaw_agent/Dockerfile
+      dockerfile: agents/costaff_agent/Dockerfile
+    container_name: costaff-agent
     restart: on-failure
     ports:
-      - "${MATECLAW_AGENT_PORT:-18080}:8080"
+      - "${COSTAFF_AGENT_PORT:-18080}:8080"
     env_file:
       - .env
     volumes:
-      - mateclaw_data:/app/data
+      - costaff_data:/app/data
     environment:
       - MCP_SERVER_URLS=${MCP_SERVER_URLS}
-      - ADK_SESSION_SERVICE_URI=${ADK_SESSION_SERVICE_URI}
+      - ADK_SESSION_SERVICE_URI=${ADK_SESSION_SERVICE_URI:?ADK_SESSION_SERVICE_URI must be set in .env}
       - MCP_SECRET_KEY=${MCP_SECRET_KEY}
       - CODING_A2A_URL=${CODING_A2A_URL:-}
     command: ["adk", "web", "--host", "0.0.0.0", "--port", "8080", "--session_service_uri", "${ADK_SESSION_SERVICE_URI}", "."]
     depends_on:
-      - mcp-mateclaw
+      - mcp-costaff
 
   postgres:
     image: postgres:15-alpine
+    container_name: costaff-postgres
     restart: always
     environment:
-      - POSTGRES_USER=${POSTGRES_USER:-mate}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-mate_pass}
-      - POSTGRES_DB=${POSTGRES_DB:-mate_db}
+      - POSTGRES_USER=${POSTGRES_USER:-costaff}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-costaff_pass}
+      - POSTGRES_DB=${POSTGRES_DB:-costaff_db}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - mateclaw_db_data:/var/lib/postgresql/data
+      - costaff_db_data:/var/lib/postgresql/data
 
 volumes:
-  mateclaw_data:
-  mateclaw_db_data:
+  costaff_data:
+  costaff_db_data:

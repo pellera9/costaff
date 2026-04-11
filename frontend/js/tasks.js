@@ -1,291 +1,570 @@
-const Tasks = {
-    currentTasks: new Map(),
+// ============================================================
+// Projects Module — Epics / Stories / ProjectTasks
+// ============================================================
+const Projects = {
+    currentEpicId: null,
+    currentEpicTitle: null,
+    refreshTimer: null,
+    currentTasks: {},   // taskId -> task object cache
+    viewMode: 'list',   // 'list' | 'kanban'
 
-    init() {
-        this.loadTasks();
-        this.setupEventListeners();
-        // Auto refresh every 10 seconds to catch 'doing' -> 'done' transitions
-        this.refreshInterval = setInterval(() => {
+    async init() {
+        this.bindForm();
+        await this.showEpicBoard();
+        this.refreshTimer = setInterval(() => {
             const el = document.getElementById('view-tasks');
             if (el && !el.classList.contains('hidden')) {
-                this.loadTasks();
+                if (this.currentEpicId) this.loadStories(this.currentEpicId);
+                else this.loadEpics();
             }
-        }, 10000);
+        }, 15000);
     },
 
-    setupEventListeners() {
-        const form = document.getElementById('task-form');
-        if (form) {
-            form.onsubmit = async (e) => {
-                e.preventDefault();
-                const formData = new FormData(form);
-                const data = Object.fromEntries(formData.entries());
-                if (!data.title?.trim()) { alert('Task title is required.'); return; }
-                if (!data.spec?.trim()) { alert('Spec / Requirement is required.'); return; }
-                const taskId = data.task_id;
-                
-                try {
-                    let res;
-                    if (taskId) {
-                        // Update existing task
-                        res = await API.fetch(`/api/tasks/${taskId}`, {
-                            method: 'PUT',
-                            body: JSON.stringify(data)
-                        });
-                    } else {
-                        // Create new task
-                        res = await API.fetch('/api/tasks', {
-                            method: 'POST',
-                            body: JSON.stringify(data)
-                        });
-                    }
-                    
-                    if (res.status === 'success') {
-                        this.closeModal();
-                        this.loadTasks();
-                    }
-                } catch (err) {
-                    alert('Failed to save task: ' + err.message);
-                }
-            };
-        }
-    },
-
-    async loadTasks() {
-        try {
-            const tasks = await API.fetch('/api/tasks');
-            this.currentTasks.clear();
-            if (Array.isArray(tasks)) {
-                tasks.forEach(t => this.currentTasks.set(t.id, t));
-            }
-            this.renderKanban(tasks);
-        } catch (err) {
-            console.error('Failed to load tasks:', err);
-        }
-    },
-
-    renderKanban(tasks) {
-        if (!Array.isArray(tasks)) return;
-
-        const lists = {
-            backlog: document.getElementById('list-backlog'),
-            doing: document.getElementById('list-doing'),
-            done: document.getElementById('list-done'),
-            failed: document.getElementById('list-failed')
-        };
-
-        const counts = {
-            backlog: document.getElementById('count-backlog'),
-            doing: document.getElementById('count-doing'),
-            done: document.getElementById('count-done'),
-            failed: document.getElementById('count-failed')
-        };
-
-        // Clear lists (deduplicate since failed no longer points to done)
-        const seen = new Set();
-        Object.values(lists).forEach(l => { if (l && !seen.has(l)) { l.innerHTML = ''; seen.add(l); } });
-
-        const stats = { backlog: 0, doing: 0, done: 0, failed: 0 };
-
-        tasks.forEach(task => {
-            const status = task.status in stats ? task.status : 'backlog';
-            stats[status]++;
-            const list = lists[status];
-            if (list) list.appendChild(this.createTaskCard(task));
-        });
-
-        // Update counts
-        Object.keys(stats).forEach(k => {
-            if (counts[k]) counts[k].innerText = stats[k];
-        });
-    },
-
-    createTaskCard(task) {
-        const div = document.createElement('div');
-        div.className = 'bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group relative animate-in fade-in slide-in-from-bottom-2 duration-300 cursor-pointer';
-        div.onclick = (e) => {
-            if (e.target.closest('button')) return;
-            this.openDetails(task);
-        };
-
-        const cronTag = task.cron ? `
-            <div class="mt-3 flex items-center gap-1.5 text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full w-fit">
-                <i class="fas fa-clock"></i> ${task.cron}
-            </div>
-        ` : '';
-
-        const callbackTag = task.channel ? `
-            <div class="mt-1 flex items-center gap-1.5 text-[10px] font-bold text-purple-500 bg-purple-50 px-2 py-0.5 rounded-full w-fit">
-                <i class="fas fa-reply"></i> ${task.channel.toUpperCase()}: ${task.recipient || 'N/A'}
-            </div>
-        ` : '';
-
-        div.innerHTML = `
-            <div class="flex justify-between items-start mb-2">
-                <h4 class="font-bold text-slate-800 text-sm leading-tight">${task.title}</h4>
-                <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    ${task.status === 'backlog' ? `
-                        <button onclick="Tasks.editTask('${task.id}')" class="text-slate-300 hover:text-blue-500 p-1">
-                            <i class="fas fa-edit text-xs"></i>
-                        </button>
-                    ` : ''}
-                    <button onclick="Tasks.deleteTask('${task.id}')" class="text-slate-300 hover:text-red-500 p-1">
-                        <i class="fas fa-trash-alt text-xs"></i>
-                    </button>
-                </div>
-            </div>
-            <p class="text-slate-500 text-xs line-clamp-3 mb-3">${task.spec}</p>
-            <div class="flex flex-wrap gap-2">
-                ${cronTag}
-                ${callbackTag}
-            </div>
-            
-            <div class="mt-4 flex items-center justify-between pt-4 border-t border-slate-50">
-                <span class="text-[10px] text-slate-400 font-medium">
-                    ${task.last_run ? 'Last run: ' + new Date(task.last_run).toLocaleTimeString() : 'Never run'}
-                </span>
-                <div class="flex items-center gap-2">
-                    ${task.status === 'doing' ? `
-                        <div title="Doing" class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center animate-spin">
-                            <i class="fas fa-spinner text-[10px]"></i>
-                        </div>
-                    ` : ''}
-                    ${task.status === 'done' ? `
-                        <div title="Done" class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
-                            <i class="fas fa-check text-[10px]"></i>
-                        </div>
-                    ` : ''}
-                    ${task.status === 'failed' ? `
-                        <div title="${task.result || 'Error'}" class="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center cursor-help">
-                            <i class="fas fa-exclamation-triangle text-[10px]"></i>
-                        </div>
-                    ` : ''}
-                    
-                    ${(task.status === 'done' || task.status === 'failed') ? `
-                        <button onclick="Tasks.moveToBacklog('${task.id}')" title="Move to Backlog" class="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200 transition-all active:scale-90">
-                            <i class="fas fa-undo text-[10px]"></i>
-                        </button>
-                    ` : ''}
-                    ${(task.status !== 'doing') ? `
-                        <button onclick="Tasks.playTask('${task.id}')" title="${task.status === 'backlog' ? 'Play' : 'Rerun'}" class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 transition-all active:scale-90 shadow-lg shadow-blue-100">
-                            <i class="fas ${task.status === 'backlog' ? 'fa-play' : 'fa-redo'} text-[10px] ${task.status === 'backlog' ? 'ml-0.5' : ''}"></i>
-                        </button>
-                    ` : ''}
-                </div>
-            </div>
-        `;
-        return div;
-    },
-
-    openModal() {
-        const modal = document.getElementById('task-modal');
-        if (modal) modal.classList.remove('hidden');
-    },
-
-    editTask(taskId) {
-        const task = this.currentTasks.get(taskId);
-        if (!task) return;
-
-        const form = document.getElementById('task-form');
+    bindForm() {
+        const form = document.getElementById('project-form');
         if (!form) return;
-        
-        form.elements['task_id'].value = task.id;
-        form.elements['title'].value = task.title;
-        form.elements['spec'].value = task.spec;
-        form.elements['cron'].value = task.cron || '';
-        form.elements['channel'].value = task.channel || '';
-        form.elements['recipient'].value = task.recipient || '';
-        
-        this.openModal();
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            const mode = document.getElementById('pf-mode').value;
+            const title = document.getElementById('pf-title').value.trim();
+            const description = document.getElementById('pf-description').value.trim();
+            const priority = document.getElementById('pf-priority').value;
+            const parentId = document.getElementById('pf-parent-id').value;
+
+            if (!title) return;
+            try {
+                if (mode === 'epic') {
+                    await API.fetch('/api/epics', { method: 'POST', body: JSON.stringify({ title, description }) });
+                    this.closeModal();
+                    await this.loadEpics();
+                } else if (mode === 'story') {
+                    await API.fetch(`/api/epics/${parentId}/stories`, { method: 'POST', body: JSON.stringify({ title, description, priority }) });
+                    this.closeModal();
+                    await this.loadStories(parentId);
+                }
+            } catch (err) {
+                alert('Save failed: ' + err.message);
+            }
+        };
+    },
+
+    // ---- Epic Board ----
+
+    async showEpicBoard() {
+        this.currentEpicId = null;
+        const _q = id => document.getElementById(id);
+        if (_q('epic-board'))    _q('epic-board').classList.remove('hidden');
+        if (_q('story-board'))   _q('story-board').classList.add('hidden');
+        if (_q('back-to-epics')) _q('back-to-epics').classList.add('hidden');
+        if (_q('add-btn-label')) _q('add-btn-label').textContent = 'NEW EPIC';
+        if (_q('add-btn'))       _q('add-btn').onclick = () => this.openAddModal();
+        await this.loadEpics();
+    },
+
+    async loadEpics() {
+        try {
+            const epics = await API.fetch('/api/epics');
+            this.renderEpics(Array.isArray(epics) ? epics : []);
+        } catch (err) {
+            console.error('Failed to load epics:', err);
+        }
+    },
+
+    renderEpics(epics) {
+        const list = document.getElementById('epic-list');
+        if (!list) return;
+        if (epics.length === 0) {
+            list.innerHTML = `<div class="col-span-3 flex flex-col items-center justify-center h-48 text-slate-300 gap-3">
+                <i class="fas fa-project-diagram text-4xl"></i>
+                <span class="text-xs font-bold uppercase tracking-widest">No projects yet — create your first Epic</span>
+            </div>`;
+            return;
+        }
+        list.innerHTML = epics.map(epic => {
+            const counts = epic.task_counts || {};
+            const total = Object.values(counts).reduce((a, b) => a + b, 0);
+            const done = counts.done || 0;
+            const doing = counts.doing || 0;
+            const failed = counts.failed || 0;
+            const progress = total > 0 ? Math.round((done / total) * 100) : 0;
+            const statusColor = { active: 'bg-blue-100 text-blue-600', completed: 'bg-green-100 text-green-600', archived: 'bg-slate-100 text-slate-500' };
+            const sc = statusColor[epic.status] || 'bg-slate-100 text-slate-500';
+            return `
+            <div class="bg-white border border-slate-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer group" onclick="Projects.openEpic('${epic.id}', ${JSON.stringify(epic.title).replace(/"/g,"&quot;")})">
+                <div class="flex justify-between items-start mb-3">
+                    <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${sc}">${epic.status}</span>
+                    <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onclick="event.stopPropagation();Projects.deleteEpic('${epic.id}')" class="text-slate-300 hover:text-red-500 p-1"><i class="fas fa-trash-alt text-xs"></i></button>
+                    </div>
+                </div>
+                <h4 class="font-bold text-slate-900 text-base mb-1 leading-tight">${epic.title}</h4>
+                <p class="text-slate-400 text-xs line-clamp-2 mb-4 h-8">${epic.description || ''}</p>
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="flex-1 bg-slate-100 rounded-full h-1.5">
+                        <div class="bg-blue-500 h-1.5 rounded-full transition-all" style="width:${progress}%"></div>
+                    </div>
+                    <span class="text-[10px] font-bold text-slate-400">${progress}%</span>
+                </div>
+                <div class="flex items-center justify-between text-[10px] text-slate-400 font-bold">
+                    <span><i class="fas fa-book-open mr-1"></i>${epic.story_count || 0} stories</span>
+                    <div class="flex gap-3">
+                        ${doing > 0 ? `<span class="text-blue-500">${doing} doing</span>` : ''}
+                        ${done > 0 ? `<span class="text-green-500">${done} done</span>` : ''}
+                        ${total > 0 ? `<span>${total} tasks</span>` : ''}
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    },
+
+    async openEpic(epicId, title) {
+        this.currentEpicId = epicId;
+        this.currentEpicTitle = title;
+        const _q = id => document.getElementById(id);
+        if (_q('epic-board'))      _q('epic-board').classList.add('hidden');
+        if (_q('story-board'))     _q('story-board').classList.remove('hidden');
+        if (_q('back-to-epics'))   _q('back-to-epics').classList.remove('hidden');
+        if (_q('epic-view-title')) _q('epic-view-title').textContent = title;
+        if (_q('add-btn-label'))   _q('add-btn-label').textContent = 'NEW TASK';
+        if (_q('add-btn'))         _q('add-btn').onclick = () => this.openAddTaskPrompt();
+        await this.loadStories(epicId);
+    },
+
+    async loadStories(epicId) {
+        try {
+            const stories = await API.fetch(`/api/epics/${epicId}/stories`);
+            this.renderStories(Array.isArray(stories) ? stories : [], epicId);
+        } catch (err) {
+            console.error('Failed to load stories:', err);
+        }
+    },
+
+    renderStories(stories, epicId) {
+        // Cache all tasks for detail modal lookup
+        this.currentTasks = {};
+        stories.forEach(s => (s.tasks || []).forEach(t => { this.currentTasks[t.id] = t; }));
+
+        if (this.viewMode === 'kanban') {
+            this._renderKanban(stories, epicId);
+            return;
+        }
+
+        const list = document.getElementById('story-list');
+        if (!list) return;
+        // Restore scroll for list mode (kanban sets overflow: hidden)
+        list.style.overflow = '';
+        if (stories.length === 0) {
+            list.innerHTML = `<div class="flex flex-col items-center justify-center h-40 text-slate-300 gap-3">
+                <i class="fas fa-book-open text-3xl"></i>
+                <span class="text-xs font-bold uppercase tracking-widest">No stories yet — add the first milestone</span>
+            </div>`;
+            return;
+        }
+        list.innerHTML = stories.map(story => {
+            const statusDot = { open: 'bg-slate-400', in_progress: 'bg-blue-500', done: 'bg-green-500' };
+            const dot = statusDot[story.status] || 'bg-slate-300';
+            const tasks = story.tasks || [];
+            const taskHtml = tasks.length === 0
+                ? `<div class="text-slate-300 text-xs font-bold text-center py-4">No tasks — ask costaff_agent to create some</div>`
+                : tasks.map(t => {
+                    const stColor = { backlog: 'text-slate-400', queued: 'text-amber-500', doing: 'text-blue-500', done: 'text-green-500', failed: 'text-red-500' };
+                    const sc = stColor[t.status] || 'text-slate-400';
+                    const agentBadge = t.assigned_agent ? `<span class="bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full text-[9px] font-bold">${t.assigned_agent}</span>` : '';
+                    return `<div class="bg-white border border-slate-100 rounded-xl p-3 flex items-center justify-between gap-3 hover:shadow-sm transition-all cursor-pointer group" onclick="Projects.openTaskDetail('${t.id}')">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <span class="w-2 h-2 rounded-full ${dot} shrink-0"></span>
+                            <span class="text-sm font-medium text-slate-800 truncate">${t.title}</span>
+                            ${agentBadge}
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="text-[10px] font-bold uppercase ${sc}">${t.status}</span>
+                            <button onclick="event.stopPropagation();Projects.deleteTask('${t.id}','${epicId}')" class="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all p-1"><i class="fas fa-trash-alt text-xs"></i></button>
+                        </div>
+                    </div>`;
+                }).join('');
+            return `<div class="bg-slate-50/50 border border-slate-100 rounded-2xl overflow-hidden">
+                <div class="p-4 flex items-center justify-between bg-white border-b border-slate-100">
+                    <div class="flex items-center gap-3">
+                        <span class="w-2.5 h-2.5 rounded-full ${dot}"></span>
+                        <span class="font-bold text-slate-800 text-sm">${story.title}</span>
+                        <span class="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">${story.priority}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] text-slate-400 font-bold">${tasks.length} tasks</span>
+                        <button onclick="Projects.deleteStory('${story.id}','${epicId}')" class="text-slate-300 hover:text-red-500 p-1"><i class="fas fa-trash-alt text-[10px]"></i></button>
+                    </div>
+                </div>
+                <div class="p-3 space-y-2">${taskHtml}</div>
+            </div>`;
+        }).join('');
+    },
+
+    _renderKanban(stories, epicId) {
+        const list = document.getElementById('story-list');
+        if (!list) return;
+
+        const allTasks = stories.flatMap(s => (s.tasks || []).map(t => ({ ...t, storyTitle: s.title })));
+        const columns = [
+            { key: 'backlog',  label: 'Backlog',  color: 'text-slate-500',  bg: 'bg-slate-50',  dot: 'bg-slate-300' },
+            { key: 'queued',   label: 'Queued',   color: 'text-amber-600',  bg: 'bg-amber-50',  dot: 'bg-amber-400' },
+            { key: 'doing',    label: 'Doing',    color: 'text-blue-600',   bg: 'bg-blue-50',   dot: 'bg-blue-500'  },
+            { key: 'done',     label: 'Done',     color: 'text-green-600',  bg: 'bg-green-50',  dot: 'bg-green-500' },
+            { key: 'failed',   label: 'Failed',   color: 'text-red-500',    bg: 'bg-red-50',    dot: 'bg-red-400'   },
+        ];
+
+        if (allTasks.length === 0) {
+            list.innerHTML = `<div class="flex flex-col items-center justify-center h-40 text-slate-300 gap-3">
+                <i class="fas fa-th-large text-3xl"></i>
+                <span class="text-xs font-bold uppercase tracking-widest">No tasks yet</span>
+            </div>`;
+            return;
+        }
+
+        // Switch story-list to overflow-hidden so columns scroll independently
+        list.style.overflow = 'hidden';
+
+        list.innerHTML = `<div class="flex gap-4 h-full overflow-x-auto">` +
+            columns.map(col => {
+                const colTasks = allTasks.filter(t => t.status === col.key);
+                const cards = colTasks.length === 0
+                    ? `<div class="text-center text-slate-300 text-[10px] font-bold py-8 uppercase tracking-widest">Empty</div>`
+                    : colTasks.map(t => {
+                        const agentBadge = t.assigned_agent ? `<span class="bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full text-[9px] font-bold mt-1 inline-block">${t.assigned_agent}</span>` : '';
+                        return `<div class="bg-white border border-slate-100 rounded-xl p-3 shadow-sm hover:shadow-md transition-all cursor-pointer" onclick="Projects.openTaskDetail('${t.id}')">
+                            <div class="flex items-start gap-2 mb-1">
+                                <span class="w-2 h-2 rounded-full ${col.dot} mt-1 shrink-0"></span>
+                                <span class="text-xs font-semibold text-slate-800 leading-tight">${t.title}</span>
+                            </div>
+                            <p class="text-[10px] text-slate-400 ml-4 mb-1">${t.storyTitle}</p>
+                            ${agentBadge ? `<div class="ml-4">${agentBadge}</div>` : ''}
+                        </div>`;
+                    }).join('');
+                return `<div class="flex-1 min-w-[200px] max-w-xs flex flex-col gap-3 h-full">
+                    <div class="flex items-center justify-between px-1 shrink-0">
+                        <span class="text-[10px] font-black uppercase tracking-widest ${col.color}">${col.label}</span>
+                        <span class="text-[10px] font-bold text-slate-400">${colTasks.length}</span>
+                    </div>
+                    <div class="${col.bg} rounded-2xl p-3 space-y-2 overflow-y-auto flex-1 min-h-0 custom-scrollbar">${cards}</div>
+                </div>`;
+            }).join('') + `</div>`;
+    },
+
+    switchView(mode) {
+        this.viewMode = mode;
+        // Update toggle button styles
+        ['list', 'kanban'].forEach(m => {
+            const btn = document.getElementById(`view-toggle-${m}`);
+            if (!btn) return;
+            if (m === mode) {
+                btn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white transition-all';
+            } else {
+                btn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-slate-600 transition-all';
+            }
+        });
+        if (this.currentEpicId) this.loadStories(this.currentEpicId);
+    },
+
+    // ---- Task Detail ----
+
+    async openTaskDetail(taskId) {
+        const t = this.currentTasks[taskId] || {};
+        document.getElementById('td-title').textContent = t.title || 'Task Detail';
+        document.getElementById('td-id').textContent = `TASK_ID: ${taskId}`;
+        const specEl = document.getElementById('td-spec');
+        if (specEl) {
+            const raw = t.spec || '*(No spec provided)*';
+            if (typeof marked !== 'undefined') {
+                marked.setOptions({ gfm: true, breaks: true });
+                specEl.innerHTML = marked.parse(raw);
+            } else {
+                specEl.textContent = raw;
+            }
+        }
+        const stColor = { backlog: 'text-slate-500', queued: 'text-amber-600', doing: 'text-blue-600', done: 'text-green-600', failed: 'text-red-500' };
+        const statusEl = document.getElementById('td-status');
+        if (statusEl) { statusEl.textContent = t.status || '—'; statusEl.className = `text-sm font-bold ${stColor[t.status] || 'text-slate-500'}`; }
+        const agentEl = document.getElementById('td-agent');
+        if (agentEl) agentEl.textContent = t.assigned_agent || '—';
+        const prioEl = document.getElementById('td-priority');
+        if (prioEl) prioEl.textContent = t.priority || '—';
+
+        document.getElementById('task-detail-modal').classList.remove('hidden');
+        document.getElementById('td-comments').innerHTML = '<div class="text-center py-8 text-slate-300 text-xs font-bold">Loading...</div>';
+        try {
+            const comments = await API.fetch(`/api/project-tasks/${taskId}/comments`);
+            this.renderComments(comments);
+        } catch (err) {
+            document.getElementById('td-comments').innerHTML = '<p class="text-center text-red-400 text-xs py-4">Failed to load</p>';
+        }
+    },
+
+    renderComments(comments) {
+        const el = document.getElementById('td-comments');
+        if (!comments || comments.length === 0) {
+            el.innerHTML = '<div class="text-center py-8 bg-slate-50 rounded-xl text-slate-400 text-xs font-bold">NO COMMENTS YET</div>';
+            return;
+        }
+        el.innerHTML = comments.map(c => {
+            const typeColor = { result: 'text-green-600', issue: 'text-red-600', decision: 'text-blue-600', note: 'text-slate-500' };
+            const tc = typeColor[c.type] || 'text-slate-500';
+            return `<div class="bg-white border border-slate-100 rounded-xl p-4 shadow-sm">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-[10px] font-black ${tc} uppercase tracking-widest">${c.type} · ${c.author}</span>
+                    <span class="text-[10px] text-slate-400 font-bold">${new Date(c.created_at).toLocaleString()}</span>
+                </div>
+                <p class="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">${c.content}</p>
+            </div>`;
+        }).join('');
+    },
+
+    closeTaskDetail() { document.getElementById('task-detail-modal').classList.add('hidden'); },
+
+    // ---- Modals ----
+
+    openAddModal() {
+        document.getElementById('pf-mode').value = 'epic';
+        document.getElementById('project-modal-title').textContent = 'New Epic';
+        document.getElementById('pf-priority-row').classList.add('hidden');
+        document.getElementById('pf-title').value = '';
+        document.getElementById('pf-description').value = '';
+        document.getElementById('project-modal').classList.remove('hidden');
+    },
+
+    openAddStoryModal() {
+        document.getElementById('pf-mode').value = 'story';
+        document.getElementById('pf-parent-id').value = this.currentEpicId;
+        document.getElementById('project-modal-title').textContent = 'New Story';
+        document.getElementById('pf-priority-row').classList.remove('hidden');
+        document.getElementById('pf-title').value = '';
+        document.getElementById('pf-description').value = '';
+        document.getElementById('project-modal').classList.remove('hidden');
+    },
+
+    openAddTaskPrompt() {
+        alert('Tasks are created by the AI team via costaff_agent. Use the chat to ask your agent to create a task under this project.');
     },
 
     closeModal() {
-        const modal = document.getElementById('task-modal');
-        if (modal) modal.classList.add('hidden');
-        const form = document.getElementById('task-form');
-        if (form) {
-            form.reset();
-            form.elements['task_id'].value = '';
-        }
+        document.getElementById('project-modal').classList.add('hidden');
+        document.getElementById('project-form').reset();
     },
 
-    async openDetails(task) {
-        document.getElementById('detail-title').innerText = task.title;
-        document.getElementById('detail-id').innerText = `TASK_ID: ${task.id}`;
-        document.getElementById('detail-spec').innerText = task.spec;
-        document.getElementById('detail-cron').innerText = task.cron || 'Manual Execution';
-        document.getElementById('detail-channel').innerText = task.channel ? `${task.channel.toUpperCase()} (${task.recipient})` : 'No Callback';
-        
-        const logsContainer = document.getElementById('detail-logs');
-        logsContainer.innerHTML = '<div class="text-center p-10 opacity-30"><i class="fas fa-spinner animate-spin"></i></div>';
-        
-        document.getElementById('task-details-modal').classList.remove('hidden');
-        
+    // ---- Delete actions ----
+
+    async deleteEpic(epicId) {
+        if (!confirm('Delete this epic and all its stories and tasks?')) return;
         try {
-            const logs = await API.fetch(`/api/tasks/${task.id}/logs`);
+            await API.fetch(`/api/epics/${epicId}`, { method: 'DELETE' });
+            await this.loadEpics();
+        } catch (err) { alert('Delete failed: ' + err.message); }
+    },
+
+    async deleteStory(storyId, epicId) {
+        if (!confirm('Delete this story?')) return;
+        try {
+            await API.fetch(`/api/epics/${epicId}/stories/${storyId}`, { method: 'DELETE' });
+            await this.loadStories(epicId);
+        } catch (err) { alert('Delete failed'); }
+    },
+
+    async deleteTask(taskId, epicId) {
+        if (!confirm('Delete this task?')) return;
+        try {
+            await API.fetch(`/api/project-tasks/${taskId}`, { method: 'DELETE' });
+            await this.loadStories(epicId);
+        } catch (err) { alert('Delete failed'); }
+    },
+};
+
+// ============================================================
+// Regular Work Module
+// ============================================================
+const RegularWork = {
+    items: [],
+    editingId: null,
+
+    async init() {
+        this.bindForm();
+        await this.load();
+        setInterval(() => {
+            const el = document.getElementById('view-cronjobs');
+            if (el && !el.classList.contains('hidden')) this.load();
+        }, 15000);
+    },
+
+    bindForm() {
+        const form = document.getElementById('rw-form');
+        if (!form) return;
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            const data = {
+                title: document.getElementById('rw-f-title').value.trim(),
+                spec: document.getElementById('rw-f-spec').value.trim(),
+                cron: document.getElementById('rw-f-cron').value.trim(),
+                agent_id: document.getElementById('rw-f-agent').value.trim() || 'costaff_agent',
+                channel: document.getElementById('rw-f-channel').value || null,
+                recipient: document.getElementById('rw-f-recipient').value.trim() || null,
+            };
+            if (!data.title || !data.spec || !data.cron) return alert('Title, Spec, and Cron are required.');
+            try {
+                if (this.editingId) {
+                    await API.fetch(`/api/regular-works/${this.editingId}`, { method: 'PUT', body: JSON.stringify(data) });
+                } else {
+                    await API.fetch('/api/regular-works', { method: 'POST', body: JSON.stringify(data) });
+                }
+                this.closeModal();
+                await this.load();
+            } catch (err) { alert('Save failed: ' + err.message); }
+        };
+    },
+
+    async load() {
+        try {
+            const works = await API.fetch('/api/regular-works');
+            this.items = Array.isArray(works) ? works : [];
+            this.render();
+        } catch (err) { console.error('Failed to load regular works:', err); }
+    },
+
+    render() {
+        const list = document.getElementById('rw-list');
+        const badge = document.getElementById('rw-count-badge');
+        const nextTime = document.getElementById('rw-next-time');
+        const nextTitle = document.getElementById('rw-next-title');
+        if (!list) return;
+
+        const active = this.items.filter(w => w.status === 'active');
+        if (badge) badge.textContent = `${active.length} JOBS`;
+
+        if (this.items.length === 0) {
+            list.innerHTML = `<div class="flex items-center justify-center h-40 text-slate-300 text-xs font-bold uppercase tracking-widest">No regular work configured</div>`;
+            if (nextTime) nextTime.textContent = 'NO JOBS';
+            if (nextTitle) nextTitle.textContent = 'No active schedules.';
+            return;
+        }
+
+        if (active.length > 0 && nextTime) {
+            nextTime.textContent = active[0].cron;
+            if (nextTitle) nextTitle.textContent = active[0].title;
+        }
+
+        list.innerHTML = this.items.map(w => {
+            const isPaused = w.status === 'paused';
+            const agentBadge = w.agent_id ? `<span class="bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full text-[9px] font-bold">${w.agent_id}</span>` : '';
+            const channelBadge = w.channel ? `<span class="bg-green-50 text-green-600 px-2 py-0.5 rounded-full text-[9px] font-bold">${w.channel.toUpperCase()}</span>` : '';
+            return `<div class="px-6 py-5 flex items-center gap-4 hover:bg-slate-50/50 transition-all group cursor-pointer" onclick="RegularWork.openDetail('${w.id}')">
+                <div class="w-10 h-10 rounded-xl ${isPaused ? 'bg-slate-100' : 'bg-blue-50'} flex items-center justify-center shrink-0">
+                    <i class="fas fa-sync-alt text-sm ${isPaused ? 'text-slate-400' : 'text-blue-500'}"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="font-bold text-slate-900 text-sm truncate">${w.title}</span>
+                        ${isPaused ? '<span class="bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full text-[9px] font-black uppercase">PAUSED</span>' : ''}
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-mono text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded font-bold">${w.cron}</span>
+                        ${agentBadge}${channelBadge}
+                        ${w.last_run ? `<span class="text-[10px] text-slate-400">Last: ${new Date(w.last_run).toLocaleString()}</span>` : ''}
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onclick="event.stopPropagation();RegularWork.toggleWork('${w.id}')" title="${isPaused ? 'Resume' : 'Pause'}" class="w-8 h-8 rounded-full ${isPaused ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'} flex items-center justify-center hover:scale-110 transition-all">
+                        <i class="fas fa-${isPaused ? 'play' : 'pause'} text-[10px]"></i>
+                    </button>
+                    <button onclick="event.stopPropagation();RegularWork.editWork('${w.id}')" class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center hover:scale-110 transition-all">
+                        <i class="fas fa-edit text-[10px]"></i>
+                    </button>
+                    <button onclick="event.stopPropagation();RegularWork.deleteWork('${w.id}')" class="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center hover:scale-110 transition-all">
+                        <i class="fas fa-trash-alt text-[10px]"></i>
+                    </button>
+                </div>
+            </div>`;
+        }).join('');
+    },
+
+    async openDetail(id) {
+        const w = this.items.find(x => x.id === id);
+        if (!w) return;
+        document.getElementById('rw-detail-title').textContent = w.title;
+        document.getElementById('rw-detail-id').textContent = `ID: ${w.id}`;
+        document.getElementById('rw-detail-spec').textContent = w.spec;
+        document.getElementById('rw-detail-cron').textContent = w.cron;
+        document.getElementById('rw-detail-agent').textContent = w.agent_id || '—';
+        document.getElementById('rw-detail-channel').textContent = w.channel ? `${w.channel.toUpperCase()} → ${w.recipient || '?'}` : 'No callback';
+        document.getElementById('rw-detail-modal').classList.remove('hidden');
+        document.getElementById('rw-detail-logs').innerHTML = '<div class="text-center py-8 text-slate-300 text-xs font-bold">Loading...</div>';
+        try {
+            const logs = await API.fetch(`/api/regular-works/${id}/logs`);
             this.renderLogs(logs);
         } catch (err) {
-            logsContainer.innerHTML = '<p class="text-center text-red-400 text-xs py-10">Failed to load logs</p>';
+            document.getElementById('rw-detail-logs').innerHTML = '<p class="text-center text-red-400 text-xs py-4">Failed to load</p>';
         }
     },
 
     renderLogs(logs) {
-        const container = document.getElementById('detail-logs');
+        const el = document.getElementById('rw-detail-logs');
         if (!logs || logs.length === 0) {
-            container.innerHTML = '<div class="text-center py-10 bg-slate-50 rounded-xl text-slate-400 text-xs font-bold">NO HISTORY RECORDED</div>';
+            el.innerHTML = '<div class="text-center py-8 bg-slate-50 rounded-xl text-slate-400 text-xs font-bold">NO HISTORY</div>';
             return;
         }
-
-        container.innerHTML = logs.map(log => `
+        el.innerHTML = logs.map(log => `
             <div class="bg-white border border-slate-100 rounded-xl p-4 shadow-sm">
                 <div class="flex justify-between items-center mb-2">
-                    <span class="text-[10px] font-black ${log.status === 'done' ? 'text-green-500' : 'text-red-500'} uppercase tracking-widest">
-                        ${log.status}
-                    </span>
-                    <span class="text-[10px] text-slate-400 font-bold">
-                        ${new Date(log.created_at).toLocaleString()}
-                    </span>
+                    <span class="text-[10px] font-black ${log.status === 'success' ? 'text-green-500' : 'text-red-500'} uppercase tracking-widest">${log.status}</span>
+                    <span class="text-[10px] text-slate-400 font-bold">${new Date(log.created_at).toLocaleString()}</span>
                 </div>
-                <div class="bg-slate-50 p-3 rounded-lg text-[11px] text-slate-600 font-mono whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto">
-                    ${log.output || '(No Output)'}
-                </div>
-            </div>
-        `).join('');
+                <div class="bg-slate-50 p-3 rounded-lg text-[11px] text-slate-600 font-mono whitespace-pre-wrap leading-relaxed max-h-32 overflow-y-auto">${log.output || '(No Output)'}</div>
+            </div>`).join('');
     },
 
-    closeDetails() {
-        document.getElementById('task-details-modal').classList.add('hidden');
+    closeDetail() { document.getElementById('rw-detail-modal').classList.add('hidden'); },
+
+    openModal() {
+        this.editingId = null;
+        document.getElementById('rw-modal-title').textContent = 'Add Regular Work';
+        document.getElementById('rw-edit-id').value = '';
+        document.getElementById('rw-form').reset();
+        document.getElementById('rw-modal').classList.remove('hidden');
     },
 
-    async deleteTask(id) {
-        if (confirm('Are you sure you want to delete this task?')) {
-            try {
-                await API.fetch(`/api/tasks/${id}`, { method: 'DELETE' });
-                this.loadTasks();
-            } catch (err) {
-                console.error('Delete failed', err);
-            }
-        }
+    editWork(id) {
+        const w = this.items.find(x => x.id === id);
+        if (!w) return;
+        this.editingId = id;
+        document.getElementById('rw-modal-title').textContent = 'Edit Regular Work';
+        document.getElementById('rw-edit-id').value = id;
+        document.getElementById('rw-f-title').value = w.title;
+        document.getElementById('rw-f-spec').value = w.spec;
+        document.getElementById('rw-f-cron').value = w.cron;
+        document.getElementById('rw-f-agent').value = w.agent_id || '';
+        document.getElementById('rw-f-channel').value = w.channel || '';
+        document.getElementById('rw-f-recipient').value = w.recipient || '';
+        document.getElementById('rw-modal').classList.remove('hidden');
     },
 
-    async playTask(id) {
+    closeModal() {
+        document.getElementById('rw-modal').classList.add('hidden');
+        document.getElementById('rw-form').reset();
+        this.editingId = null;
+    },
+
+    async toggleWork(id) {
         try {
-            await API.fetch(`/api/tasks/${id}/play`, { method: 'POST' });
-            this.loadTasks();
-        } catch (err) {
-            console.error('Execution failed', err);
-        }
+            await API.fetch(`/api/regular-works/${id}/toggle`, { method: 'POST' });
+            await this.load();
+        } catch (err) { alert('Failed to toggle: ' + err.message); }
     },
 
-    async moveToBacklog(id) {
+    async deleteWork(id) {
+        if (!confirm('Delete this Regular Work?')) return;
         try {
-            await API.fetch(`/api/tasks/${id}`, {
-                method: 'PUT',
-                body: JSON.stringify({ status: 'backlog' })
-            });
-            this.loadTasks();
-        } catch (err) {
-            console.error('Failed to move to backlog', err);
-        }
-    }
+            await API.fetch(`/api/regular-works/${id}`, { method: 'DELETE' });
+            await this.load();
+        } catch (err) { alert('Delete failed: ' + err.message); }
+    },
+};
+
+// Keep backward-compat: Tasks.init() called from app.js
+const Tasks = {
+    init() { return Projects.init(); }
 };

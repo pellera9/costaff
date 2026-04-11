@@ -40,7 +40,7 @@ docker-compose.override.yml
 # Build / packaging artifacts
 build/
 dist/
-mateclaw_cli.egg-info/
+costaff_cli.egg-info/
 *.egg-info/
 
 # IDE / local tooling
@@ -54,22 +54,22 @@ mateclaw_cli.egg-info/
 *.pdf
 *.html~
 
-# mate / mateclaw project runtime folder (never commit)
-.mate/
-.mateclaw/
+# costaff project runtime folder (never commit)
+.costaff/
 
-# License tools (internal, never commit — lives in mateclaw-license repo)
+# License tools (internal, never commit — lives in costaff-license repo)
 tools/
 
-# Landing page (separate repo: MateClawAI/MateClawAI.github.io)
+# Landing page (separate repo: AICoStaff/CoStaffAI.github.io)
 landing/
 
 # License files (customer-specific, never commit)
-mate-license.yaml
+costaff-license.yaml
+costaff-license-*.yaml
 
 # License signing key (NEVER commit private key)
 *.pem
-mate_private_key*
+costaff_private_key*
 
 # License issuance registry (internal record, never commit)
 tools/license_registry.json

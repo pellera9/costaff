@@ -1,76 +1,82 @@
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from .models import Base
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# 優先讀取 mate onboard 設定的資料庫 (ADK_SESSION_SERVICE_URI)
-# 如果沒有設定，才使用 SQLALCHEMY_DATABASE_URL 或預設的 mate_agent.db
-uri = os.getenv("ADK_SESSION_SERVICE_URI") or os.getenv("SQLALCHEMY_DATABASE_URL") or "sqlite:///./data/mate_agent.db"
+uri = os.getenv("ADK_SESSION_SERVICE_URI") or os.getenv("SQLALCHEMY_DATABASE_URL")
+if not uri:
+    raise RuntimeError(
+        "Database URI not configured. "
+        "Set ADK_SESSION_SERVICE_URI=postgresql+asyncpg://user:pass@host:5432/db in .env"
+    )
 
-# 轉換為 SQLAlchemy 同步模式路徑 (移除 +aiosqlite 或 +asyncpg)
-if "+aiosqlite" in uri:
-    uri = uri.replace("+aiosqlite", "")
+# Strip async driver prefix — SQLAlchemy ORM needs the sync driver
 if "+asyncpg" in uri:
     uri = uri.replace("+asyncpg", "")
+if "+aiosqlite" in uri:
+    raise RuntimeError(
+        "SQLite is not supported. Use PostgreSQL: "
+        "ADK_SESSION_SERVICE_URI=postgresql+asyncpg://user:pass@host:5432/db"
+    )
 
 SQLALCHEMY_DATABASE_URL = uri
 
-_is_sqlite = "sqlite" in SQLALCHEMY_DATABASE_URL
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False} if _is_sqlite else {},
-    **({} if _is_sqlite else {"pool_size": 10, "max_overflow": 20, "pool_pre_ping": True})
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
 def init_db():
-    from sqlalchemy import inspect, text
+    from sqlalchemy import inspect
+
     inspector = inspect(engine)
+    existing = set(inspector.get_table_names())
 
-    # Migration: identity_maps — add session_id if missing
-    if "identity_maps" in inspector.get_table_names():
-        columns = [c["name"] for c in inspector.get_columns("identity_maps")]
-        if "session_id" not in columns:
-            from .models import IdentityMap
-            IdentityMap.__table__.drop(engine)
-
-    # Migration: task_logs — add user_id if missing
-    if "task_logs" in inspector.get_table_names():
-        columns = [c["name"] for c in inspector.get_columns("task_logs")]
-        if "user_id" not in columns:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE task_logs ADD COLUMN user_id VARCHAR NOT NULL DEFAULT ''"))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_task_logs_user_id ON task_logs (user_id)"))
+    with engine.connect() as conn:
+        # Drop legacy tables replaced by the new schema
+        for legacy in ("tasks", "task_logs"):
+            if legacy in existing:
+                conn.execute(text(f"DROP TABLE IF EXISTS {legacy} CASCADE"))
                 conn.commit()
 
-    # Migration: identity_maps — add is_approved if missing
-    if "identity_maps" in inspector.get_table_names():
-        columns = [c["name"] for c in inspector.get_columns("identity_maps")]
-        if "is_approved" not in columns:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE identity_maps ADD COLUMN is_approved BOOLEAN NOT NULL DEFAULT FALSE"))
+        # Migrate reminders: drop and recreate if it uses the old schema
+        if "reminders" in existing:
+            old_cols = {c["name"] for c in inspector.get_columns("reminders")}
+            if "prompt" in old_cols or "cron" in old_cols:
+                conn.execute(text("DROP TABLE IF EXISTS reminders CASCADE"))
                 conn.commit()
 
-    # Migration: api_configs — add agent_ids if missing
-    if "api_configs" in inspector.get_table_names():
-        columns = [c["name"] for c in inspector.get_columns("api_configs")]
-        if "agent_ids" not in columns:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE api_configs ADD COLUMN agent_ids VARCHAR DEFAULT '__all__'"))
+        # identity_maps migrations
+        if "identity_maps" in existing:
+            cols = {c["name"] for c in inspector.get_columns("identity_maps")}
+            if "session_id" not in cols:
+                from .models import IdentityMap
+                IdentityMap.__table__.drop(engine)
+            elif "is_approved" not in cols:
+                conn.execute(text(
+                    "ALTER TABLE identity_maps ADD COLUMN is_approved BOOLEAN NOT NULL DEFAULT FALSE"
+                ))
                 conn.commit()
 
-    # Migration: skill_configs — add agent_ids if missing
-    if "skill_configs" in inspector.get_table_names():
-        columns = [c["name"] for c in inspector.get_columns("skill_configs")]
-        if "agent_ids" not in columns:
-            with engine.connect() as conn:
-                conn.execute(text("ALTER TABLE skill_configs ADD COLUMN agent_ids VARCHAR DEFAULT '__all__'"))
-                conn.commit()
+        # api_configs / skill_configs: add agent_ids if missing
+        for tbl in ("api_configs", "skill_configs"):
+            if tbl in existing:
+                cols = {c["name"] for c in inspector.get_columns(tbl)}
+                if "agent_ids" not in cols:
+                    conn.execute(text(
+                        f"ALTER TABLE {tbl} ADD COLUMN agent_ids VARCHAR DEFAULT '__all__'"
+                    ))
+                    conn.commit()
 
     Base.metadata.create_all(bind=engine)
+
 
 def get_db():
     db = SessionLocal()

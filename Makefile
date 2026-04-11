@@ -1,8 +1,8 @@
 .PHONY: build run stop clean up down logs logs-api logs-mcp restart init
 
 # Variables
-IMAGE_NAME = mateclaw-agent-service
-CONTAINER_NAME = mateclaw-agent-instance
+IMAGE_NAME = costaff-agent-service
+CONTAINER_NAME = costaff-agent-instance
 
 # Docker native commands
 build:
@@ -30,7 +30,7 @@ logs:
 	docker-compose -f docker-compose.local.yaml logs -f
 
 logs-agent:
-	docker-compose -f docker-compose.local.yaml logs -f mateclaw-agent
+	docker-compose -f docker-compose.local.yaml logs -f costaff-agent
 
 logs-reminder:
 	docker-compose -f docker-compose.local.yaml logs -f mcp-reminder

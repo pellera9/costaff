@@ -36,6 +36,10 @@ def send_telegram_notification(recipient_id: str, message: str, session_id: str 
     finally:
         db.close()
 
+    # Telegram HTML mode does not support <br> — replace with newline
+    import re
+    message = re.sub(r'<br\s*/?>', '\n', message, flags=re.IGNORECASE)
+
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {"chat_id": final_recipient, "text": message, "parse_mode": "HTML"}
 

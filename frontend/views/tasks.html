@@ -1,163 +1,147 @@
 <div class="h-full flex flex-col gap-6">
-    <!-- Task Controls -->
+    <!-- Header -->
     <div class="flex justify-between items-center">
-        <p class="text-slate-500 font-medium">Manage and schedule automated agent tasks.</p>
-        <button onclick="Tasks.openModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-100 transition-all active:scale-95">
-            <i class="fas fa-plus"></i> NEW TASK
-        </button>
+        <div>
+            <p class="text-slate-500 font-medium text-sm">AI team project board — Epics, Stories, and Tasks.</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <button id="back-to-epics" onclick="Projects.showEpicBoard()" class="hidden px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm transition-all flex items-center gap-2">
+                <i class="fas fa-arrow-left text-xs"></i> All Epics
+            </button>
+            <button id="add-btn" onclick="Projects.openAddModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-100 transition-all active:scale-95">
+                <i class="fas fa-plus"></i> <span id="add-btn-label">NEW EPIC</span>
+            </button>
+        </div>
     </div>
 
-    <!-- Kanban Board -->
-    <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-6 overflow-hidden">
-        <!-- Backlog -->
-        <div class="flex flex-col gap-4 bg-slate-50 rounded-2xl p-4 border border-slate-100 overflow-hidden">
-            <div class="flex items-center justify-between px-2">
-                <h3 class="font-bold text-slate-800 flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-slate-400"></span> BACKLOG
-                </h3>
-                <span id="count-backlog" class="bg-slate-200 text-slate-600 text-xs font-bold px-2 py-0.5 rounded-full">0</span>
+    <!-- Epic Board -->
+    <div id="epic-board" class="flex-1 overflow-y-auto custom-scrollbar">
+        <div id="epic-list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            <div class="col-span-3 flex items-center justify-center h-40 text-slate-300 text-xs font-bold uppercase tracking-widest">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Story / Task View (hidden initially) -->
+    <div id="story-board" class="hidden flex-1 flex flex-col gap-5 overflow-hidden">
+        <div class="flex items-center gap-4 pb-4 border-b border-slate-100">
+            <div>
+                <h3 id="epic-view-title" class="text-xl font-bold text-slate-900"></h3>
+                <p id="epic-view-desc" class="text-slate-400 text-sm mt-0.5"></p>
             </div>
-            <div id="list-backlog" class="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-1">
-                <!-- Task Cards -->
+            <div class="ml-auto flex items-center gap-3">
+                <!-- View toggle -->
+                <div class="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
+                    <button id="view-toggle-list" onclick="Projects.switchView('list')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white transition-all">
+                        <i class="fas fa-list mr-1"></i>List
+                    </button>
+                    <button id="view-toggle-kanban" onclick="Projects.switchView('kanban')" class="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-400 hover:text-slate-600 transition-all">
+                        <i class="fas fa-th-large mr-1"></i>Kanban
+                    </button>
+                </div>
+                <button onclick="Projects.openAddStoryModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-all flex items-center gap-2">
+                    <i class="fas fa-plus"></i> Add Story
+                </button>
             </div>
         </div>
-
-        <!-- Doing -->
-        <div class="flex flex-col gap-4 bg-blue-50/50 rounded-2xl p-4 border border-blue-100/50 overflow-hidden">
-            <div class="flex items-center justify-between px-2">
-                <h3 class="font-bold text-blue-800 flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-blue-500"></span> DOING
-                </h3>
-                <span id="count-doing" class="bg-blue-200 text-blue-600 text-xs font-bold px-2 py-0.5 rounded-full">0</span>
-            </div>
-            <div id="list-doing" class="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-1">
-                <!-- Task Cards -->
-            </div>
-        </div>
-
-        <!-- Done -->
-        <div class="flex flex-col gap-4 bg-green-50/50 rounded-2xl p-4 border border-green-100/50 overflow-hidden">
-            <div class="flex items-center justify-between px-2">
-                <h3 class="font-bold text-green-800 flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-green-500"></span> DONE
-                </h3>
-                <span id="count-done" class="bg-green-200 text-green-600 text-xs font-bold px-2 py-0.5 rounded-full">0</span>
-            </div>
-            <div id="list-done" class="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-1">
-                <!-- Task Cards -->
-            </div>
-        </div>
-
-        <!-- Failed -->
-        <div class="flex flex-col gap-4 bg-red-50/50 rounded-2xl p-4 border border-red-100/50 overflow-hidden">
-            <div class="flex items-center justify-between px-2">
-                <h3 class="font-bold text-red-800 flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-red-500"></span> FAILED
-                </h3>
-                <span id="count-failed" class="bg-red-200 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">0</span>
-            </div>
-            <div id="list-failed" class="flex-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-1">
-                <!-- Task Cards -->
-            </div>
+        <div id="story-list" class="flex-1 overflow-y-auto custom-scrollbar space-y-4">
         </div>
     </div>
 </div>
 
-<!-- Task Details & History Modal -->
-<div id="task-details-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-6">
-    <div class="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
+<!-- Epic / Story / Task Add Modal -->
+<div id="project-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-6">
+    <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
         <div class="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <div>
-                <h3 id="detail-title" class="text-xl font-bold text-slate-900">Task Details</h3>
-                <p id="detail-id" class="text-slate-400 text-[10px] font-mono mt-1 uppercase tracking-wider"></p>
+                <h3 id="project-modal-title" class="text-xl font-bold text-slate-900">New Epic</h3>
+                <p class="text-slate-500 text-sm">Define a long-term goal or project.</p>
             </div>
-            <button onclick="Tasks.closeDetails()" class="text-slate-400 hover:text-slate-600 transition-colors">
+            <button onclick="Projects.closeModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
                 <i class="fas fa-times text-xl"></i>
             </button>
         </div>
-        
-        <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
-            <!-- Config Section -->
-            <div class="mb-8">
-                <h4 class="text-xs font-black text-slate-400 mb-4 tracking-widest uppercase flex items-center gap-2">
-                    <i class="fas fa-cog text-blue-500"></i> Configuration
-                </h4>
-                <div class="bg-slate-50 rounded-2xl p-6 space-y-4">
-                    <div>
-                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Requirement Spec</span>
-                        <p id="detail-spec" class="text-sm text-slate-700 leading-relaxed"></p>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
-                        <div>
-                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Schedule</span>
-                            <p id="detail-cron" class="text-sm font-bold text-blue-600"></p>
-                        </div>
-                        <div>
-                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Reporting</span>
-                            <p id="detail-channel" class="text-sm font-bold text-purple-600"></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Execution Logs -->
+        <form id="project-form" class="p-8 space-y-5">
+            <input type="hidden" id="pf-mode">
+            <input type="hidden" id="pf-parent-id">
             <div>
-                <h4 class="text-xs font-black text-slate-400 mb-4 tracking-widest uppercase flex items-center justify-between">
-                    <span class="flex items-center gap-2"><i class="fas fa-history text-green-500"></i> Execution History</span>
-                </h4>
-                <div id="detail-logs" class="space-y-3">
-                    <!-- Logs will be loaded here -->
-                </div>
+                <label class="block text-xs font-bold text-slate-400 mb-2 tracking-widest uppercase">Title</label>
+                <input type="text" id="pf-title" required placeholder="e.g. CoStaff Development" class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 transition-all">
             </div>
-        </div>
-    </div>
-</div>
-
-<!-- Task Modal -->
-<div id="task-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-6">
-    <div class="bg-white rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-        <div class="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
             <div>
-                <h3 class="text-xl font-bold text-slate-900">Task Configuration</h3>
-                <p class="text-slate-500 text-sm">Define agent requirements and schedule.</p>
+                <label class="block text-xs font-bold text-slate-400 mb-2 tracking-widest uppercase">Description <span class="text-slate-300">(optional)</span></label>
+                <textarea id="pf-description" rows="3" placeholder="Brief description..." class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 transition-all resize-none"></textarea>
             </div>
-            <button onclick="Tasks.closeModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
-                <i class="fas fa-times text-xl"></i>
-            </button>
-        </div>
-        <form id="task-form" class="p-8 space-y-6">
-            <input type="hidden" name="task_id" id="task-id-input">
-            <div class="grid grid-cols-2 gap-4">
-                <div class="col-span-2">
-                    <label class="block text-xs font-bold text-slate-400 mb-2 tracking-widest uppercase">Task Title</label>
-                    <input type="text" name="title" required placeholder="Daily News Summary" class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 transition-all">
-                </div>
-                <div class="col-span-2">
-                    <label class="block text-xs font-bold text-slate-400 mb-2 tracking-widest uppercase">Spec / Requirement</label>
-                    <textarea name="spec" required rows="4" placeholder="Fetch top news from Yahoo Finance and summarize..." class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 transition-all resize-none"></textarea>
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-400 mb-2 tracking-widest uppercase">Cron Schedule (Optional)</label>
-                    <input type="text" name="cron" placeholder="0 17 * * *" class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 transition-all">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-400 mb-2 tracking-widest uppercase">Callback Channel</label>
-                    <select name="channel" class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 transition-all">
-                        <option value="">No Callback</option>
-                        <option value="discord">Discord</option>
-                        <option value="line">Line</option>
-                        <option value="telegram">Telegram</option>
-                    </select>
-                </div>
-                <div class="col-span-2">
-                    <label class="block text-xs font-bold text-slate-400 mb-2 tracking-widest uppercase">Recipient ID</label>
-                    <input type="text" name="recipient" placeholder="Channel ID or User ID" class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 transition-all">
-                </div>
+            <div id="pf-priority-row" class="hidden">
+                <label class="block text-xs font-bold text-slate-400 mb-2 tracking-widest uppercase">Priority</label>
+                <select id="pf-priority" class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-slate-900 focus:ring-2 focus:ring-blue-500 transition-all">
+                    <option value="high">High</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="low">Low</option>
+                </select>
             </div>
             <div class="pt-4 flex gap-4">
-                <button type="button" onclick="Tasks.closeModal()" class="flex-1 px-6 py-4 rounded-xl font-bold text-slate-400 hover:bg-slate-50 transition-all">CANCEL</button>
-                <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-xl font-bold shadow-lg shadow-blue-100 transition-all active:scale-95">SAVE TASK</button>
+                <button type="button" onclick="Projects.closeModal()" class="flex-1 px-6 py-4 rounded-xl font-bold text-slate-400 hover:bg-slate-50 transition-all">CANCEL</button>
+                <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-xl font-bold shadow-lg shadow-blue-100 transition-all active:scale-95">SAVE</button>
             </div>
         </form>
+    </div>
+</div>
+
+<style>
+#td-spec{line-height:1.7}
+#td-spec h1{font-size:1.35rem;font-weight:800;color:#0f172a;margin:0 0 .75rem;letter-spacing:-.01em}
+#td-spec h2{font-size:1.05rem;font-weight:700;color:#1e293b;margin:1.5rem 0 .5rem;padding-bottom:.4rem;border-bottom:2px solid #e2e8f0}
+#td-spec h3{font-size:.85rem;font-weight:700;color:#334155;margin:1.1rem 0 .35rem}
+#td-spec h4{font-size:.75rem;font-weight:700;color:#64748b;margin:.75rem 0 .25rem;text-transform:uppercase;letter-spacing:.06em}
+#td-spec p{margin:.5rem 0;color:#475569;font-size:.875rem}
+#td-spec ul,#td-spec ol{margin:.5rem 0 .5rem 1.4rem}
+#td-spec li{margin:.3rem 0;color:#475569;font-size:.875rem}
+#td-spec li input[type=checkbox]{margin-right:.4rem;accent-color:#3b82f6}
+#td-spec strong{color:#0f172a;font-weight:700}
+#td-spec code{background:#eff6ff;color:#2563eb;padding:.15rem .35rem;border-radius:.3rem;font-size:.8em;font-family:monospace}
+#td-spec hr{border:none;border-top:1px solid #e2e8f0;margin:1rem 0}
+#td-spec blockquote{border-left:3px solid #3b82f6;padding:.25rem .75rem;margin:.5rem 0;color:#64748b;background:#f8fafc;border-radius:0 .5rem .5rem 0}
+</style>
+
+<!-- Task Detail Modal -->
+<div id="task-detail-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-6">
+    <div class="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+        <div class="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <div>
+                <h3 id="td-title" class="text-xl font-bold text-slate-900">Task Details</h3>
+                <p id="td-id" class="text-slate-400 text-[10px] font-mono mt-1 uppercase tracking-wider"></p>
+            </div>
+            <button onclick="Projects.closeTaskDetail()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-6">
+            <div>
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Spec</span>
+                <div id="td-spec" class="text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-xl p-4 prose prose-sm max-w-none prose-headings:font-bold prose-headings:text-slate-800 prose-h1:text-base prose-h2:text-sm prose-h3:text-xs prose-h3:uppercase prose-h3:tracking-widest prose-h3:text-slate-500 prose-strong:text-slate-800 prose-li:marker:text-blue-400 prose-code:bg-white prose-code:px-1 prose-code:rounded prose-code:text-blue-600"></div>
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+                <div>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Status</span>
+                    <p id="td-status" class="text-sm font-bold text-blue-600"></p>
+                </div>
+                <div>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Agent</span>
+                    <p id="td-agent" class="text-sm font-bold text-purple-600"></p>
+                </div>
+                <div>
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Priority</span>
+                    <p id="td-priority" class="text-sm font-bold text-amber-600"></p>
+                </div>
+            </div>
+            <div>
+                <h4 class="text-xs font-black text-slate-400 mb-3 tracking-widest uppercase flex items-center gap-2">
+                    <i class="fas fa-comments text-blue-500"></i> Comments / Results
+                </h4>
+                <div id="td-comments" class="space-y-3">
+                    <div class="text-center py-8 text-slate-300 text-xs font-bold">Loading...</div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>

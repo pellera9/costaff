@@ -1,4 +1,4 @@
-# Mateclaw
+# CoStaff
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Docker Support](https://img.shields.io/badge/docker-supported-blue.svg)](https://www.docker.com/)
@@ -9,9 +9,9 @@
 
 **繁體中文** | [English](./README.md)
 
-**Mateclaw** 是一個自架、隱私優先的 AI Agent 平台，基於 **Google ADK（Agent Development Kit）** 和 **Model Context Protocol（MCP）** 構建。它連接你偏好的聊天平台——**Telegram、Discord 和 Line**——並提供功能完整的 Web 儀表板，讓操作者管理 Agent、工具、使用者與對話。
+**CoStaff** 是一個自架、隱私優先的 AI Agent 平台，基於 **Google ADK（Agent Development Kit）** 和 **Model Context Protocol（MCP）** 構建。它連接你偏好的聊天平台——**Telegram、Discord 和 Line**——並提供功能完整的 Web 儀表板，讓操作者管理 Agent、工具、使用者與對話。
 
-外部 Agent（如 [`mateclaw-coding-agent`](https://github.com/MateClawAI/mateclaw-coding-agent) 和 [`mateclaw-viz-report-agent`](https://github.com/MateClawAI/mateclaw-viz-report-agent)）透過 **A2A 協議**整合，在不修改核心的情況下擴展平台能力。
+外部 Agent（如 [`costaff-coding-agent`](https://github.com/CoStaffAI/costaff-coding-agent) 和 [`costaff-viz-report-agent`](https://github.com/CoStaffAI/costaff-viz-report-agent)）透過 **A2A 協議**整合，在不修改核心的情況下擴展平台能力。
 
 ---
 
@@ -31,7 +31,7 @@
 
 ## 功能特色
 
-- **多 Agent 編排** — 主 Mateclaw Agent 透過 A2A 協議將任務委派給外部 Agent；任何含有 `mateclaw.agent.json` 宣告的 Agent 都可一鍵接入
+- **多 Agent 編排** — 主 CoStaff Agent 透過 A2A 協議將任務委派給外部 Agent；任何含有 `costaff.agent.json` 宣告的 Agent 都可一鍵接入
 - **逐 Agent 工具指派** — 從儀表板指定每個 Agent 可存取的 MCP、API 和 Skill，套用後針對性重啟，無需全量重新部署
 - **動態 MCP 層** — 核心 MCP 始終存在；可在儀表板即時新增外部 MCP（Streamable HTTP 或 SSE）
 - **API 與 Skill 登記冊** — 在資料庫中登記外部 REST API 和可重用的提示詞範本，按 Agent 和使用者分別指派
@@ -54,10 +54,10 @@ graph TD
     User_DC((Discord)) <--> Bot_DC[Discord Bot]
     User_LN((Line)) <--> Bot_LN[Line Bot]
 
-    Bot_TG & Bot_DC & Bot_LN <--> MateclawAgent[Mateclaw Agent\nGoogle ADK]
+    Bot_TG & Bot_DC & Bot_LN <--> CoStaffAgent[CoStaff Agent\nGoogle ADK]
 
-    MateclawAgent <--> MCP_Core[核心 MCP]
-    MateclawAgent <--> MCP_Ext[外部 MCP\nStreamable HTTP / SSE]
+    CoStaffAgent <--> MCP_Core[核心 MCP]
+    CoStaffAgent <--> MCP_Ext[外部 MCP\nStreamable HTTP / SSE]
 
     MCP_Core <--> DB[(PostgreSQL / SQLite)]
     MCP_Core <--> Scheduler[APScheduler]
@@ -66,19 +66,19 @@ graph TD
 
     Dashboard[Web 儀表板] <--> API[FastAPI 後端]
     API <--> DB
-    API -->|重啟| MateclawAgent
+    API -->|重啟| CoStaffAgent
 ```
 
 ---
 
 ## Web 儀表板
 
-儀表板（`mateclaw dashboard`）是支援深色/淺色模式的瀏覽器操作控制台：
+儀表板（`cst dashboard`）是支援深色/淺色模式的瀏覽器操作控制台：
 
 | 模組 | 說明 |
 |------|------|
 | **Dashboard** | 即時系統狀態（CPU、記憶體、磁碟）與服務健康概覽 |
-| **Chat** | 直接在瀏覽器中與 Mateclaw Agent 對話，含完整對話歷史 |
+| **Chat** | 直接在瀏覽器中與 CoStaff Agent 對話，含完整對話歷史 |
 | **Agents** | 查看內外部 Agent 狀態；設定逐 Agent 的 MCP 指派，Apply & Restart 即生效 |
 | **MCPs** | 管理 MCP 擴充 — 即時新增/移除外部 MCP |
 | **APIs** | 登記外部 REST API 設定，按 Agent 和使用者指派 |
@@ -95,27 +95,27 @@ graph TD
 
 ## 外部 Agent
 
-Mateclaw 支援部署和管理透過 **A2A 協議**溝通的外部 Agent。
+CoStaff 支援部署和管理透過 **A2A 協議**溝通的外部 Agent。
 
-任何包含 `mateclaw.agent.json` 宣告的專案都可以被登記和部署：
+任何包含 `costaff.agent.json` 宣告的專案都可以被登記和部署：
 
 ```bash
 # 部署本地 Agent 專案
-mateclaw agent deploy --local /path/to/my-agent
+cst agent deploy --local /path/to/my-agent
 
 # 新增遠端 URL Agent
-mateclaw agent add my-agent --url http://my-agent.example.com
+cst agent add my-agent --url http://my-agent.example.com
 
 # 列出所有 Agent
-mateclaw agent list
+cst agent list
 ```
 
 **官方第一方 Agent：**
 
 | Agent | Repository | 職責 |
 |-------|------------|------|
-| Coding Agent | [mateclaw-coding-agent](https://github.com/MateClawAI/mateclaw-coding-agent) | 沙盒 Python 程式碼執行 |
-| Viz Report Agent | [mateclaw-viz-report-agent](https://github.com/MateClawAI/mateclaw-viz-report-agent) | 圖表生成與 HTML/PDF 報告 |
+| Coding Agent | [costaff-coding-agent](https://github.com/CoStaffAI/costaff-coding-agent) | 沙盒 Python 程式碼執行 |
+| Viz Report Agent | [costaff-viz-report-agent](https://github.com/CoStaffAI/costaff-viz-report-agent) | 圖表生成與 HTML/PDF 報告 |
 
 ---
 
@@ -157,7 +157,7 @@ pip install -e .
 ### 2. 執行設定精靈
 
 ```bash
-mateclaw onboard
+cst onboard
 ```
 
 精靈會引導你完成：
@@ -167,18 +167,18 @@ mateclaw onboard
 - 儀表板管理員帳號設定
 - 身份雜湊鹽值設定
 
-所有設定儲存至當前目錄的 `.mateclaw/`。
+所有設定儲存至當前目錄的 `.costaff/`。
 
 ### 3. 啟動平台
 
 ```bash
-mateclaw start
+cst start
 ```
 
 ### 4. 開啟儀表板
 
 ```bash
-mateclaw dashboard
+cst dashboard
 ```
 
 在 `http://localhost:8501` 開啟 Web UI。
@@ -189,22 +189,22 @@ mateclaw dashboard
 
 | 指令 | 說明 |
 |------|------|
-| `mateclaw onboard` | 互動式設定精靈 |
-| `mateclaw start` | 建置並啟動所有服務 |
-| `mateclaw start --no-build` | 不重建映像直接啟動 |
-| `mateclaw stop` | 停止所有服務 |
-| `mateclaw restart` | 重啟所有服務 |
-| `mateclaw ps` | 顯示運行中服務的狀態 |
-| `mateclaw dashboard` | 開啟 Web 儀表板 |
-| `mateclaw chat` | CLI 模式與 Agent 對話 |
-| `mateclaw agent deploy --local <path>` | 部署本地 Agent 專案 |
-| `mateclaw agent add <name> --url <url>` | 登記遠端 URL Agent |
-| `mateclaw agent list` | 列出所有已登記的 Agent |
-| `mateclaw agent remove <name>` | 移除已登記的 Agent |
-| `mateclaw config show` | 顯示當前設定 |
-| `mateclaw database backup` | 備份資料庫 |
-| `mateclaw database restore` | 從備份還原 |
-| `mateclaw version` | 顯示 CLI 版本 |
+| `cst onboard` | 互動式設定精靈 |
+| `cst start` | 建置並啟動所有服務 |
+| `cst start --no-build` | 不重建映像直接啟動 |
+| `costaff stop` | 停止所有服務 |
+| `costaff restart` | 重啟所有服務 |
+| `costaff ps` | 顯示運行中服務的狀態 |
+| `cst dashboard` | 開啟 Web 儀表板 |
+| `costaff chat` | CLI 模式與 Agent 對話 |
+| `cst agent deploy --local <path>` | 部署本地 Agent 專案 |
+| `cst agent add <name> --url <url>` | 登記遠端 URL Agent |
+| `cst agent list` | 列出所有已登記的 Agent |
+| `cst agent remove <name>` | 移除已登記的 Agent |
+| `costaff config show` | 顯示當前設定 |
+| `costaff database backup` | 備份資料庫 |
+| `costaff database restore` | 從備份還原 |
+| `costaff version` | 顯示 CLI 版本 |
 
 ---
 

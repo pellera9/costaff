@@ -65,7 +65,7 @@ const App = {
                     });
 
                     if (res && res.token) {
-                        localStorage.setItem('mate_token', res.token);
+                        localStorage.setItem('costaff_token', res.token);
                         window.location.reload();
                     } else {
                         throw new Error("Invalid response structure");
@@ -125,21 +125,27 @@ const App = {
                 // One-time initialization for specific tabs
                 if (tabId === 'chat') await UI.initChat();
                 if (tabId === 'tasks') await Tasks.init();
+                if (tabId === 'cronjobs' && typeof RegularWork !== 'undefined') await RegularWork.init();
                 if (tabId === 'apis') Apis.init();
                 if (tabId === 'skills') Skills.init();
-                if (tabId === 'config') { UI.updateThemeUI(localStorage.getItem('mate_theme') || 'light'); await UI.initApprovalToggle(); }
+                if (tabId === 'diary') Diary.init();
+                if (tabId === 'config') { UI.updateThemeUI(localStorage.getItem('costaff_theme') || 'light'); await UI.initApprovalToggle(); }
                 if (tabId === 'logs') {
                     const svcs = await API.fetch('/api/status');
                     UI.updateLogServices(svcs);
                 }
             } catch(e) {
                 console.error("View render failed:", tabId, e);
-                container.innerHTML = `<div class="p-20 text-center opacity-20 uppercase font-headline">Failed to load module: ${tabId}</div>`;
+                container.innerHTML = `<div class="p-20 text-center uppercase font-headline text-red-400 text-sm">
+                    <div class="text-xl font-bold mb-2">Failed to load module: ${tabId}</div>
+                    <div class="font-mono text-xs bg-red-50 border border-red-100 rounded p-4 mt-2 text-left max-w-lg mx-auto">${e && e.message ? e.message : String(e)}</div>
+                    <button onclick="App.state.loadedViews.delete('${tabId}'); App.switchMainTab('${tabId}')" class="mt-4 px-4 py-2 bg-blue-600 text-white text-xs rounded-xl font-bold hover:bg-blue-700">Retry</button>
+                </div>`;
             }
         }
 
         // Ensure theme buttons are updated if switching back to config tab
-        if (tabId === 'config') { UI.updateThemeUI(localStorage.getItem('mate_theme') || 'light'); UI.initApprovalToggle(); }
+        if (tabId === 'config') { UI.updateThemeUI(localStorage.getItem('costaff_theme') || 'light'); UI.initApprovalToggle(); }
 
         // DOM: Visibility switch - ensure we only target actual main-tab-view elements
         document.querySelectorAll('.main-tab-view').forEach(el => el.classList.add('hidden'));
@@ -201,14 +207,16 @@ const App = {
 
         try {
             if (tab === 'dashboard') {
-                const [stats, status, license] = await Promise.all([
+                const [stats, status, license, aiTeam] = await Promise.all([
                     API.fetch('/api/os-stats'),
                     API.fetch('/api/status'),
                     API.fetch('/api/license'),
+                    API.fetch('/api/dashboard/ai-team'),
                 ]);
                 UI.renderOSStats(stats);
                 UI.renderDashboard(status);
                 UI.renderLicense(license);
+                UI.renderAITeam(aiTeam);
             }
             
             if (tab === 'sessions') {
@@ -240,7 +248,8 @@ const App = {
                 }
             }
 
-            if (tab === 'cronjobs') UI.renderCronjobs();
+            if (tab === 'cronjobs' && typeof RegularWork !== 'undefined') RegularWork.load();
+            if (tab === 'diary' && typeof Diary !== 'undefined') Diary.load();
             if (tab === 'logs') UI.renderLogs();
             if (tab === 'information') {
                 const sub = this.state.subTabs.information;
@@ -260,7 +269,7 @@ const App = {
     },
 
     logout() {
-        localStorage.removeItem('mate_token');
+        localStorage.removeItem('costaff_token');
         window.location.reload();
     }
 };

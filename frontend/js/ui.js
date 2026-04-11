@@ -58,16 +58,16 @@ const UI = {
 
     // --- Theme Management ---
     loadTheme() {
-        const theme = localStorage.getItem('mate_theme') || 'light';
+        const theme = localStorage.getItem('costaff_theme') || 'light';
         this.toggleTheme(theme);
     },
     toggleTheme(mode) {
         if (mode === 'light') {
             document.body.classList.add('light-mode');
-            localStorage.setItem('mate_theme', 'light');
+            localStorage.setItem('costaff_theme', 'light');
         } else {
             document.body.classList.remove('light-mode');
-            localStorage.setItem('mate_theme', 'dark');
+            localStorage.setItem('costaff_theme', 'dark');
         }
         this.updateThemeUI(mode);
     },
@@ -181,7 +181,7 @@ const UI = {
                         </div>
                     </div>
                     ${!isEnterprise ? `
-                    <a href="mailto:simonliuyuwei@gmail.com?subject=Mateclaw Enterprise License Inquiry"
+                    <a href="mailto:simonliuyuwei@gmail.com?subject=CoStaff Enterprise License Inquiry"
                        class="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-700 transition-all whitespace-nowrap">
                         Upgrade →
                     </a>` : ''}
@@ -482,9 +482,79 @@ const UI = {
                 <div class="text-5xl font-headline font-bold text-slate-900">${svcs.filter(s=>s.name.includes('bot')).length}</div>
             </div>
             <div class="card-linear bg-white border border-slate-100 shadow-xl rounded-3xl p-8 hover:bg-slate-50 transition-all duration-300 cursor-default group">
-                <div class="label-mono text-[9px] mb-4 text-slate-400 tracking-[0.2em] uppercase">MATE CORES</div>
+                <div class="label-mono text-[9px] mb-4 text-slate-400 tracking-[0.2em] uppercase">MCP CORES</div>
                 <div class="text-5xl font-headline font-bold text-slate-900">${svcs.filter(s=>s.name.includes('mcp')).length}</div>
             </div>`;
+    },
+
+    renderAITeam({ works, diary }) {
+        // --- Scheduled Jobs ---
+        const rwList = document.getElementById('dash-rw-list');
+        const rwBadge = document.getElementById('dash-rw-badge');
+        if (rwList) {
+            const active = (works || []).filter(w => w.status === 'active');
+            if (rwBadge) rwBadge.textContent = `${active.length} JOBS`;
+            if (active.length === 0) {
+                rwList.innerHTML = `<div class="flex items-center justify-center h-20 text-slate-300 text-[10px] font-bold uppercase tracking-widest">No active schedules</div>`;
+            } else {
+                rwList.innerHTML = active.map(w => {
+                    const ch = w.channel ? `<span class="bg-green-50 text-green-600 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase">${w.channel}</span>` : '';
+                    const lastRan = w.last_ran_at ? `<span class="text-[9px] text-slate-300">${new Date(w.last_ran_at).toLocaleString()}</span>` : '';
+                    return `<div class="px-5 py-3 flex flex-col gap-1 hover:bg-slate-50 transition-all">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="font-bold text-slate-800 text-sm truncate">${w.title}</span>
+                            <div class="flex items-center gap-1 shrink-0">${ch}</div>
+                        </div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="font-mono text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded font-bold">${w.cron}</span>
+                            <span class="text-[9px] text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded font-bold">${w.agent_id || 'costaff_agent'}</span>
+                            ${lastRan}
+                        </div>
+                        ${w.last_output ? `<p class="text-[10px] text-slate-400 line-clamp-2 leading-relaxed mt-1">${w.last_output.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>` : ''}
+                    </div>`;
+                }).join('');
+            }
+        }
+
+        // --- Diary Feed ---
+        const diaryList = document.getElementById('dash-diary-list');
+        const diaryDate = document.getElementById('dash-diary-date');
+        if (diaryList) {
+            const entries = diary || [];
+            if (diaryDate && entries.length > 0) diaryDate.textContent = entries[0].date || '';
+            if (entries.length === 0) {
+                diaryList.innerHTML = `<div class="flex items-center justify-center h-20 text-slate-300 text-[10px] font-bold uppercase tracking-widest">No diary entries yet</div>`;
+            } else {
+                // Group by date
+                const byDate = {};
+                entries.forEach(e => {
+                    const d = e.date || e.created_at?.split('T')[0] || '—';
+                    if (!byDate[d]) byDate[d] = [];
+                    byDate[d].push(e);
+                });
+                diaryList.innerHTML = Object.entries(byDate).map(([date, items]) => {
+                    const cards = items.map(e => {
+                        const typeColor = { daily: 'text-blue-600 bg-blue-50', weekly: 'text-purple-600 bg-purple-50', monthly: 'text-green-600 bg-green-50' };
+                        const tc = typeColor[e.type] || 'text-slate-500 bg-slate-50';
+                        return `<div class="px-5 py-4 hover:bg-slate-50 transition-all">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${tc}">${e.type || 'note'}</span>
+                                <span class="text-[10px] font-bold text-slate-500">${e.agent_name || '—'}</span>
+                            </div>
+                            ${e.done ? `<div class="mb-1"><span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Done</span><p class="text-xs text-slate-700 mt-0.5 leading-relaxed">${e.done}</p></div>` : ''}
+                            ${e.next ? `<div class="mb-1"><span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Next</span><p class="text-xs text-slate-500 mt-0.5 leading-relaxed">${e.next}</p></div>` : ''}
+                            ${e.blocker ? `<div><span class="text-[9px] font-black text-red-400 uppercase tracking-widest">Blocker</span><p class="text-xs text-red-600 mt-0.5 leading-relaxed">${e.blocker}</p></div>` : ''}
+                        </div>`;
+                    }).join('');
+                    return `<div>
+                        <div class="px-5 py-2 bg-slate-50 border-b border-slate-100 sticky top-0">
+                            <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${date}</span>
+                        </div>
+                        ${cards}
+                    </div>`;
+                }).join('');
+            }
+        }
     },
 
     renderChatSessions(sessions) {
@@ -508,9 +578,9 @@ const UI = {
     },
 
     async initChat() {
-        // Always connect to the mateclaw agent — same as channels (Telegram/Discord/Line)
+        // Always connect to the costaff agent — same as channels (Telegram/Discord/Line)
         const agents = await API.fetch('/api/agents');
-        this.chatState.app = agents.find(a => a.includes('mateclaw')) || agents[0] || 'mateclaw_agent';
+        this.chatState.app = agents.find(a => a.includes('costaff')) || agents[0] || 'costaff_agent';
 
         const form = document.getElementById('chat-form');
         if (form) form.onsubmit = (e) => { e.preventDefault(); this.sendChatMessage(); };
@@ -712,7 +782,7 @@ const UI = {
         setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
     },
 
-    _coreMCPs: ['mateclaw', 'coding'],
+    _coreMCPs: ['costaff', 'coding'],
 
     renderMCP(svcs, conf) {
         const coreMCPs = (conf.mcp || []).map(m => ({name: m, isExternal: false, isCore: true}));
@@ -913,14 +983,14 @@ const UI = {
     renderAgents(svcs) {
         // Cache svcs so onclick handlers can retrieve by name without embedding JSON in HTML
         App.state.cachedSvcs = svcs;
-        // Only show root mateclaw-agent as Internal Agent
-        const agents = svcs.filter(s => s.name.includes('mateclaw-agent'));
+        // Only show root costaff-agent as Internal Agent
+        const agents = svcs.filter(s => s.name.includes('costaff-agent'));
         const list = document.getElementById('agents-list'); if (!list) return;
         list.innerHTML = agents.map(a => {
             const up = a.status.includes('Up');
             return `<div onclick="UI.loadAgentDetail('${a.name}')"
                  class="p-5 cursor-pointer hover:bg-slate-50 transition-all ${App.state.activeAgent===a.name?'bg-blue-50 border-l-4 border-l-blue-600':''}">
-                <div class="flex justify-between items-center mb-1"><div class="text-sm font-headline font-bold text-slate-900 uppercase tracking-tight">mateclaw agent</div><div class="w-2 h-2 rounded-full ${up?'bg-blue-600 shadow-[0_0_8px_rgba(37,99,235,0.5)] animate-pulse':'bg-slate-200'}"></div></div>
+                <div class="flex justify-between items-center mb-1"><div class="text-sm font-headline font-bold text-slate-900 uppercase tracking-tight">costaff agent</div><div class="w-2 h-2 rounded-full ${up?'bg-blue-600 shadow-[0_0_8px_rgba(37,99,235,0.5)] animate-pulse':'bg-slate-200'}"></div></div>
                 <div class="text-[10px] text-slate-400 font-mono uppercase tracking-tighter italic">${a.status}</div></div>`;
         }).join('');
     },
@@ -1006,7 +1076,7 @@ const UI = {
         const logsSection = document.getElementById('ext-agent-logs-section');
         const urlNotice = document.getElementById('ext-agent-url-notice');
         if (agent.type === 'github') {
-            // MCP section only for agents that declare mcp_configurable in mateclaw.agent.json
+            // MCP section only for agents that declare mcp_configurable in costaff.agent.json
             if (agent.mcp_configurable) {
                 mcpSection.classList.remove('hidden'); mcpSection.classList.add('flex');
                 this._loadExtAgentMCPConfig(agent.name);
@@ -1115,7 +1185,7 @@ const UI = {
         document.getElementById('agent-placeholder').classList.add('hidden');
         document.getElementById('ext-agent-content').classList.add('hidden');
         document.getElementById('agent-content').classList.remove('hidden');
-        document.getElementById('agent-detail-name').innerText = 'MATECLAW AGENT';
+        document.getElementById('agent-detail-name').innerText = 'COSTAFF AGENT';
         this.loadAgentLogs();
         this.updateAgentStatus(name, svcs);
         this.loadAgentMCPConfig(name);
@@ -1123,14 +1193,14 @@ const UI = {
 
     // Map Docker container name (may include project prefix) to config agent_id
     _agentConfigId(dockerName) {
-        if (dockerName.includes('mateclaw-agent') || dockerName.includes('mateclaw_agent')) return 'mateclaw_agent';
+        if (dockerName.includes('costaff-agent') || dockerName.includes('costaff_agent')) return 'costaff_agent';
         if (dockerName.includes('coding-agent') || dockerName.includes('coding_agent')) return 'coding_agent';
         return dockerName.replace(/-/g, '_');
     },
 
     // Extract bare service name for docker logs (strip compose project prefix)
     _dockerServiceName(containerName) {
-        // e.g. "mateclaw-mateclaw-agent-1" → "mateclaw-agent"
+        // e.g. "costaff-costaff-agent-1" → "costaff-agent"
         return containerName.replace(/^[^-]+-/, '').replace(/-\d+$/, '');
     },
 
@@ -1151,7 +1221,7 @@ const UI = {
 
             box.innerHTML = available.map(mcp => {
                 const checked = assigned.includes(mcp);
-                const isCore = (agentId === 'mateclaw_agent' && mcp === 'mateclaw') || (agentId === 'coding_agent' && mcp === 'coding');
+                const isCore = (agentId === 'costaff_agent' && mcp === 'costaff') || (agentId === 'coding_agent' && mcp === 'coding');
                 return `<label class="flex items-center gap-3 p-3 rounded-xl border ${checked ? 'border-blue-200 bg-blue-50' : 'border-slate-100 bg-white'} cursor-pointer hover:border-blue-200 transition-all">
                     <input type="checkbox" value="${mcp}" ${checked ? 'checked' : ''} ${isCore ? 'disabled' : ''}
                         class="w-4 h-4 accent-blue-600 rounded" onchange="UI._updateMCPCheckStyle(this)">
@@ -1405,7 +1475,7 @@ const UI = {
         const blob = new Blob([text], { type: 'text/plain' });
         const url = URL.createObjectURL(blob); const a = document.createElement('a');
         const source = document.getElementById('log-service-select').value || 'system';
-        a.href = url; a.download = `mate_logs_${source}_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.log`;
+        a.href = url; a.download = `costaff_logs_${source}_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.log`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
     }
 };

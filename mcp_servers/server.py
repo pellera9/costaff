@@ -1,0 +1,99 @@
+import os
+import sys
+import asyncio
+
+_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _root not in sys.path:
+    sys.path.insert(0, _root)
+
+from mcp_servers.core import mcp, scheduler, scheduled_job_ids, logger, tz
+from src.core.database import SessionLocal, init_db
+from src.core import models
+from src.core.license import LicenseManager
+
+# Import all tool modules to register @mcp.tool() decorators
+from mcp_servers.tools import user, messaging, reminders, regular_works, projects, diary, events, apis, skills
+
+# Import background task functions
+from mcp_servers.background import sync_database_tasks, poll_queued_tasks, _ensure_default_regular_works
+from mcp_servers.executors.reminder import execute_reminder
+
+
+async def startup():
+    try:
+        LicenseManager.load()
+    except ValueError as e:
+        logger.error(f"LICENSE ERROR: {e}")
+        raise SystemExit(1)
+
+    init_db()
+    if not scheduler.running:
+        scheduler.start()
+
+    # Ensure default Regular Works exist for all known users
+    db = SessionLocal()
+    try:
+        users = db.query(models.UserContact).all()
+        for u in users:
+            _ensure_default_regular_works(u.user_id)
+    finally:
+        db.close()
+
+    # Pre-load pending reminders
+    db = SessionLocal()
+    try:
+        from apscheduler.triggers.date import DateTrigger
+        pending = db.query(models.Reminder).filter(models.Reminder.status == "pending").all()
+        for r in pending:
+            if r.run_at:
+                job_id = f"reminder_{r.id}"
+                try:
+                    run_time = r.run_at.replace(tzinfo=tz) if r.run_at.tzinfo is None else r.run_at
+                    scheduler.add_job(
+                        execute_reminder, DateTrigger(run_date=run_time),
+                        args=[r.id], id=job_id, replace_existing=True
+                    )
+                    scheduled_job_ids.add(job_id)
+                except Exception as e:
+                    logger.error(f"Failed to pre-load reminder {r.id}: {e}")
+    finally:
+        db.close()
+
+    asyncio.create_task(sync_database_tasks())
+    asyncio.create_task(poll_queued_tasks())
+    logger.info("CoStaff Agent Engine online.")
+
+
+if __name__ == "__main__":
+    async def main():
+        await startup()
+        import uvicorn
+        from starlette.middleware.base import BaseHTTPMiddleware
+        from starlette.responses import Response as StarletteResponse
+
+        starlette_app = mcp.streamable_http_app()
+        logger.info("MCP transport: streamable-http (endpoint: /mcp)")
+
+        mcp_secret = os.getenv("MCP_SECRET_KEY")
+        if mcp_secret:
+            class BearerMiddleware(BaseHTTPMiddleware):
+                async def dispatch(self, request, call_next):
+                    auth = request.headers.get("authorization", "")
+                    if auth != f"Bearer {mcp_secret}":
+                        return StarletteResponse("Unauthorized", status_code=401)
+                    return await call_next(request)
+            starlette_app = BearerMiddleware(starlette_app)
+            logger.info("MCP Bearer token authentication enabled.")
+        else:
+            logger.warning("MCP_SECRET_KEY not set — running without authentication.")
+
+        config = uvicorn.Config(
+            starlette_app,
+            host="0.0.0.0",
+            port=int(os.getenv("MCP_COSTAFF_PORT", "8081")),
+            log_level="info",
+        )
+        server = uvicorn.Server(config)
+        await server.serve()
+
+    asyncio.run(main())

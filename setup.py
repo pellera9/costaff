@@ -1,11 +1,11 @@
 from setuptools import setup
 
 setup(
-    name="mateclaw-cli",
+    name="costaff-cli",
     version="0.2.3",
-    description="Mateclaw Agent Ecosystem CLI by Mateclaw",
+    description="CoStaff Agent Ecosystem CLI by CoStaff",
     author="Simon Liu",
-    py_modules=["mateclaw"],
+    py_modules=["costaff"],
     install_requires=[
         "typer[all]",
         "rich",
@@ -21,7 +21,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "mateclaw=mateclaw:app",
+            "cst=costaff:app",
         ],
     },
 )

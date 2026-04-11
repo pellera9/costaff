@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 # Basic Bot Configuration
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-APP_NAME = os.getenv("ADK_APP_NAME", "mate_agent")
-SALT = os.getenv("ID_SALT", "default_secret_mate_salt")
+APP_NAME = os.getenv("ADK_APP_NAME", "costaff_agent")
+SALT = os.getenv("ID_SALT", "default_secret_costaff_salt")
 
 # PrivAI Configuration
 PRIVAI_URL = os.getenv("PRIVAI_API_BASE_URL", "https://api.bcm.apmic.ai").rstrip("/")
@@ -33,7 +33,7 @@ PRIVAI_KEY = os.getenv("PRIVAI_API_KEY")
 if not TOKEN:
     logger.warning("DISCORD_BOT_TOKEN missing. Discord bot will not start.")
 
-class MateBot(commands.Bot):
+class CoStaffBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
@@ -43,7 +43,7 @@ class MateBot(commands.Bot):
         await self.tree.sync()
         logger.info("Synced Slash Commands tree.")
 
-bot = MateBot()
+bot = CoStaffBot()
 
 # --- Utilities ---
 
@@ -59,10 +59,10 @@ def _require_approval() -> bool:
     OSS installations (no license file) always return False — no approval gate.
     """
     project_root = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    license_path = os.path.join(project_root, ".mateclaw", "mateclaw-license.yaml")
+    license_path = os.path.join(project_root, ".costaff", "costaff-license.yaml")
     if not os.path.exists(license_path):
         return False  # OSS: approval gate not available
-    config_path = os.path.join(project_root, ".mateclaw", "config.json")
+    config_path = os.path.join(project_root, ".costaff", "config.json")
     try:
         with open(config_path, "r") as f:
             return json.load(f).get("require_approval", True)
@@ -96,7 +96,7 @@ def sync_identity(hashed_id: str, real_id: str, session_id: str):
     finally:
         db.close()
 
-async def upload_to_mate(file_content: io.BytesIO, filename: str, user_id: str, sid: str = None, app_name: str = "mate_agent") -> str:
+async def upload_to_costaff(file_content: io.BytesIO, filename: str, user_id: str, sid: str = None, app_name: str = "costaff_agent") -> str:
     """Synchronizes attachments to PrivAI cloud."""
     if not PRIVAI_KEY: return None
     metadata = json.dumps({"owner_id": user_id, "source": "discord_upload"})
@@ -256,7 +256,7 @@ async def slash_files(interaction: discord.Interaction, n: int = 5):
 
 @bot.tree.command(name="help", description="Show list of available commands")
 async def slash_help(interaction: discord.Interaction):
-    txt = ("**Mate Agent 指令：**\n"
+    txt = ("**CoStaff 指令：**\n"
            "`/start` - 開始/身份檢查\n"
            "`/reset` - 重設對話\n"
            "`/profile` - 查看個人資料\n"
@@ -281,7 +281,7 @@ async def handle_msg(message):
                 img_data = await attachment.read(); data_b64 = base64.b64encode(img_data).decode()
                 parts.append({"inlineData": {"mimeType": attachment.content_type or "image/jpeg", "data": data_b64}})
             buf = io.BytesIO(await attachment.read())
-            file_id = await upload_to_mate(buf, attachment.filename, uid, sid=sid, app_name=APP_NAME)
+            file_id = await upload_to_costaff(buf, attachment.filename, uid, sid=sid, app_name=APP_NAME)
             if file_id and not any(attachment.filename.lower().endswith(ext) for ext in ['png', 'jpg', 'jpeg', 'webp']):
                 parts.append({"text": f"[System: User uploaded a document: {attachment.filename} (ID: {file_id})]"})
 

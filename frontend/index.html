@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mate Dashboard</title>
+    <title>CoStaff Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="css/main.css">
@@ -63,8 +63,8 @@
                 <div class="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-blue-200">
                     <i class="fas fa-robot text-white text-3xl"></i>
                 </div>
-                <h2 class="text-4xl font-bold text-slate-900 tracking-tight mb-1">Mate</h2>
-                <p class="text-slate-500 text-sm font-medium">Meet Your Partner</p>
+                <h2 class="text-4xl font-bold text-slate-900 tracking-tight mb-1">CoStaff</h2>
+                <p class="text-slate-500 text-sm font-medium">Your AI Staff, Ready to Work.</p>
             </div>
             
             <form id="auth-form" class="space-y-5 w-full">
@@ -88,7 +88,7 @@
         <div class="p-8 pb-4">
             <div class="flex items-center gap-3 text-blue-600 mb-8">
                 <i class="fas fa-robot text-3xl"></i>
-                <span class="text-2xl font-bold text-slate-900 tracking-tight">Mate</span>
+                <span class="text-2xl font-bold text-slate-900 tracking-tight">CoStaff</span>
             </div>
         </div>
         
@@ -119,12 +119,15 @@
                 <i class="fas fa-bolt w-5 text-center"></i> Skills
             </button>
 
-            <div class="sidebar-group-label">Regular Work</div>
+            <div class="sidebar-group-label">AI Team</div>
             <button data-tab="cronjobs" class="sidebar-item w-full flex items-center gap-3 px-6 py-3 transition-all font-bold text-sm">
-                <i class="fas fa-clock w-5 text-center"></i> Reminders
+                <i class="fas fa-sync-alt w-5 text-center"></i> Regular Work
             </button>
             <button data-tab="tasks" class="sidebar-item w-full flex items-center gap-3 px-6 py-3 transition-all font-bold text-sm">
-                <i class="fas fa-tasks w-5 text-center"></i> Tasks
+                <i class="fas fa-project-diagram w-5 text-center"></i> Projects
+            </button>
+            <button data-tab="diary" class="sidebar-item w-full flex items-center gap-3 px-6 py-3 transition-all font-bold text-sm">
+                <i class="fas fa-book w-5 text-center"></i> Diary
             </button>
 
             <div class="sidebar-group-label">Control</div>
@@ -177,6 +180,7 @@
             <div id="view-chat" class="main-tab-view hidden h-full flex"></div>
             <div id="view-config" class="main-tab-view hidden"></div>
             <div id="view-docs" class="main-tab-view hidden"></div>
+            <div id="view-diary" class="main-tab-view hidden"></div>
         </div>
     </main>
 
@@ -200,67 +204,6 @@
         </div>
     </div>
 
-    <!-- Cronjob Modal -->
-    <div id="cron-modal" class="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm hidden">
-        <div class="bg-white w-full max-w-lg overflow-hidden rounded-[2.5rem] shadow-2xl border border-slate-200">
-            <div class="px-10 py-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                <div>
-                    <h3 class="text-lg font-bold text-slate-900">Schedule Proactive Message</h3>
-                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Send messages automatically</p>
-                </div>
-                <button onclick="UI.closeCronModal()" class="text-slate-400 hover:text-rose-500 transition-colors"><i class="fas fa-times"></i></button>
-            </div>
-            
-            <div class="p-10 space-y-6">
-                <div class="grid grid-cols-2 gap-6">
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Target Channel</label>
-                        <select id="cron-channel" class="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-blue-500/20 outline-none">
-                            <option value="dc">Discord</option><option value="tg">Telegram</option><option value="line">Line</option>
-                        </select>
-                    </div>
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Recipient ID</label>
-                        <input type="text" id="cron-recipient" placeholder="Platform User/Group ID" class="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-mono text-slate-900 focus:ring-2 focus:ring-blue-500/20 outline-none">
-                    </div>
-                </div>
-
-                <div class="space-y-4">
-                    <div class="flex items-center justify-between px-1">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Schedule & Message</label>
-                        <span class="text-[9px] font-mono text-blue-500 bg-blue-50 px-2 py-0.5 rounded">Standard Cron Syntax</span>
-                    </div>
-                    
-                    <div class="relative group">
-                        <!-- Cron parts labels for guidance -->
-                        <div class="flex gap-4 mb-2 px-6 text-[8px] font-black text-slate-300 uppercase tracking-tighter">
-                            <span class="w-4">min</span>
-                            <span class="w-4">hr</span>
-                            <span class="w-4">day</span>
-                            <span class="w-4">mon</span>
-                            <span class="w-4">week</span>
-                            <span class="ml-2 text-blue-400">--- your message content ---</span>
-                        </div>
-                        <textarea id="cron-full-input" rows="4" placeholder="* * * * * Type your message here..." 
-                            class="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-5 font-mono text-sm text-blue-600 focus:ring-2 focus:ring-blue-500/20 outline-none resize-none shadow-inner"></textarea>
-                    </div>
-
-                    <!-- Helper Quick Examples -->
-                    <div class="flex flex-wrap gap-2">
-                        <button onclick="document.getElementById('cron-full-input').value='0 * * * * Hello every hour!'" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 text-[9px] font-bold transition-all">Hourly</button>
-                        <button onclick="document.getElementById('cron-full-input').value='0 9 * * * Good morning!'" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 text-[9px] font-bold transition-all">Daily 9AM</button>
-                        <button onclick="document.getElementById('cron-full-input').value='30 18 * * 1-5 Office update...'" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 text-[9px] font-bold transition-all">Work Days 6:30PM</button>
-                    </div>
-                </div>
-
-                <div class="pt-4 flex gap-4">
-                    <button onclick="UI.closeCronModal()" class="flex-1 px-4 py-4 rounded-xl text-xs font-bold text-slate-400 hover:bg-slate-50 transition-all uppercase tracking-widest">Cancel</button>
-                    <button onclick="UI.saveCronjobLine()" class="flex-1 px-4 py-4 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all uppercase tracking-widest">Save Task</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
@@ -277,12 +220,13 @@
             }
         }
     </script>
-    <script src="js/config.js"></script>
-    <script src="js/api.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/tasks.js"></script>
-    <script src="js/apis.js"></script>
-    <script src="js/skills.js"></script>
-    <script src="js/app.js"></script>
+    <script src="js/config.js?v=2"></script>
+    <script src="js/api.js?v=2"></script>
+    <script src="js/ui.js?v=3"></script>
+    <script src="js/tasks.js?v=6"></script>
+    <script src="js/apis.js?v=2"></script>
+    <script src="js/skills.js?v=2"></script>
+    <script src="js/diary.js?v=1"></script>
+    <script src="js/app.js?v=4"></script>
 </body>
 </html>

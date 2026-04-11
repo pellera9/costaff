@@ -19,11 +19,11 @@ from utils.instructions import AGENT_INSTRUCTION
 
 # --- Configuration ---
 # Prefer per-agent MCP URLs; fall back to shared MCP_SERVER_URLS
-raw_config = os.getenv("MATECLAW_AGENT_MCP_URLS") or os.getenv("MCP_SERVER_URLS", "")
+raw_config = os.getenv("COSTAFF_AGENT_MCP_URLS") or os.getenv("MCP_SERVER_URLS", "")
 logger.info(f"Loading MCP config: {raw_config}")
 
 if not raw_config:
-    raise EnvironmentError("MATECLAW_AGENT_MCP_URLS (or MCP_SERVER_URLS) is not set.")
+    raise EnvironmentError("COSTAFF_AGENT_MCP_URLS (or MCP_SERVER_URLS) is not set.")
 
 try:
     mcp_config = json.loads(raw_config)
@@ -67,8 +67,8 @@ for name, entry in mcp_config.items():
         logger.error(f"FAILED to load MCP '{name}': {e}")
 
 # Define the model to use
-model_provider = os.getenv("MATECLAW_AGENT_MODEL_PROVIDER", "gemini").lower()
-model_name = os.getenv("MATECLAW_AGENT_GEMINI_MODEL", "gemini-2.5-flash")
+model_provider = os.getenv("COSTAFF_AGENT_MODEL_PROVIDER", "gemini").lower()
+model_name = os.getenv("COSTAFF_AGENT_GEMINI_MODEL", "gemini-2.5-flash")
 
 if model_provider == "litellm":
     selected_model = litellm_model
@@ -124,9 +124,9 @@ if raw_agents:
 # Define the root agent
 root_agent = LlmAgent(
     model=selected_model,
-    name="mateclaw_agent",
+    name="costaff_agent",
     description=(
-        "Mateclaw Agent: a personal AI assistant for scheduling, reminders, profile management, "
+        "CoStaff Agent: a personal AI assistant for scheduling, reminders, profile management, "
         "and general knowledge. "
         "Responsible for: answering questions with general knowledge; managing user profile and identity; "
         "creating and managing reminders and scheduled messages; managing Kanban tasks for recurring "
