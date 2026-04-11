@@ -150,8 +150,9 @@ def handle_message(event):
 
 async def handle_reset(event, uid, sid):
     if await delete_session(APP_NAME, uid, sid):
+        preferred_lang = os.getenv("COSTAFF_PREFERRED_LANGUAGE", "Traditional Chinese (繁體中文)")
         res = await run_adk_prompt(APP_NAME, uid, sid,
-                                   prompt=f"(Context ID: {uid}). Please check my identity and greet me in Traditional Chinese.")
+                                   prompt=f"(Context ID: {uid}). Please check my identity and greet me in {preferred_lang}.")
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"🔄 對話已重設\n\n{res}"))
     else:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="Reset failed."))

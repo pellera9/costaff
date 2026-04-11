@@ -68,6 +68,21 @@ def onboard():
         set_key(PATHS["env"], "LITELLM_SKIP_SPECIAL_TOKENS", "True" if skip_special else "False")
 
     console.print(Panel.fit("🌏 [bold blue]System Configuration[/bold blue]"))
+    
+    # Language Selection
+    lang_choice = questionary.select(
+        "Preferred Response Language (回覆語系):",
+        choices=[
+            questionary.Choice("Traditional Chinese (繁體中文)", value="Traditional Chinese (繁體中文)"),
+            questionary.Choice("English", value="English"),
+            questionary.Choice("Japanese (日本語)", value="Japanese (日本語)"),
+            questionary.Choice("Simplified Chinese (简体中文)", value="Simplified Chinese (简体中文)"),
+        ],
+        default="Traditional Chinese (繁體中文)"
+    ).ask()
+    if lang_choice:
+        set_key(PATHS["env"], "COSTAFF_PREFERRED_LANGUAGE", lang_choice)
+
     common_timezones = [
         "UTC", "Asia/Taipei", "Asia/Tokyo", "Asia/Shanghai", "Asia/Singapore",
         "Asia/Seoul", "Asia/Hong_Kong", "America/New_York", "America/Los_Angeles",

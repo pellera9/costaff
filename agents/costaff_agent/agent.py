@@ -145,7 +145,13 @@ if raw_agents:
 
 # Construct dynamic instruction
 display_names_block = "\n".join(agent_display_mappings) if agent_display_mappings else "- (No external agents registered)"
-instruction = AGENT_INSTRUCTION.replace("{SUB_AGENT_DISPLAY_NAMES}", display_names_block)
+preferred_lang = os.getenv("COSTAFF_PREFERRED_LANGUAGE", "Traditional Chinese (繁體中文)")
+
+instruction = (
+    AGENT_INSTRUCTION
+    .replace("{SUB_AGENT_DISPLAY_NAMES}", display_names_block)
+    .replace("{PREFERRED_LANGUAGE}", preferred_lang)
+)
 
 # Define the root agent
 root_agent = LlmAgent(

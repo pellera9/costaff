@@ -147,7 +147,8 @@ async def _run_adk_prompt_inner(
 
                     # Nudge: The agent used tools but stayed silent
                     logger.warning(f"Attempt {attempt + 1}: No text found for session {sid}. Nudging...")
-                    payload["newMessage"] = {"role": "user", "parts": [{"text": "任務已完成，請用繁體中文向用戶說明結果摘要（1-2句即可）。"}]}
+                    preferred_lang = os.getenv("COSTAFF_PREFERRED_LANGUAGE", "Traditional Chinese (繁體中文)")
+                    payload["newMessage"] = {"role": "user", "parts": [{"text": f"任務已完成，請用{preferred_lang}向用戶說明結果摘要（1-2句即可）。"}]}
                     continue
 
                 logger.error(f"ADK Run Error ({res.status_code}): {res.text}")

@@ -163,8 +163,8 @@ def _build_task_spec(task, db) -> str:
             f"The task is NOT done until you receive and relay {task.assigned_agent}'s actual deliverable."
         )
 
-    lines.append(f"\n(System: Autonomous project task ID={task.id}. Execute it. Respond in 繁體中文.)")
-
+        preferred_lang = os.getenv("COSTAFF_PREFERRED_LANGUAGE", "Traditional Chinese (繁體中文)")
+        lines.append(f"\n(System: Autonomous project task ID={task.id}. Execute it. Respond in {preferred_lang}.)")
     # Resolve channel/recipient for PROGRESS_CONTEXT so coding_agent can send live updates
     channel = task.channel
     recipient = task.recipient

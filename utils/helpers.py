@@ -146,7 +146,10 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
         services_fragment[ext_svc] = svc_def
 
     # Volumes: map agent-specific data volumes to the global costaff_data volume
-    volumes_fragment = {}
+    # In standard docker-compose, the volume is prefixed with the project name (e.g. costaff_costaff_data)
+    # We'll use 'costaff_costaff_data' as the canonical shared volume name.
+    SHARED_VOLUME = "costaff_costaff_data"
+    
     for svc_name, svc_def in services_fragment.items():
         new_vols = []
         for vol in svc_def.get("volumes", []):
@@ -156,7 +159,7 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
                 if not local_part.startswith("/") and not local_part.startswith("./"):
                     if container_part.startswith("/app/data"):
                         # Force use the global shared volume
-                        new_vols.append(f"costaff_data:{container_part}")
+                        new_vols.append(f"{SHARED_VOLUME}:{container_part}")
                         continue
             new_vols.append(vol)
         svc_def["volumes"] = new_vols
@@ -164,7 +167,7 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
     fragment = {
         "services": services_fragment,
         "networks": {"costaff_default": {"external": True}},
-        "volumes": {"costaff_data": {"external": True}},
+        "volumes": {SHARED_VOLUME: {"external": True}},
     }
     fragment_path = os.path.join(fragment_dir, "compose-fragment.yaml")
     with open(fragment_path, "w") as f:

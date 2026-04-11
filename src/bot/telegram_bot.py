@@ -177,8 +177,9 @@ async def cmd_reset(msg: Message):
         return
     await bot.send_chat_action(msg.chat.id, "typing")
     if await delete_session(APP_NAME, uid, sid):
+        preferred_lang = os.getenv("COSTAFF_PREFERRED_LANGUAGE", "Traditional Chinese (繁體中文)")
         res = await run_adk_prompt(APP_NAME, uid, sid,
-                                   prompt=f"(Context ID: {uid}). Please check my identity and greet me in Traditional Chinese.")
+                                   prompt=f"(Context ID: {uid}). Please check my identity and greet me in {preferred_lang}.")
         await safe_reply(msg, f"🔄 <b>對話已重設</b>\n\n{res}")
     else:
         await msg.answer("Reset failed.")
