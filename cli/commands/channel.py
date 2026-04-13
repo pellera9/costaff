@@ -24,10 +24,10 @@ channel_app = typer.Typer(help="Manage communication channels.")
 
 # Official CoStaff Channel Registry
 OFFICIAL_CHANNELS = {
-    "telegram": "https://github.com/AICoStaff/costaff-channel-telegram.git",
-    "line": "https://github.com/AICoStaff/costaff-channel-line.git",
-    "discord": "https://github.com/AICoStaff/costaff-channel-discord.git",
-    "webchat": "https://github.com/AICoStaff/costaff-channel-webchat.git",
+    "telegram": "https://github.com/costaff-ai/costaff-channel-telegram.git",
+    "line": "https://github.com/costaff-ai/costaff-channel-line.git",
+    "discord": "https://github.com/costaff-ai/costaff-channel-discord.git",
+    "webchat": "https://github.com/costaff-ai/costaff-channel-webchat.git",
 }
 
 
