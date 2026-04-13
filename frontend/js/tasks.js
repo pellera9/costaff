@@ -7,6 +7,7 @@ const Projects = {
     refreshTimer: null,
     currentTasks: {},   // taskId -> task object cache
     viewMode: 'list',   // 'list' | 'kanban'
+    filters: { stories: [], agents: [], date: '' },  // kanban filter state
 
     async init() {
         this.bindForm();
@@ -203,7 +204,7 @@ const Projects = {
         const list = document.getElementById('story-list');
         if (!list) return;
 
-        const allTasks = stories.flatMap(s => (s.tasks || []).map(t => ({ ...t, storyTitle: s.title })));
+        const allTasks = stories.flatMap(s => (s.tasks || []).map(t => ({ ...t, storyTitle: s.title, storyId: s.id })));
         const columns = [
             { key: 'backlog',  label: 'Backlog',  color: 'text-slate-500',  bg: 'bg-slate-50',  dot: 'bg-slate-300' },
             { key: 'queued',   label: 'Queued',   color: 'text-amber-600',  bg: 'bg-amber-50',  dot: 'bg-amber-400' },
@@ -220,12 +221,75 @@ const Projects = {
             return;
         }
 
+        // Build filter options from available tasks
+        const storyOptions = [...new Map(allTasks.map(t => [t.storyId, t.storyTitle])).entries()];
+        const agentOptions = [...new Set(allTasks.map(t => t.assigned_agent).filter(Boolean))];
+
+        // Apply filters (stories and agents are arrays for multi-select)
+        const now = new Date();
+        const dateThresholds = {
+            today: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+            week:  new Date(now - 7 * 86400000),
+            month: new Date(now - 30 * 86400000),
+        };
+        const f = this.filters;
+        const visibleTasks = allTasks.filter(t => {
+            if (f.stories.length && !f.stories.includes(t.storyId)) return false;
+            if (f.agents.length  && !f.agents.includes(t.assigned_agent)) return false;
+            if (f.date && dateThresholds[f.date]) {
+                const updated = new Date(t.updated_at || t.created_at);
+                if (updated < dateThresholds[f.date]) return false;
+            }
+            return true;
+        });
+
+        const hasActiveFilter = f.stories.length || f.agents.length || f.date;
+
+        // Helper to build a multi-select dropdown using <details>/<summary>
+        const _multiSelect = (key, label, options /* [{id, label}] */, selected /* string[] */) => {
+            const count = selected.length;
+            const btnLabel = count === 0 ? label : `${label} (${count})`;
+            const btnActive = count > 0 ? 'border-blue-400 text-blue-600' : 'border-slate-200 text-slate-500';
+            const items = options.map(o => {
+                const checked = selected.includes(o.id) ? 'checked' : '';
+                const escapedId = o.id.replace(/'/g, "\\'");
+                return `<label class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 rounded-lg cursor-pointer text-[10px] font-bold text-slate-700 whitespace-nowrap">
+                    <input type="checkbox" ${checked} onchange="Projects.toggleFilter('${key}','${escapedId}')" class="accent-blue-500 w-3 h-3">
+                    ${o.label}
+                </label>`;
+            }).join('');
+            return `<details class="relative kanban-filter-details" onclick="event.stopPropagation()">
+                <summary class="list-none flex items-center gap-1 text-[10px] font-bold border ${btnActive} rounded-lg px-2 py-1 bg-white cursor-pointer select-none hover:border-blue-300 transition-colors">
+                    ${btnLabel}<i class="fas fa-chevron-down text-[8px] ml-0.5 opacity-50"></i>
+                </summary>
+                <div class="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 py-1 min-w-max max-h-52 overflow-y-auto custom-scrollbar">
+                    ${items}
+                </div>
+            </details>`;
+        };
+
+        const filterBar = `
+        <div class="flex items-center gap-2 mb-3 shrink-0 flex-wrap" id="kanban-filter-bar">
+            <i class="fas fa-filter text-[10px] text-slate-400"></i>
+            ${_multiSelect('stories', 'Stories', storyOptions.map(([id, title]) => ({ id, label: title })), f.stories)}
+            ${_multiSelect('agents',  'Agents',  agentOptions.map(a => ({ id: a, label: a })), f.agents)}
+            <select class="text-[10px] font-bold border rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 cursor-pointer transition-colors ${f.date ? 'border-blue-400 text-blue-600' : 'border-slate-200 text-slate-500'}"
+                    onchange="Projects.setFilter('date', this.value)">
+                <option value="">All Time</option>
+                <option value="today" ${f.date === 'today' ? 'selected' : ''}>Today</option>
+                <option value="week"  ${f.date === 'week'  ? 'selected' : ''}>Last 7 Days</option>
+                <option value="month" ${f.date === 'month' ? 'selected' : ''}>Last 30 Days</option>
+            </select>
+            ${hasActiveFilter ? `<button onclick="Projects.clearFilters()" class="text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors ml-1"><i class="fas fa-times mr-1"></i>Clear</button>` : ''}
+            <span class="text-[10px] text-slate-400 font-bold ml-auto">${visibleTasks.length} / ${allTasks.length} tasks</span>
+        </div>`;
+
         // Switch story-list to overflow-hidden so columns scroll independently
         list.style.overflow = 'hidden';
 
-        list.innerHTML = `<div class="flex gap-4 h-full overflow-x-auto">` +
+        list.innerHTML = filterBar + `<div class="flex gap-4 overflow-x-auto" style="height:calc(100% - 40px)">` +
             columns.map(col => {
-                const colTasks = allTasks.filter(t => t.status === col.key);
+                const colTasks = visibleTasks.filter(t => t.status === col.key);
                 const cards = colTasks.length === 0
                     ? `<div class="text-center text-slate-300 text-[10px] font-bold py-8 uppercase tracking-widest">Empty</div>`
                     : colTasks.map(t => {
@@ -247,10 +311,38 @@ const Projects = {
                     <div class="${col.bg} rounded-2xl p-3 space-y-2 overflow-y-auto flex-1 min-h-0 custom-scrollbar">${cards}</div>
                 </div>`;
             }).join('') + `</div>`;
+
+        // Close all <details> dropdowns when clicking outside the filter bar
+        const closeDetails = (e) => {
+            if (!e.target.closest('#kanban-filter-bar')) {
+                document.querySelectorAll('.kanban-filter-details[open]').forEach(d => d.removeAttribute('open'));
+            }
+        };
+        document.removeEventListener('click', this._closeDetailsHandler);
+        this._closeDetailsHandler = closeDetails;
+        document.addEventListener('click', closeDetails);
+    },
+
+    toggleFilter(key, value) {
+        const arr = this.filters[key];
+        const idx = arr.indexOf(value);
+        if (idx === -1) arr.push(value); else arr.splice(idx, 1);
+        if (this.currentEpicId) this.loadStories(this.currentEpicId);
+    },
+
+    setFilter(key, value) {
+        this.filters[key] = value;
+        if (this.currentEpicId) this.loadStories(this.currentEpicId);
+    },
+
+    clearFilters() {
+        this.filters = { stories: [], agents: [], date: '' };
+        if (this.currentEpicId) this.loadStories(this.currentEpicId);
     },
 
     switchView(mode) {
         this.viewMode = mode;
+        if (mode === 'list') this.filters = { stories: [], agents: [], date: '' };
         // Update toggle button styles
         ['list', 'kanban'].forEach(m => {
             const btn = document.getElementById(`view-toggle-${m}`);
@@ -312,7 +404,7 @@ const Projects = {
                     <span class="text-[10px] font-black ${tc} uppercase tracking-widest">${c.type} · ${c.author}</span>
                     <span class="text-[10px] text-slate-400 font-bold">${new Date(c.created_at).toLocaleString()}</span>
                 </div>
-                <p class="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">${c.content}</p>
+                <div class="prose prose-xs prose-slate max-w-none text-xs leading-relaxed markdown-body">${typeof marked !== 'undefined' ? marked.parse(c.content || '') : (c.content || '').replace(/\n/g, '<br>')}</div>
             </div>`;
         }).join('');
     },

@@ -50,6 +50,24 @@ async def execute_project_task(task_id: str):
         task.updated_at = datetime.utcnow()
         db.commit()
 
+        # Write start comment
+        start_comment = models.TaskComment(
+            id=str(uuid.uuid4()),
+            task_id=task_id,
+            user_id=task.user_id,
+            author=task.assigned_agent or "costaff_agent",
+            content=(
+                f"## 🚀 開始執行\n"
+                f"- **任務**：{task.title}\n"
+                f"- **指派 Agent**：{task.assigned_agent or 'costaff_agent'}\n"
+                f"- **任務說明**：{(task.spec or '').strip()[:300] or '—'}"
+            ),
+            type="note",
+            created_at=datetime.utcnow()
+        )
+        db.add(start_comment)
+        db.commit()
+
         # Build context-enriched spec and use task-scoped session to prevent context bleed
         spec = _build_task_spec(task, db)
         task_session_id = f"task_{task_id}"
@@ -85,12 +103,19 @@ async def execute_project_task(task_id: str):
             logger.error(f"ProjectTask execution failed {task_id}: {e}")
             task.status = "failed"
             task.updated_at = datetime.utcnow()
+            import traceback
             comment = models.TaskComment(
                 id=str(uuid.uuid4()),
                 task_id=task_id,
                 user_id=task.user_id,
                 author=task.assigned_agent or "costaff_agent",
-                content=str(e),
+                content=(
+                    f"## ❌ 錯誤發生\n"
+                    f"- **錯誤類型**：{type(e).__name__}\n"
+                    f"- **錯誤訊息**：{str(e)}\n"
+                    f"- **發生位置**：Agent 執行階段（task_id={task_id}）\n"
+                    f"- **詳細 Traceback**：\n```\n{traceback.format_exc()[-1000:]}\n```"
+                ),
                 type="issue",
                 created_at=datetime.utcnow()
             )

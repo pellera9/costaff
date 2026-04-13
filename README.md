@@ -48,32 +48,47 @@ External agents (such as [`costaff-coding-agent`](https://github.com/CoStaffAI/c
 
 ## Architecture
 
+CoStaff uses a **plugin-style architecture**. The core platform (agent + MCP + dashboard) runs as a standalone Docker stack. Channels and external agents each live in their own Docker projects and connect to the core via the shared `costaff_default` network.
+
 ```mermaid
 graph TD
-    User_TG((Telegram)) <--> Bot_TG[Telegram Bot]
-    User_DC((Discord)) <--> Bot_DC[Discord Bot]
-    User_LN((Line)) <--> Bot_LN[Line Bot]
+    subgraph Channels ["Channel Plugins (separate Docker projects)"]
+        CH_TG[costaff-channel-telegram]
+        CH_DC[costaff-channel-discord]
+        CH_LN[costaff-channel-line]
+        CH_WEB[costaff-channel-webchat]
+    end
 
-    Bot_TG & Bot_DC & Bot_LN <--> CoStaffAgent[CoStaff Agent\nGoogle ADK]
+    subgraph Core ["CoStaff Core (.costaff/)"]
+        CoStaffAgent[CoStaff Agent\nGoogle ADK]
+        MCP_Core[Core MCP\nAPScheduler + Notifier]
+        DB[(PostgreSQL)]
+        API[FastAPI Backend]
+        Dashboard[Web Dashboard]
+    end
 
-    CoStaffAgent <--> MCP_Core[Core MCP]
-    CoStaffAgent <--> MCP_Ext[External MCPs\nStreamable HTTP / SSE]
+    subgraph Agents ["External Agent Plugins (separate Docker projects)"]
+        AG_CODE[costaff-agent-coding\nA2A]
+        AG_BA[costaff-agent-business-analysis\nA2A]
+    end
 
-    MCP_Core <--> DB[(PostgreSQL / SQLite)]
-    MCP_Core <--> Scheduler[APScheduler]
-    Scheduler --> Notifier[Notifier]
-    Notifier --> Bot_TG & Bot_DC & Bot_LN
-
-    Dashboard[Web Dashboard] <--> API[FastAPI Backend]
+    CH_TG & CH_DC & CH_LN & CH_WEB -->|HTTP ADK API| CoStaffAgent
+    CoStaffAgent <--> MCP_Core
+    CoStaffAgent -->|A2A| AG_CODE & AG_BA
+    MCP_Core <--> DB
+    MCP_Core -->|push| CH_TG & CH_DC & CH_LN & CH_WEB
+    Dashboard <--> API
     API <--> DB
     API -->|restart| CoStaffAgent
 ```
+
+All plugins connect through the **`costaff_default` Docker network** — no port mapping required between services.
 
 ---
 
 ## Web Dashboard
 
-The dashboard (`cst dashboard`) is a browser-based operator console with dark/light mode:
+The dashboard (`costaff dashboard`) is a browser-based operator console with dark/light mode:
 
 | Module | Description |
 |--------|-------------|
@@ -101,13 +116,13 @@ Any project containing a `costaff.agent.json` manifest can be registered and dep
 
 ```bash
 # Deploy a local agent project
-cst agent deploy --local /path/to/my-agent
+costaff agent deploy --local /path/to/my-agent
 
 # Add a remote URL agent
-cst agent add my-agent --url http://my-agent.example.com
+costaff agent add my-agent --url http://my-agent.example.com
 
 # List all agents
-cst agent list
+costaff agent list
 ```
 
 **First-party agents:**
@@ -116,6 +131,47 @@ cst agent list
 |-------|------------|------|
 | Coding Agent | [costaff-coding-agent](https://github.com/CoStaffAI/costaff-coding-agent) | Sandboxed Python code execution |
 | Viz Report Agent | [costaff-viz-report-agent](https://github.com/CoStaffAI/costaff-viz-report-agent) | Chart generation & HTML/PDF reports |
+
+---
+
+## Plugin Architecture
+
+CoStaff is designed as a **pluggable platform**. Both channels and agents are independent Docker projects that attach to the core at runtime — no modification to the core codebase is required.
+
+### How Plugins Connect
+
+Every plugin (channel or agent) joins the shared Docker network:
+
+```yaml
+# In the plugin's docker-compose.yaml
+networks:
+  default:
+    external: true
+    name: costaff_default
+```
+
+This gives the plugin direct access to `costaff-agent-costaff` (ADK API on port 8080) and `costaff-mcp-costaff` (MCP on port 8000) by container hostname — no port forwarding or tunnels needed.
+
+### Channel Plugins
+
+Channels are standalone bots/servers that:
+1. Receive messages from users (Telegram, Discord, LINE, HTTP)
+2. Forward them to the CoStaff Agent via `POST /run` on the ADK API
+3. Receive push notifications from the MCP notifier
+
+Built-in channels live under `.costaff/dynamic-channels/` and are started automatically with `costaff start`.
+
+### Agent Plugins
+
+External agents expose an **A2A-compatible** endpoint and register a `costaff.agent.json` manifest. The CoStaff Agent discovers and delegates tasks to them automatically.
+
+```bash
+# Register a local agent project
+costaff agent deploy --local /path/to/my-agent
+
+# Register a remote agent
+costaff agent add my-agent --url http://my-agent.internal
+```
 
 ---
 
@@ -144,23 +200,33 @@ cst agent list
 
 - Python 3.10+
 - Docker and Docker Compose
-- At least one of:
-  - **Gemini API Key** from [Google AI Studio](https://aistudio.google.com/)
-  - **LiteLLM-compatible** provider API key
+- A **Gemini API Key** from [Google AI Studio](https://aistudio.google.com/) (or any LiteLLM-compatible provider)
 
-### 1. Install the CLI
+### Quick Start (no bot tokens required)
+
+The fastest way to get started is with the built-in **Webchat** channel — no Telegram, Discord, or Line tokens needed.
 
 ```bash
+# 1. Install the CLI
 pip install -e .
+
+# 2. Run the setup wizard (only Gemini API key required)
+costaff onboard
+
+# 3. Start the platform
+costaff start
+
+# 4. Open the dashboard
+costaff dashboard
 ```
 
-### 2. Run the Setup Wizard
+Then open **http://localhost:8501**, go to **Chat**, and start talking to the agent immediately.
 
-```bash
-cst onboard
-```
+To add bot channels later, go to **Dashboard → Channels** and enter your token — no restart of the core platform required.
 
-The wizard configures:
+### Full Setup
+
+The setup wizard (`costaff onboard`) configures:
 - AI model provider (Gemini or LiteLLM)
 - Database type (SQLite or PostgreSQL)
 - Bot tokens (Telegram, Discord, Line — all optional)
@@ -169,38 +235,24 @@ The wizard configures:
 
 All configuration is saved to `.costaff/` in the current directory.
 
-### 3. Start the Platform
-
-```bash
-cst start
-```
-
-### 4. Open the Dashboard
-
-```bash
-cst dashboard
-```
-
-Opens the web UI at `http://localhost:8501`.
-
 ---
 
 ## CLI Reference
 
 | Command | Description |
 |---------|-------------|
-| `cst onboard` | Interactive setup wizard |
-| `cst start` | Build and start all services |
-| `cst start --no-build` | Start without rebuilding images |
+| `costaff onboard` | Interactive setup wizard |
+| `costaff start` | Build and start all services |
+| `costaff start --no-build` | Start without rebuilding images |
 | `costaff stop` | Stop all services |
 | `costaff restart` | Restart all services |
 | `costaff ps` | Show status of running services |
-| `cst dashboard` | Open the web dashboard |
+| `costaff dashboard` | Open the web dashboard |
 | `costaff chat` | CLI-based chat with the agent |
-| `cst agent deploy --local <path>` | Deploy a local agent project |
-| `cst agent add <name> --url <url>` | Register a remote URL agent |
-| `cst agent list` | List all registered agents |
-| `cst agent remove <name>` | Remove a registered agent |
+| `costaff agent deploy --local <path>` | Deploy a local agent project |
+| `costaff agent add <name> --url <url>` | Register a remote URL agent |
+| `costaff agent list` | List all registered agents |
+| `costaff agent remove <name>` | Remove a registered agent |
 | `costaff config show` | Display current configuration |
 | `costaff database backup` | Backup the database |
 | `costaff database restore` | Restore from a backup |

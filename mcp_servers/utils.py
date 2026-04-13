@@ -121,6 +121,8 @@ def _get_user_channel_info(user_id: str, db) -> tuple:
         return "discord", user_id
     elif sid.startswith("line_"):
         return "line", user_id
+    elif sid.startswith("web_"):
+        return "webchat", user_id
     return None, None
 
 
@@ -149,21 +151,42 @@ def _build_task_spec(task, db) -> str:
     if task.spec:
         lines.append(task.spec)
 
+    preferred_lang = os.getenv("COSTAFF_PREFERRED_LANGUAGE", "Traditional Chinese (繁體中文)")
+
     if task.assigned_agent and task.assigned_agent != "costaff_agent":
         lines.append(
             f"\n[DELEGATION INSTRUCTIONS — READ CAREFULLY]\n"
             f"This task is assigned to: {task.assigned_agent}\n"
             f"You MUST:\n"
-            f"1. Call {task.assigned_agent} via A2A tool, passing the FULL task spec above (including PROGRESS_CONTEXT).\n"
-            f"2. WAIT for {task.assigned_agent} to return its COMPLETE output (e.g. file path, report content, etc.).\n"
-            f"3. Your final response MUST be the actual output from {task.assigned_agent}, verbatim.\n"
+            f"1. Call add_task_comment(task_id=\"{task.id}\", comment_type=\"note\") with an implementation plan BEFORE delegating.\n"
+            f"   Format the plan as:\n"
+            f"   ## 實作計畫\n"
+            f"   - **目標**：<本次任務要達成的事情>\n"
+            f"   - **實作步驟**：\n"
+            f"     1. <步驟>\n"
+            f"   - **預計產出**：<檔案、資料表、報告等>\n"
+            f"2. Call {task.assigned_agent} via A2A tool, passing the FULL task spec above (including PROGRESS_CONTEXT).\n"
+            f"3. WAIT for {task.assigned_agent} to return its COMPLETE output (e.g. file path, report content, etc.).\n"
+            f"4. If {task.assigned_agent} returns an error, call add_task_comment(task_id=\"{task.id}\", comment_type=\"issue\") with:\n"
+            f"   ## ❌ 錯誤發生\n"
+            f"   - **錯誤類型**：<類型>\n"
+            f"   - **錯誤訊息**：<完整訊息>\n"
+            f"   - **發生位置**：<哪個步驟>\n"
+            f"   - **處理方式**：<如何嘗試修復或說明>\n"
+            f"5. Your FINAL response (which becomes the completion comment) MUST follow this format:\n"
+            f"   ## ✅ 任務完成\n"
+            f"   ### 使用案例\n"
+            f"   - <此成果如何被使用>\n"
+            f"   ### 驗收條件\n"
+            f"   - ✅ <條件1>：<完成說明>\n"
+            f"   - ✅ <條件2>：<完成說明>\n"
+            f"   ### 產出\n"
+            f"   - <具體產出物：檔案路徑、資料表、報告位置等>\n"
             f"   Do NOT return 'I have delegated this task' or any delegation acknowledgment as your final response.\n"
             f"   Do NOT use send_message_now to say you delegated — only send it if {task.assigned_agent} produces an actual result to share.\n"
-            f"4. If {task.assigned_agent} fails or times out, report the error explicitly.\n"
             f"The task is NOT done until you receive and relay {task.assigned_agent}'s actual deliverable."
         )
 
-        preferred_lang = os.getenv("COSTAFF_PREFERRED_LANGUAGE", "Traditional Chinese (繁體中文)")
         lines.append(f"\n(System: Autonomous project task ID={task.id}. Execute it. Respond in {preferred_lang}.)")
     # Resolve channel/recipient for PROGRESS_CONTEXT so coding_agent can send live updates
     channel = task.channel

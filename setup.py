@@ -21,7 +21,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "cst=costaff:app",
+            "costaff=costaff:app",
         ],
     },
 )

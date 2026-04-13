@@ -48,32 +48,47 @@
 
 ## 系統架構
 
+CoStaff 採用**插件式架構**。核心平台（Agent + MCP + 儀表板）作為獨立 Docker Stack 運行。Channel 和外部 Agent 各自擁有獨立的 Docker 專案，透過共用的 `costaff_default` 網路連接到核心。
+
 ```mermaid
 graph TD
-    User_TG((Telegram)) <--> Bot_TG[Telegram Bot]
-    User_DC((Discord)) <--> Bot_DC[Discord Bot]
-    User_LN((Line)) <--> Bot_LN[Line Bot]
+    subgraph Channels ["Channel 插件（各自獨立的 Docker 專案）"]
+        CH_TG[costaff-channel-telegram]
+        CH_DC[costaff-channel-discord]
+        CH_LN[costaff-channel-line]
+        CH_WEB[costaff-channel-webchat]
+    end
 
-    Bot_TG & Bot_DC & Bot_LN <--> CoStaffAgent[CoStaff Agent\nGoogle ADK]
+    subgraph Core ["CoStaff 核心（.costaff/）"]
+        CoStaffAgent[CoStaff Agent\nGoogle ADK]
+        MCP_Core[核心 MCP\nAPScheduler + 通知器]
+        DB[(PostgreSQL)]
+        API[FastAPI 後端]
+        Dashboard[Web 儀表板]
+    end
 
-    CoStaffAgent <--> MCP_Core[核心 MCP]
-    CoStaffAgent <--> MCP_Ext[外部 MCP\nStreamable HTTP / SSE]
+    subgraph Agents ["外部 Agent 插件（各自獨立的 Docker 專案）"]
+        AG_CODE[costaff-agent-coding\nA2A]
+        AG_BA[costaff-agent-business-analysis\nA2A]
+    end
 
-    MCP_Core <--> DB[(PostgreSQL / SQLite)]
-    MCP_Core <--> Scheduler[APScheduler]
-    Scheduler --> Notifier[通知器]
-    Notifier --> Bot_TG & Bot_DC & Bot_LN
-
-    Dashboard[Web 儀表板] <--> API[FastAPI 後端]
+    CH_TG & CH_DC & CH_LN & CH_WEB -->|HTTP ADK API| CoStaffAgent
+    CoStaffAgent <--> MCP_Core
+    CoStaffAgent -->|A2A| AG_CODE & AG_BA
+    MCP_Core <--> DB
+    MCP_Core -->|推送| CH_TG & CH_DC & CH_LN & CH_WEB
+    Dashboard <--> API
     API <--> DB
     API -->|重啟| CoStaffAgent
 ```
+
+所有插件透過 **`costaff_default` Docker 網路**連接——服務之間不需要 port mapping 或 tunnel。
 
 ---
 
 ## Web 儀表板
 
-儀表板（`cst dashboard`）是支援深色/淺色模式的瀏覽器操作控制台：
+儀表板（`costaff dashboard`）是支援深色/淺色模式的瀏覽器操作控制台：
 
 | 模組 | 說明 |
 |------|------|
@@ -101,13 +116,13 @@ CoStaff 支援部署和管理透過 **A2A 協議**溝通的外部 Agent。
 
 ```bash
 # 部署本地 Agent 專案
-cst agent deploy --local /path/to/my-agent
+costaff agent deploy --local /path/to/my-agent
 
 # 新增遠端 URL Agent
-cst agent add my-agent --url http://my-agent.example.com
+costaff agent add my-agent --url http://my-agent.example.com
 
 # 列出所有 Agent
-cst agent list
+costaff agent list
 ```
 
 **官方第一方 Agent：**
@@ -116,6 +131,47 @@ cst agent list
 |-------|------------|------|
 | Coding Agent | [costaff-coding-agent](https://github.com/CoStaffAI/costaff-coding-agent) | 沙盒 Python 程式碼執行 |
 | Viz Report Agent | [costaff-viz-report-agent](https://github.com/CoStaffAI/costaff-viz-report-agent) | 圖表生成與 HTML/PDF 報告 |
+
+---
+
+## 插件架構說明
+
+CoStaff 設計為**可插拔平台**。Channel 和 Agent 都是獨立的 Docker 專案，在執行期間掛接到核心——無需修改核心程式碼。
+
+### 插件如何連接
+
+每個插件（Channel 或 Agent）加入共用 Docker 網路：
+
+```yaml
+# 插件的 docker-compose.yaml 中
+networks:
+  default:
+    external: true
+    name: costaff_default
+```
+
+這讓插件可以直接透過容器主機名稱存取 `costaff-agent-costaff`（ADK API，port 8080）和 `costaff-mcp-costaff`（MCP，port 8000）。
+
+### Channel 插件
+
+Channel 是獨立的 Bot 或 HTTP 伺服器，負責：
+1. 接收來自使用者的訊息（Telegram、Discord、LINE、HTTP）
+2. 透過 ADK API 的 `POST /run` 轉發給 CoStaff Agent
+3. 接收來自 MCP 通知器的推送訊息
+
+內建 Channel 存放於 `.costaff/dynamic-channels/`，執行 `costaff start` 時自動啟動。
+
+### Agent 插件
+
+外部 Agent 公開相容 **A2A 協議**的端點，並登記 `costaff.agent.json` manifest。CoStaff Agent 會自動發現並委派任務給它們。
+
+```bash
+# 登記本地 Agent 專案
+costaff agent deploy --local /path/to/my-agent
+
+# 登記遠端 Agent
+costaff agent add my-agent --url http://my-agent.internal
+```
 
 ---
 
@@ -144,23 +200,33 @@ cst agent list
 
 - Python 3.10+
 - Docker 與 Docker Compose
-- 以下至少一項：
-  - 來自 [Google AI Studio](https://aistudio.google.com/) 的 **Gemini API Key**
-  - **LiteLLM 相容**的模型提供者 API Key
+- 來自 [Google AI Studio](https://aistudio.google.com/) 的 **Gemini API Key**（或任何 LiteLLM 相容的模型提供者）
 
-### 1. 安裝 CLI
+### 最快啟動方式（不需要 Bot Token）
+
+內建的 **Webchat** Channel 可以讓你立即開始使用，無需設定任何 Telegram、Discord 或 Line Token。
 
 ```bash
+# 1. 安裝 CLI
 pip install -e .
+
+# 2. 執行設定精靈（只需填入 Gemini API Key）
+costaff onboard
+
+# 3. 啟動平台
+costaff start
+
+# 4. 開啟儀表板
+costaff dashboard
 ```
 
-### 2. 執行設定精靈
+開啟 **http://localhost:8501**，進入 **Chat**，即可立即開始與 Agent 對話。
 
-```bash
-cst onboard
-```
+之後想新增 Bot Channel，只需前往 **儀表板 → Channels** 輸入 Token——無需重啟核心平台。
 
-精靈會引導你完成：
+### 完整設定
+
+設定精靈（`costaff onboard`）會引導你完成：
 - AI 模型提供者選擇（Gemini 或 LiteLLM）
 - 資料庫類型（SQLite 或 PostgreSQL）
 - Bot Token 設定（Telegram、Discord、Line——皆為選填）
@@ -169,38 +235,24 @@ cst onboard
 
 所有設定儲存至當前目錄的 `.costaff/`。
 
-### 3. 啟動平台
-
-```bash
-cst start
-```
-
-### 4. 開啟儀表板
-
-```bash
-cst dashboard
-```
-
-在 `http://localhost:8501` 開啟 Web UI。
-
 ---
 
 ## CLI 指令參考
 
 | 指令 | 說明 |
 |------|------|
-| `cst onboard` | 互動式設定精靈 |
-| `cst start` | 建置並啟動所有服務 |
-| `cst start --no-build` | 不重建映像直接啟動 |
+| `costaff onboard` | 互動式設定精靈 |
+| `costaff start` | 建置並啟動所有服務 |
+| `costaff start --no-build` | 不重建映像直接啟動 |
 | `costaff stop` | 停止所有服務 |
 | `costaff restart` | 重啟所有服務 |
 | `costaff ps` | 顯示運行中服務的狀態 |
-| `cst dashboard` | 開啟 Web 儀表板 |
+| `costaff dashboard` | 開啟 Web 儀表板 |
 | `costaff chat` | CLI 模式與 Agent 對話 |
-| `cst agent deploy --local <path>` | 部署本地 Agent 專案 |
-| `cst agent add <name> --url <url>` | 登記遠端 URL Agent |
-| `cst agent list` | 列出所有已登記的 Agent |
-| `cst agent remove <name>` | 移除已登記的 Agent |
+| `costaff agent deploy --local <path>` | 部署本地 Agent 專案 |
+| `costaff agent add <name> --url <url>` | 登記遠端 URL Agent |
+| `costaff agent list` | 列出所有已登記的 Agent |
+| `costaff agent remove <name>` | 移除已登記的 Agent |
 | `costaff config show` | 顯示當前設定 |
 | `costaff database backup` | 備份資料庫 |
 | `costaff database restore` | 從備份還原 |

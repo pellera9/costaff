@@ -22,19 +22,34 @@ console = Console()
 channel_app = typer.Typer(help="Manage communication channels.")
 
 
+# Official CoStaff Channel Registry
+OFFICIAL_CHANNELS = {
+    "telegram": "https://github.com/AICoStaff/costaff-channel-telegram.git",
+    "line": "https://github.com/AICoStaff/costaff-channel-line.git",
+    "discord": "https://github.com/AICoStaff/costaff-channel-discord.git",
+    "webchat": "https://github.com/AICoStaff/costaff-channel-webchat.git",
+}
+
+
 @channel_app.command("add")
 def channel_add(
-    name: str = typer.Argument(..., help="Channel name (e.g. webchat)"),
+    name: str = typer.Argument(..., help="Channel name (e.g. telegram, webchat)"),
     local: Optional[str] = typer.Option(None, "--local", help="Local project path"),
     github: Optional[str] = typer.Option(None, "--github", help="GitHub repository URL"),
     env: Optional[List[str]] = typer.Option(None, "--env", "-e", help="Set environment variables"),
 ):
-    """Add a communication channel (Local or GitHub mode)."""
-    if not local and not github:
-        console.print("[red]Error: --local or --github is required[/red]")
-        raise typer.Exit(1)
-    
+    """Add a communication channel (Auto-discovery, Local, or GitHub mode)."""
     name = name.strip().lower().replace(" ", "-")
+    
+    # Auto-resolve GitHub URL for official channels if no source is provided
+    if not local and not github:
+        if name in OFFICIAL_CHANNELS:
+            github = OFFICIAL_CHANNELS[name]
+            console.print(f"📦 [bold cyan]{name}[/bold cyan] recognized as an official channel.")
+        else:
+            console.print(f"[red]Error: '{name}' is not an official channel. Please provide --github or --local URL.[/red]")
+            raise typer.Exit(1)
+    
     conf = ConfigManager.get_config()
     
     if "dynamic_channels" not in conf:
@@ -114,3 +129,45 @@ def channel_remove(name: str = typer.Argument(...)):
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
     console.print(f"[green]Channel '{name}' removed. Restart costaff to apply clean up.[/green]")
+
+
+@channel_app.command("rebuild")
+def channel_rebuild(
+    name: str = typer.Argument(..., help="Channel name to rebuild"),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Build without Docker layer cache"),
+):
+    """Rebuild Docker images and restart a local channel from source."""
+    conf = ConfigManager.get_config()
+    if name not in conf.get("dynamic_channels", {}):
+        console.print(f"[red]Error: Channel '{name}' not found.[/red]")
+        raise typer.Exit(1)
+    
+    chan_conf = conf["dynamic_channels"][name]
+    fragment_path = chan_conf["fragment_path"]
+    container_names = chan_conf.get("container_names", [f"costaff-chan-{name}"])
+    source_path = chan_conf.get("source_path", "(unknown)")
+    main_compose = os.path.join(_project_root, ".costaff", "docker-compose.yaml")
+    load_dotenv(PATHS["env"], override=True)
+
+    console.print(f"Building channel [bold]{name}[/bold] from [cyan]{source_path}[/cyan]...")
+    build_cmd = DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path, "build"]
+    if no_cache:
+        build_cmd.append("--no-cache")
+    build_cmd.extend(container_names)
+
+    build_result = subprocess.run(build_cmd, cwd=_project_root)
+    if build_result.returncode != 0:
+        console.print(f"[red]Build failed for channel '{name}'.[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"Starting rebuilt channel containers for [bold]{name}[/bold]...")
+    up_result = subprocess.run(
+        DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path,
+                                   "up", "-d", "--force-recreate"] + container_names,
+        cwd=_project_root,
+    )
+    if up_result.returncode == 0:
+        console.print(f"[green]Channel '{name}' rebuilt and restarted.[/green]")
+    else:
+        console.print(f"[red]Failed to start channel '{name}' after build.[/red]")
+        raise typer.Exit(1)

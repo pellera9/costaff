@@ -30,14 +30,8 @@ async def startup():
     if not scheduler.running:
         scheduler.start()
 
-    # Ensure default Regular Works exist for all known users
-    db = SessionLocal()
-    try:
-        users = db.query(models.UserContact).all()
-        for u in users:
-            _ensure_default_regular_works(u.user_id)
-    finally:
-        db.close()
+    # Ensure default global Regular Works exist (shared across all users)
+    _ensure_default_regular_works()
 
     # Pre-load pending reminders
     db = SessionLocal()

@@ -8,7 +8,7 @@ const App = {
         activeAgent: null,
         activeExtAgent: null,
         mcpMode: 'local',
-        loadedViews: new Set()
+        loadedViews: new Set(),
     },
 
     async init() {
@@ -93,8 +93,8 @@ const App = {
         // Initial tab load
         await this.switchMainTab('dashboard');
         
-        // Polling sync
-        setInterval(() => this.refresh(), 5000);
+        // Polling sync — skip sessions tab (user-driven, not auto-refreshed)
+        setInterval(() => { if (this.state.activeTab !== 'sessions') this.refresh(); }, 5000);
     },
 
     async switchMainTab(tabId) {
@@ -189,14 +189,23 @@ const App = {
         });
 
         if (parent === 'sessions') {
-            const isExp = subId === 'explorer';
-            const expEl = document.getElementById('sessions-explorer');
-            const tblEl = document.getElementById('sessions-table-view');
+            const isExp  = subId === 'explorer';
+            const isHist = subId === 'history';
+
+            const expEl    = document.getElementById('sessions-explorer');
+            const tblEl    = document.getElementById('sessions-table-view');
             const filterEl = document.getElementById('session-table-filter');
-            
+            const toolsBtn = document.getElementById('btn-toggle-tools');
+
             if (expEl) expEl.classList.toggle('hidden', !isExp);
             if (tblEl) tblEl.classList.toggle('hidden', isExp);
-            if (filterEl) filterEl.classList.toggle('hidden', isExp); // Show filter for logs/data
+
+            if (filterEl) {
+                if (isExp) { filterEl.classList.add('hidden'); filterEl.classList.remove('flex'); }
+                else       { filterEl.classList.remove('hidden'); filterEl.classList.add('flex'); }
+            }
+            // Tool calls toggle — only for history tab
+            if (toolsBtn) toolsBtn.style.display = isHist ? '' : 'none';
         }
         this.refresh();
     },
@@ -223,10 +232,12 @@ const App = {
                 if (this.state.subTabs.sessions === 'explorer') {
                     const sessions = await API.fetch('/api/chat/sessions');
                     UI.renderChatSessions(sessions);
+                } else if (this.state.subTabs.sessions === 'history') {
+                    const data = await API.fetch('/api/db/events');
+                    UI.drawTable('sessions-thead', 'sessions-tbody', 'events', data);
                 } else {
-                    const dbTab = this.state.subTabs.sessions === 'history' ? 'events' : 'user_states';
-                    const data = await API.fetch(`/api/db/${dbTab}`);
-                    UI.drawTable('sessions-thead', 'sessions-tbody', dbTab, data);
+                    const data = await API.fetch('/api/db/user_states');
+                    UI.drawTable('sessions-thead', 'sessions-tbody', 'user_states', data);
                 }
             }
 

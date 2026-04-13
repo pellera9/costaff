@@ -47,9 +47,10 @@ def get_identities(auth: bool = Depends(AuthManager.verify_token)):
         with engine.connect() as conn:
             rows = conn.execute(text("""
                 SELECT i.session_id, i.hashed_id, i.real_id, i.is_approved, i.created_at,
-                       COALESCE(u.chinese_name, u.english_name) AS name
+                       COALESCE(u.chinese_name, u.english_name, w.username) AS name
                 FROM identity_maps i
                 LEFT JOIN user_contacts u ON u.user_id = i.hashed_id
+                LEFT JOIN webchat_users w ON i.session_id LIKE 'web_%' AND w.email = i.real_id
                 ORDER BY i.created_at DESC
             """))
             result = []
@@ -206,15 +207,32 @@ def get_db_table_data(table: str, auth: bool = Depends(AuthManager.verify_token)
                     for p in raw_parts:
                         if "text" in p:
                             simplified.append({"type": "text", "text": p["text"][:800]})
-                        elif "functionCall" in p:
+                        elif "function_call" in p:
+                            fc = p["function_call"]
+                            simplified.append({"type": "call", "name": fc.get("name", ""), "args": fc.get("args", {})})
+                        elif "functionCall" in p:  # legacy camelCase fallback
                             fc = p["functionCall"]
                             simplified.append({"type": "call", "name": fc.get("name", ""), "args": fc.get("args", {})})
-                        elif "functionResponse" in p:
+                        elif "function_response" in p:
+                            fr = p["function_response"]
+                            resp = fr.get("response", {})
+                            # response.content may be a list of parts or a plain string
+                            content = resp.get("content", "")
+                            if isinstance(content, list):
+                                content = " ".join(c.get("text", "") for c in content if isinstance(c, dict))
+                            data = resp.get("structuredContent") or content or ""
+                            simplified.append({"type": "result", "name": fr.get("name", ""), "data": data})
+                        elif "functionResponse" in p:  # legacy camelCase fallback
                             fr = p["functionResponse"]
                             resp = fr.get("response", {})
-                            data = resp.get("structuredContent") or resp.get("content", "")
+                            content = resp.get("content", "")
+                            if isinstance(content, list):
+                                content = " ".join(c.get("text", "") for c in content if isinstance(c, dict))
+                            data = resp.get("structuredContent") or content or ""
                             simplified.append({"type": "result", "name": fr.get("name", ""), "data": data})
-                    d["content"] = json.dumps(simplified, ensure_ascii=False) if simplified else json.dumps([{"type": "text", "text": "(Empty)"}])
+                    if not simplified:
+                        continue  # Skip events with no meaningful content
+                    d["content"] = json.dumps(simplified, ensure_ascii=False)
                 rows.append(d)
             return rows
     except Exception:

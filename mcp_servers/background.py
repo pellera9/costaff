@@ -179,19 +179,22 @@ _DEFAULT_REGULAR_WORKS = [
 ]
 
 
-def _ensure_default_regular_works(user_id: str):
-    """Create the 4 default RegularWork entries for a user if none exist yet."""
+def _ensure_default_regular_works(user_id: str = None):
+    """Create the 4 default global RegularWork entries (user_id='*') if none exist yet.
+    The user_id parameter is kept for backwards compatibility but ignored.
+    """
     db = SessionLocal()
     try:
         existing_count = db.query(models.RegularWork).filter(
-            models.RegularWork.user_id == user_id
+            models.RegularWork.user_id == "*",
+            models.RegularWork.session_id == "system-default",
         ).count()
         if existing_count > 0:
             return
         for w in _DEFAULT_REGULAR_WORKS:
             db.add(models.RegularWork(
                 id=str(uuid.uuid4()),
-                user_id=user_id,
+                user_id="*",
                 session_id="system-default",
                 title=w["title"],
                 spec=w["spec"],
@@ -204,9 +207,9 @@ def _ensure_default_regular_works(user_id: str):
                 updated_at=datetime.utcnow(),
             ))
         db.commit()
-        logger.info(f"Created default Regular Works for user {user_id}")
+        logger.info("Created default global Regular Works (user_id='*')")
     except Exception as e:
         db.rollback()
-        logger.error(f"Failed to create default Regular Works for {user_id}: {e}")
+        logger.error(f"Failed to create default global Regular Works: {e}")
     finally:
         db.close()

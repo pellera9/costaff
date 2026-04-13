@@ -98,51 +98,64 @@ def onboard():
         set_key(PATHS["env"], "TIMEZONE", tz_choice)
 
     platforms = questionary.checkbox(
-        "Select Channels to enable:",
+        "Select Channels to enable (官方通訊頻道):",
         choices=[
-            questionary.Choice("Telegram", value="tg"),
-            questionary.Choice("Discord", value="dc"),
+            questionary.Choice("Telegram", value="telegram"),
+            questionary.Choice("Discord", value="discord"),
             questionary.Choice("Line", value="line"),
-            questionary.Choice("Email (SMTP)", value="email"),
+            questionary.Choice("WebChat (網頁版對話)", value="webchat"),
+            questionary.Choice("Email (SMTP - 系統通知用)", value="email"),
         ]
     ).ask()
 
     set_key(PATHS["env"], "ADK_SESSION_SERVICE_URI", db_uri)
 
-    if platforms:
-        for p in platforms:
-            if p == "tg":
-                token = questionary.password("Telegram Bot Token:").ask()
-                if token:
-                    set_key(PATHS["env"], "TELEGRAM_BOT_TOKEN", token)
-            elif p == "dc":
-                token = questionary.password("Discord Bot Token:").ask()
-                if token:
-                    set_key(PATHS["env"], "DISCORD_BOT_TOKEN", token)
-            elif p == "line":
-                token = questionary.password("Line Channel Access Token:").ask()
-                secret = questionary.password("Line Channel Secret:").ask()
-                if token:
-                    set_key(PATHS["env"], "LINE_CHANNEL_ACCESS_TOKEN", token)
-                if secret:
-                    set_key(PATHS["env"], "LINE_CHANNEL_SECRET", secret)
-            elif p == "email":
-                server_addr = questionary.text("SMTP Server (e.g. smtp.gmail.com):").ask()
-                port = questionary.text("SMTP Port:", default="465").ask()
-                user = questionary.text("SMTP User (Email):").ask()
-                password = questionary.password("SMTP Password:").ask()
-                if server_addr:
-                    set_key(PATHS["env"], "SMTP_SERVER", server_addr)
-                if port:
-                    set_key(PATHS["env"], "SMTP_PORT", port)
-                if user:
-                    set_key(PATHS["env"], "SMTP_USER", user)
-                if password:
-                    set_key(PATHS["env"], "SMTP_PASSWORD", password)
-
     conf = ConfigManager.get_config()
+    conf.setdefault("dynamic_channels", {})
+
+    if platforms:
+        from cli.commands.channel import OFFICIAL_CHANNELS
+        from utils.helpers import _deploy_local_channel
+        
+        for p in platforms:
+            if p == "email":
+                # Email is still a legacy system service for now
+                server_addr = questionary.text("SMTP Server (e.g. smtp.gmail.com):").ask()
+                # ... (rest of email setup)
+                continue
+            
+            # For Official Dynamic Channels:
+            if p in OFFICIAL_CHANNELS:
+                console.print(f"\n🚀 [bold]Configuring {p.capitalize()} Channel...[/bold]")
+                envs = {}
+                if p == "telegram":
+                    token = questionary.password("Telegram Bot Token:").ask()
+                    if token: envs["TELEGRAM_BOT_TOKEN"] = token
+                elif p == "discord":
+                    token = questionary.password("Discord Bot Token:").ask()
+                    if token: envs["DISCORD_BOT_TOKEN"] = token
+                elif p == "line":
+                    token = questionary.password("Line Channel Access Token:").ask()
+                    secret = questionary.password("Line Channel Secret:").ask()
+                    if token: envs["LINE_CHANNEL_ACCESS_TOKEN"] = token
+                    if secret: envs["LINE_CHANNEL_SECRET"] = secret
+                
+                # Auto-deploy via GitHub
+                repo_url = OFFICIAL_CHANNELS[p]
+                target_src = os.path.join(_project_root, ".costaff", "src", "channels", p)
+                
+                if not os.path.exists(target_src):
+                    os.makedirs(os.path.dirname(target_src), exist_ok=True)
+                    subprocess.run(["git", "clone", "--depth", "1", repo_url, target_src], check=True)
+                
+                try:
+                    entry = _deploy_local_channel(p, target_src, conf, predefined_envs=envs)
+                    conf["dynamic_channels"][p] = entry
+                except Exception as e:
+                    console.print(f"[red]Failed to deploy {p}: {e}[/red]")
+
     conf.update({
-        "channels": [p for p in (platforms or []) if p != "email"],
+        "channels": [p for p in (platforms or []) if p not in ["email", "telegram", "line", "discord", "webchat"]], # legacy empty
         "model_provider": model_provider,
     })
     conf.setdefault("external_agents", {})

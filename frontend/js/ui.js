@@ -218,9 +218,10 @@ const UI = {
     _activeIdentityId: null,
 
     _channelIcon(sid) {
-        if (sid.startsWith('tg_'))   return { icon: 'fab fa-telegram', color: 'bg-sky-500', label: 'Telegram' };
+        if (sid.startsWith('tg_'))   return { icon: 'fab fa-telegram', color: 'bg-sky-500',    label: 'Telegram' };
         if (sid.startsWith('dc_'))   return { icon: 'fab fa-discord',  color: 'bg-indigo-500', label: 'Discord' };
-        if (sid.startsWith('line_')) return { icon: 'fab fa-line',     color: 'bg-green-500', label: 'LINE' };
+        if (sid.startsWith('line_')) return { icon: 'fab fa-line',     color: 'bg-green-500',  label: 'LINE' };
+        if (sid.startsWith('web_'))  return { icon: 'fas fa-globe',    color: 'bg-blue-600',   label: 'WebChat' };
         return { icon: 'fas fa-globe', color: 'bg-slate-400', label: 'Unknown' };
     },
 
@@ -373,9 +374,20 @@ const UI = {
         const deletableTables = ['reminders', 'identities', 'user_states'];
         if (head) head.innerHTML = `<tr class="bg-slate-50 uppercase tracking-widest text-[9px] font-bold text-primary/60">${s.cols.map(c => `<th class="px-6 py-4 text-left font-headline">${c}</th>`).join('')}${deletableTables.includes(schemaType)?'<th class="px-6 py-4"></th>':''}</tr>`;
         
-        if (body) body.innerHTML = data.map(r => `
-            <tr class="group hover:bg-slate-50 transition-all border-b border-slate-100 last:border-none">
-                ${s.keys.map(k => { 
+        if (body) body.innerHTML = data.map(r => {
+            // Determine if this event row contains only tool calls/results (no text)
+            let isToolOnlyRow = false;
+            if (schemaType === 'events' && r.content) {
+                try {
+                    const parts = JSON.parse(r.content);
+                    isToolOnlyRow = parts.length > 0 && parts.every(p => p.type === 'call' || p.type === 'result');
+                } catch {}
+            }
+            const toolClass = isToolOnlyRow ? ' event-tool-row' : '';
+            const toolStyle = (isToolOnlyRow && !this._showToolEvents) ? 'display:none;' : '';
+            return `
+            <tr class="group hover:bg-slate-50 transition-all border-b border-slate-100 last:border-none${toolClass}" style="${toolStyle}">
+                ${s.keys.map(k => {
                     let val = r[k] || '-'; 
                     if (schemaType === 'reminders' && k === 'run_at' && r.cron) {
                         val = `<span class="font-mono text-blue-600 font-bold">${r.cron}</span>`;
@@ -388,11 +400,23 @@ const UI = {
                         let displayVal = val.toString().toUpperCase();
                         const isCron = schemaType === 'reminders' && r.cron;
 
-                        // Handle JSON states for Memory
+                        // Handle JSON states for Memory — show key summary + expand button
                         if (k === 'state' && typeof val === 'object' && val !== null) {
-                            displayVal = `<span class="text-[10px] font-mono text-blue-500 opacity-80" title='${JSON.stringify(val)}'>{ DATA_OBJ }</span>`;
+                            const keys = Object.keys(val);
+                            const preview = keys.slice(0, 3).join(', ') + (keys.length > 3 ? ` … +${keys.length - 3}` : '');
+                            const escaped = JSON.stringify(val).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+                            displayVal = `<span class="text-[10px] font-mono text-slate-500 mr-1">{${preview}}</span><button onclick="UI.showStateModal('${escaped}')" class="text-[9px] font-bold text-blue-500 hover:text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 hover:bg-blue-50 transition-colors">View</button>`;
                         } else if (k === 'state' && typeof val === 'string' && val.startsWith('{')) {
-                            displayVal = `<span class="text-[10px] font-mono text-blue-500 opacity-80" title='${val}'>{ MEMORY_BLOCK }</span>`;
+                            try {
+                                const parsed = JSON.parse(val);
+                                const keys = Object.keys(parsed);
+                                const preview = keys.slice(0, 3).join(', ') + (keys.length > 3 ? ` … +${keys.length - 3}` : '');
+                                const escaped = val.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+                                displayVal = `<span class="text-[10px] font-mono text-slate-500 mr-1">{${preview}}</span><button onclick="UI.showStateModal('${escaped}')" class="text-[9px] font-bold text-blue-500 hover:text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 hover:bg-blue-50 transition-colors">View</button>`;
+                            } catch {
+                                const escaped = val.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+                                displayVal = `<button onclick="UI.showStateModal('${escaped}')" class="text-[9px] font-bold text-blue-500 hover:text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 hover:bg-blue-50 transition-colors">View</button>`;
+                            }
                         }
 
                         // Map internal statuses to user-friendly labels
@@ -416,21 +440,39 @@ const UI = {
                     if (schemaType === 'events' && k === 'content') {
                         try {
                             const parts = JSON.parse(val);
+                            // Sanitize: allow only safe inline HTML tags
+                            const _safe = (s) => s
+                                .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                                .replace(/&lt;(\/?(b|i|u|s|code|br|span)(\s[^>]*)?)\&gt;/gi, '<$1>');
+                            const _truncate = (text, limit=400) => {
+                                if (text.length <= limit) return `<span>${_safe(text)}</span>`;
+                                const uid = 'ev' + Math.random().toString(36).slice(2,8);
+                                return `<span id="${uid}-short">${_safe(text.slice(0, limit))}<span class="text-slate-400">…</span>
+                                    <button onclick="document.getElementById('${uid}-short').style.display='none';document.getElementById('${uid}-full').style.display=''" class="ml-1 text-[9px] font-bold text-blue-500 hover:text-blue-700">more</button></span>
+                                    <span id="${uid}-full" style="display:none">${_safe(text)}
+                                    <button onclick="document.getElementById('${uid}-full').style.display='none';document.getElementById('${uid}-short').style.display=''" class="ml-1 text-[9px] font-bold text-slate-400 hover:text-slate-600">less</button></span>`;
+                            };
                             const html = parts.map(p => {
                                 if (p.type === 'text') {
-                                    return `<div class="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">${p.text.replace(/</g,'&lt;')}</div>`;
+                                    return `<div class="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">${_truncate(p.text)}</div>`;
                                 }
                                 if (p.type === 'call') {
                                     const args = JSON.stringify(p.args, null, 2);
-                                    return `<div class="text-xs mt-1"><span class="font-black text-amber-600">🔧 ${p.name}</span><pre class="text-slate-400 text-[10px] mt-1 whitespace-pre-wrap leading-relaxed">${args.substring(0, 400).replace(/</g,'&lt;')}</pre></div>`;
+                                    return `<div class="text-xs mt-1 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                                        <span class="font-black text-amber-600 text-[10px] uppercase tracking-wide">🔧 ${p.name}</span>
+                                        <pre class="text-slate-500 text-[10px] mt-1 whitespace-pre-wrap leading-relaxed">${_truncate(args, 300)}</pre>
+                                    </div>`;
                                 }
                                 if (p.type === 'result') {
                                     const data = typeof p.data === 'string' ? p.data : JSON.stringify(p.data, null, 2);
-                                    return `<div class="text-xs mt-1"><span class="font-black text-emerald-600">✅ ${p.name}</span><pre class="text-slate-400 text-[10px] mt-1 whitespace-pre-wrap leading-relaxed">${data.substring(0, 400).replace(/</g,'&lt;')}</pre></div>`;
+                                    return `<div class="text-xs mt-1 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                                        <span class="font-black text-emerald-600 text-[10px] uppercase tracking-wide">✅ ${p.name}</span>
+                                        <pre class="text-slate-500 text-[10px] mt-1 whitespace-pre-wrap leading-relaxed">${_truncate(data, 300)}</pre>
+                                    </div>`;
                                 }
                                 return '';
-                            }).join('<div class="border-t border-slate-50 my-2"></div>');
-                            return `<td class="px-6 py-5 max-w-xs">${html}</td>`;
+                            }).join('<div class="border-t border-slate-100 my-2"></div>');
+                            return `<td class="px-6 py-5 max-w-sm">${html || '<span class="text-slate-300 text-xs italic">—</span>'}</td>`;
                         } catch(e) {}
                     }
                     return `<td class="px-6 py-5 text-sm font-medium text-slate-900">${val}</td>`;
@@ -441,7 +483,8 @@ const UI = {
                 </td>` : ''}
                 ${schemaType==='identities' ? `<td class="px-6 py-5"><button onclick="UI.deleteIdentity('${r.session_id}')" class="p-2 text-slate-400 hover:text-rose-500 transition-all"><i class="fas fa-trash-alt text-xs"></i></button></td>` : ''}
                 ${schemaType==='user_states' ? `<td class="px-6 py-5"><button onclick="UI.deleteUserState('${r.app_name}','${r.user_id}')" class="p-2 text-slate-400 hover:text-rose-500 transition-all"><i class="fas fa-trash-alt text-xs"></i></button></td>` : ''}
-            </tr>`).join('');
+            </tr>`;
+        }).join('');
     },
 
     renderDashboard(svcs) {
@@ -449,7 +492,7 @@ const UI = {
         if (lastUpdateEl) lastUpdateEl.innerText = `SYNC: ${new Date().toLocaleTimeString()}`;
 
         const table = document.getElementById('status-table');
-        if (table) table.innerHTML = svcs.map(s => {
+        if (table) table.innerHTML = [...svcs].sort((a, b) => a.name.localeCompare(b.name)).map(s => {
             const isActive = s.status.includes('Up');
             return `
             <tr class="group hover:bg-slate-50 transition-all">
@@ -928,16 +971,17 @@ const UI = {
     },
 
     renderGateways(svcs, conf) { 
-        const platforms = [{ id: 'tg', name: 'Telegram', icon: 'telegram' }, { id: 'dc', name: 'Discord', icon: 'discord' }, { id: 'line', name: 'Line', icon: 'line' }];
+        const platforms = [{ id: 'tg', name: 'Telegram', icon: 'telegram' }, { id: 'dc', name: 'Discord', icon: 'discord' }, { id: 'line', name: 'Line', icon: 'line' }, { id: 'web', name: 'WebChat', icon: 'globe', fas: true }];
+        const svcName = { tg: 'channel-telegram', dc: 'channel-discord', line: 'channel-line', web: 'channel-webchat' };
         const list = document.getElementById('gateways-list'); if (!list) return;
         list.innerHTML = platforms.map(p => {
-            const svc = 'bot-'+(p.id==='tg'?'telegram':p.id==='dc'?'discord':'line');
+            const svc = svcName[p.id];
             const up = svcs.find(s=>s.name.includes(svc))?.status.includes('Up');
             return `<div onclick="UI.loadGatewayDetail('${p.id}', ${JSON.stringify(svcs).replace(/"/g, '&quot;')})" 
                  class="p-6 border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-all group ${App.state.activeGateway===p.id?'bg-blue-50 border-l-4 border-l-blue-600':''}">
                 <div class="flex items-center gap-5">
                     <div class="w-12 h-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
-                        <i class="fab fa-${p.icon} text-xl"></i>
+                        <i class="${p.fas ? 'fas' : 'fab'} fa-${p.icon} text-xl"></i>
                     </div>
                     <div class="flex-1 min-w-0">
                         <div class="flex justify-between items-center mb-1">
@@ -952,7 +996,7 @@ const UI = {
     },
 
     async loadGatewayDetail(platform, svcs) {
-        const platforms = { 'tg': 'Telegram', 'dc': 'Discord', 'line': 'Line' };
+        const platforms = { 'tg': 'Telegram', 'dc': 'Discord', 'line': 'Line', 'web': 'WebChat' };
         const fullName = platforms[platform] || platform.toUpperCase();
         App.state.activeGateway = platform; this.renderGateways(svcs, {});
         const config = await API.fetch('/api/config'); const gConf = config.gateways_config?.[platform] || {};
@@ -960,22 +1004,29 @@ const UI = {
         if (content) {
             content.classList.remove('hidden'); document.getElementById('gateway-placeholder').classList.add('hidden');
             document.getElementById('gateway-detail-name').innerText = fullName;
-            document.getElementById('gateway-icon-large').innerHTML = `<i class="fab fa-${platform==='tg'?'telegram':platform==='dc'?'discord':'line'}"></i>`;
+            const iconMap = { tg: 'fab fa-telegram', dc: 'fab fa-discord', line: 'fab fa-line', web: 'fas fa-globe' };
+            document.getElementById('gateway-icon-large').innerHTML = `<i class="${iconMap[platform] || 'fas fa-globe'}"></i>`;
             this.updateGatewayStatus(platform, svcs);
-            let fields = platform === 'line' ? [ { label: 'ACCESS TOKEN', key: 'token', type: 'password' }, { label: 'SECRET KEY', key: 'secret', type: 'password' } ] : [{ label: 'TOKEN', key: 'token', type: 'password' }];
-            document.getElementById('gateway-config-form').innerHTML = fields.map(f => `<div class="space-y-3"><label class="label-mono text-[10px] text-blue-600 font-black uppercase tracking-[0.2em]">${f.label}</label><input type="${f.type}" id="gw-field-${f.key}" value="${gConf[f.key] || ''}" class="w-full bg-slate-50 border border-slate-100 rounded-xl px-5 py-4 outline-none focus:ring-2 focus:ring-blue-500/20 font-mono text-sm text-slate-900"></div>`).join('');
+            if (platform === 'web') {
+                document.getElementById('gateway-config-form').innerHTML = `<div class="p-4 rounded-xl bg-slate-50 border border-slate-100 text-sm text-slate-500">WebChat is a standalone web application.<br>Configure it via its own <code>.env</code> file.</div>`;
+            } else {
+                let fields = platform === 'line' ? [ { label: 'ACCESS TOKEN', key: 'token', type: 'password' }, { label: 'SECRET KEY', key: 'secret', type: 'password' } ] : [{ label: 'TOKEN', key: 'token', type: 'password' }];
+                document.getElementById('gateway-config-form').innerHTML = fields.map(f => `<div class="space-y-3"><label class="label-mono text-[10px] text-blue-600 font-black uppercase tracking-[0.2em]">${f.label}</label><input type="${f.type}" id="gw-field-${f.key}" value="${gConf[f.key] || ''}" class="w-full bg-slate-50 border border-slate-100 rounded-xl px-5 py-4 outline-none focus:ring-2 focus:ring-blue-500/20 font-mono text-sm text-slate-900"></div>`).join('');
+            }
         }
     },
 
     updateGatewayStatus(platform, svcs) {
         const el = document.getElementById('gateway-detail-actions'); if (!el) return;
-        const svc = 'bot-'+(platform==='tg'?'telegram':platform==='dc'?'discord':'line');
+        const svcName = { tg: 'channel-telegram', dc: 'channel-discord', line: 'channel-line', web: 'channel-webchat' };
+        const svc = svcName[platform] || platform;
         const up = (svcs.find(s=>s.name.includes(svc))?.status || '').includes('Up');
         el.innerHTML = `<button onclick="UI.serviceAction('${svc}', '${up?'stop':'start'}')" class="px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${up?'bg-slate-100 text-rose-500':'bg-blue-600 text-white hover:bg-blue-700'}">${up?'STOP':'START'}</button>`;
     },
 
     async saveGatewayConfig() {
         const platform = App.state.activeGateway; if (!platform) return;
+        if (platform === 'web') return;
         const config = platform === 'line' ? { token: document.getElementById('gw-field-token').value, secret: document.getElementById('gw-field-secret').value } : { token: document.getElementById('gw-field-token').value };
         try { await API.fetch('/api/gateways', { method: 'POST', body: JSON.stringify({ platform, config }) }); alert('Bridge established.'); App.refresh(); } catch(e) { alert('Sync Failed.'); }
     },
@@ -984,7 +1035,7 @@ const UI = {
         // Cache svcs so onclick handlers can retrieve by name without embedding JSON in HTML
         App.state.cachedSvcs = svcs;
         // Only show root costaff-agent as Internal Agent
-        const agents = svcs.filter(s => s.name.includes('costaff-agent'));
+        const agents = svcs.filter(s => s.name.includes('costaff-agent-costaff'));
         const list = document.getElementById('agents-list'); if (!list) return;
         list.innerHTML = agents.map(a => {
             const up = a.status.includes('Up');
@@ -1461,12 +1512,60 @@ const UI = {
     },
     async deleteReminder(id) { if (confirm('PURGE_TASK?')) { try { await API.fetch(`/api/reminders/${id}`, { method: 'DELETE' }); this.renderCronjobs(); } catch (e) { alert('PURGE_FAILED'); } } },
     filterLogs() { this.renderLogs(); },
+    showStateModal(escapedJson) {
+        const raw = escapedJson.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+        let pretty = raw;
+        try { pretty = JSON.stringify(JSON.parse(raw), null, 2); } catch {}
+
+        // Reuse or create modal
+        let modal = document.getElementById('state-json-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'state-json-modal';
+            modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm';
+            modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+            document.body.appendChild(modal);
+        }
+        modal.innerHTML = `
+            <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden mx-4">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50 shrink-0">
+                    <span class="text-xs font-black uppercase tracking-widest text-slate-700">Memory State</span>
+                    <button onclick="document.getElementById('state-json-modal').remove()" class="text-slate-400 hover:text-slate-700 transition-colors"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="overflow-y-auto flex-1 p-6">
+                    <pre class="text-[11px] font-mono text-slate-700 leading-relaxed whitespace-pre-wrap break-all bg-slate-50 rounded-xl p-4">${pretty.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>
+                </div>
+            </div>`;
+    },
+
+    _showToolEvents: false,
+
+    toggleToolEvents() {
+        this._showToolEvents = !this._showToolEvents;
+        const btn = document.getElementById('btn-toggle-tools');
+        const label = document.getElementById('btn-toggle-tools-label');
+        if (this._showToolEvents) {
+            if (btn) btn.className = btn.className.replace('border-slate-200 bg-white text-slate-400 hover:border-amber-300 hover:text-amber-600', 'border-amber-400 bg-amber-50 text-amber-600');
+            if (label) label.textContent = 'Tool Calls: ON';
+        } else {
+            if (btn) btn.className = btn.className.replace('border-amber-400 bg-amber-50 text-amber-600', 'border-slate-200 bg-white text-slate-400 hover:border-amber-300 hover:text-amber-600');
+            if (label) label.textContent = 'Tool Calls: OFF';
+        }
+        this._applyEventFilters();
+    },
+
     filterDBTable() {
-        const query = document.getElementById('db-filter-input').value.toLowerCase();
+        this._applyEventFilters();
+    },
+
+    _applyEventFilters() {
+        const query = (document.getElementById('db-filter-input')?.value || '').toLowerCase();
         const rows = document.querySelectorAll('#sessions-tbody tr');
         rows.forEach(row => {
-            const text = row.innerText.toLowerCase();
-            row.style.display = text.includes(query) ? '' : 'none';
+            const isToolRow = row.classList.contains('event-tool-row');
+            const textMatch = !query || row.innerText.toLowerCase().includes(query);
+            const toolVisible = !isToolRow || this._showToolEvents;
+            row.style.display = (textMatch && toolVisible) ? '' : 'none';
         });
     },
     downloadLogs() {
