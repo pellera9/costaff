@@ -67,7 +67,7 @@ for name, entry in mcp_config.items():
         logger.error(f"FAILED to load MCP '{name}': {e}")
 
 # Define the model to use
-model_provider = os.getenv("COSTAFF_AGENT_MODEL_PROVIDER", "gemini").lower()
+model_provider = (os.getenv("COSTAFF_AGENT_MODEL_PROVIDER") or "gemini").lower()
 model_name = os.getenv("COSTAFF_AGENT_GEMINI_MODEL", "gemini-2.5-flash")
 
 if model_provider == "litellm":
