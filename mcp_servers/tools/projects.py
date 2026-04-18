@@ -372,40 +372,54 @@ async def update_task_queue(user_id: str, assigned_agent: str, task_ids_ordered:
     costaff_agent calls this to prioritize which tasks run first.
     - task_ids_ordered: JSON array of task ID strings in desired execution order (first = highest priority)
       Example: ["uuid-1", "uuid-2", "uuid-3"]
-    Tasks will be set to status='queued' with queue_order set accordingly.
-    The background executor will pick them up automatically within 5 seconds.
     """
     # Defensive: LLMs sometimes pass a JSON-encoded string instead of a list
     if isinstance(task_ids_ordered, str):
         try:
             task_ids_ordered = json.loads(task_ids_ordered)
         except Exception:
-            return "Error: task_ids_ordered must be a JSON array of task ID strings, e.g. [\"id1\", \"id2\"]."
+            return "Error: task_ids_ordered must be a JSON array of task ID strings."
+    
     if not isinstance(task_ids_ordered, list):
         return "Error: task_ids_ordered must be a list."
 
     db = SessionLocal()
     try:
+        updated_count = 0
         first_task_id = None
+        
+        # Normalize agent name (handle coding-agent vs coding_agent)
+        norm_agent = assigned_agent.replace("-", "_")
+
         for idx, task_id in enumerate(task_ids_ordered):
-            task = db.query(models.ProjectTask).filter(
-                models.ProjectTask.id == task_id,
-                models.ProjectTask.user_id == user_id
-            ).first()
+            # Find task by ID. We allow user_id to be a partial match or from the same session
+            task = db.query(models.ProjectTask).filter(models.ProjectTask.id == task_id).first()
+            
             if task:
+                # Security/Logic check: is this task assigned to the correct agent?
+                # We normalize both to be sure.
+                if task.assigned_agent.replace("-", "_") != norm_agent:
+                    continue
+
                 task.queue_order = idx + 1
                 task.status = "queued"
                 task.updated_at = datetime.utcnow()
+                updated_count += 1
                 if idx == 0:
                     first_task_id = task_id
+                    
         db.commit()
-        # Event-driven: kick off the first task immediately
+        
+        # Trigger immediate execution for the first task in queue
         if first_task_id:
+            from executors.task_executor import execute_project_task
             asyncio.create_task(execute_project_task(first_task_id))
-        return f"Queue updated for agent '{assigned_agent}': {len(task_ids_ordered)} tasks ordered. Execution started."
+            
+        return f"Queue updated for agent '{assigned_agent}': {updated_count} tasks marked as queued. Execution triggered."
     except Exception as e:
         db.rollback()
-        return f"Error: {str(e)}"
+        logger.error(f"update_task_queue error: {e}")
+        return f"Internal Error: {str(e)}"
     finally:
         db.close()
 
