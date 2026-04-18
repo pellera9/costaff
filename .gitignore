@@ -59,7 +59,7 @@ costaff_cli.egg-info/
 .costaff_backup/
 
 # License tools (internal, never commit — lives in costaff-license repo)
-tools/
+/tools/
 
 # Landing page (separate repo: costaff-ai/CoStaffAI.github.io)
 landing/
@@ -73,4 +73,4 @@ costaff-license-*.yaml
 costaff_private_key*
 
 # License issuance registry (internal record, never commit)
-tools/license_registry.json
+/tools/license_registry.json
