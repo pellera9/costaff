@@ -153,7 +153,22 @@ import re
 preferred_lang = os.getenv("COSTAFF_PREFERRED_LANGUAGE", "Traditional Chinese (繁體中文)")
 
 if sub_agents:
-    display_names_block = "\n".join(agent_display_mappings)
+    roster_lines = [
+        "## 🛠 團隊專家名冊 (Current Team Roster)",
+        "當你收到任務時，請優先核對此名冊。你具備以下所有專家的擴展能力：",
+        ""
+    ]
+    for agent_name, agent_cfg in agents_config.items():
+        # Use the name formatted for A2A transfer
+        a2a_name = agent_name.replace("-", "_")
+        # Find the meta we fetched earlier
+        desc = next((a.description for a in sub_agents if a.name == a2a_name), "特殊任務專家")
+        roster_lines.append(f"### 🤖 專家 ID: `{a2a_name}`")
+        roster_lines.append(f"- **職責描述**: {desc}")
+        roster_lines.append(f"- **調用方法**: 使用 `transfer_to_agent(agent_name='{a2a_name}')` 並在 spec 中說明任務。")
+        roster_lines.append("")
+    
+    display_names_block = "\n".join(roster_lines)
     # Keep content, strip only the marker comments.
     instruction_body = re.sub(r"<!--\s*(BEGIN|END)_SUB_AGENTS\s*-->", "", AGENT_INSTRUCTION)
 else:
