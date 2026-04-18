@@ -388,22 +388,27 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
         services_fragment[ext_svc] = svc_def
 
     # Volumes: map agent-specific data volumes to the global costaff_data volume
-    # In standard docker-compose, the volume is prefixed with the project name (e.g. costaff_costaff_data)
-    # We'll use 'costaff_costaff_data' as the canonical shared volume name.
     SHARED_VOLUME = "costaff_costaff_data"
     
     for svc_name, svc_def in services_fragment.items():
         new_vols = []
+        has_shared_mount = False
+        
         for vol in svc_def.get("volumes", []):
             if ":" in str(vol):
                 local_part, container_part = vol.split(":", 1)
-                # If it's a named volume (not a path) and maps to /app/data
-                if not local_part.startswith("/") and not local_part.startswith("./"):
-                    if container_part.startswith("/app/data"):
-                        # Force use the global shared volume
-                        new_vols.append(f"{SHARED_VOLUME}:{container_part}")
-                        continue
+                # If any volume maps to /app/data, redirect it to SHARED_VOLUME
+                if container_part.startswith("/app/data"):
+                    new_vols.append(f"{SHARED_VOLUME}:{container_part}")
+                    has_shared_mount = True
+                    continue
             new_vols.append(vol)
+        
+        # [NEW] Proactive injection: If no shared workspace is defined, add it.
+        # This ensures even "lazy" agents can see the shared data.
+        if not has_shared_mount:
+            new_vols.append(f"{SHARED_VOLUME}:/app/data")
+            
         svc_def["volumes"] = new_vols
 
     # Inject env_file into all services
