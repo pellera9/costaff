@@ -243,6 +243,9 @@ run_onboard() {
         return
     fi
 
+    # Unset legacy env var so _runtime_root defaults to ~/.costaff
+    unset COSTAFF_HOME
+
     echo -e "${BOLD}Starting costaff onboard...${RESET}\n"
     costaff onboard
 }

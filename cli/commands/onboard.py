@@ -179,7 +179,6 @@ def onboard():
     ConfigManager.update_external_agents_env()
 
     console.print(Panel.fit("🤖 [bold blue]Docker Setup[/bold blue]"))
-    console.print(f"[bold green]Generated {dest_compose}[/bold green]")
 
     if questionary.confirm("Do you want to build Docker images now?").ask():
         console.print("Building Docker images...")
