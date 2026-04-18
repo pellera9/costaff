@@ -1,10 +1,11 @@
 import os
+import secrets
 import shutil
 import subprocess
 
 import questionary
 import typer
-from dotenv import set_key
+from dotenv import dotenv_values, set_key
 from rich.console import Console
 from rich.panel import Panel
 
@@ -109,6 +110,14 @@ def onboard():
     ).ask()
 
     set_key(PATHS["env"], "ADK_SESSION_SERVICE_URI", db_uri)
+
+    existing = dotenv_values(PATHS["env"])
+    if not existing.get("MCP_SECRET_KEY"):
+        set_key(PATHS["env"], "MCP_SECRET_KEY", secrets.token_hex(32))
+        console.print("[green]Generated MCP_SECRET_KEY[/green]")
+    if not existing.get("API_HEADERS_KEY"):
+        set_key(PATHS["env"], "API_HEADERS_KEY", secrets.token_hex(32))
+        console.print("[green]Generated API_HEADERS_KEY[/green]")
 
     # Generate .costaff/docker-compose.yaml BEFORE deploying channels,
     # because channel deploy runs `docker compose -f <this file>` immediately.
