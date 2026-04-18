@@ -93,12 +93,12 @@ def _fetch_agent_card_metadata(a2a_url: str, agent_name: str) -> dict:
     # Paths to try
     paths = ["/.well-known/agent.json", "/.well-known/agent-card.json"]
     
-    # 3 attempts with exponential backoff
-    for attempt in range(3):
+    # 5 attempts with exponential backoff (max ~40 seconds)
+    for attempt in range(5):
         for path in paths:
             try:
                 url = f"{a2a_url.rstrip('/')}{path}"
-                resp = httpx.get(url, timeout=5.0)
+                resp = httpx.get(url, timeout=10.0)
                 if resp.status_code == 200:
                     card = resp.json()
                     desc = card.get("description", "").strip()
@@ -112,9 +112,10 @@ def _fetch_agent_card_metadata(a2a_url: str, agent_name: str) -> dict:
             except Exception as e:
                 pass
         
-        if attempt < 2:
-            logger.info(f"Retrying fetch for '{agent_name}' in 3s... (attempt {attempt+1})")
-            time.sleep(3)
+        if attempt < 4:
+            wait_time = (attempt + 1) * 3
+            logger.info(f"Retrying fetch for '{agent_name}' in {wait_time}s... (attempt {attempt+1}/5)")
+            time.sleep(wait_time)
             
     logger.warning(f"Could not fetch agent card for '{agent_name}' from {a2a_url} after retries.")
     return metadata
