@@ -135,19 +135,24 @@ def channel_remove(name: str = typer.Argument(...)):
 def channel_rebuild(
     name: str = typer.Argument(..., help="Channel name to rebuild"),
     no_cache: bool = typer.Option(False, "--no-cache", help="Build without Docker layer cache"),
+    pull: bool = typer.Option(True, "--pull/--no-pull", help="Git pull before rebuilding"),
 ):
     """Rebuild Docker images and restart a local channel from source."""
     conf = ConfigManager.get_config()
     if name not in conf.get("dynamic_channels", {}):
         console.print(f"[red]Error: Channel '{name}' not found.[/red]")
         raise typer.Exit(1)
-    
+
     chan_conf = conf["dynamic_channels"][name]
     fragment_path = chan_conf["fragment_path"]
     container_names = chan_conf.get("container_names", [f"costaff-chan-{name}"])
     source_path = chan_conf.get("source_path", "(unknown)")
     main_compose = os.path.join(_runtime_root, "docker-compose.yaml")
     load_dotenv(PATHS["env"], override=True)
+
+    if pull and os.path.isdir(os.path.join(source_path, ".git")):
+        console.print(f"Pulling latest code for [bold]{name}[/bold]...")
+        subprocess.run(["git", "pull", "--ff-only"], cwd=source_path)
 
     console.print(f"Building channel [bold]{name}[/bold] from [cyan]{source_path}[/cyan]...")
     build_cmd = DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path, "build"]
