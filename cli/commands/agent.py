@@ -375,6 +375,7 @@ def agent_model(
 def agent_rebuild(
     name: str = typer.Argument(..., help="Agent name to rebuild"),
     no_cache: bool = typer.Option(False, "--no-cache", help="Build without Docker layer cache"),
+    pull: bool = typer.Option(True, "--pull/--no-pull", help="Git pull before rebuilding"),
 ):
     """Rebuild Docker images and restart a local agent from source."""
     conf = ConfigManager.get_config()
@@ -391,6 +392,10 @@ def agent_rebuild(
     source_path = agent_conf.get("source_path", "(unknown)")
     main_compose = os.path.join(_runtime_root, "docker-compose.yaml")
     load_dotenv(PATHS["env"], override=True)
+
+    if pull and os.path.isdir(os.path.join(source_path, ".git")):
+        console.print(f"Pulling latest code for [bold]{name}[/bold] from [cyan]{source_path}[/cyan]...")
+        subprocess.run(["git", "pull", "--ff-only"], cwd=source_path)
 
     console.print(f"Building [bold]{name}[/bold] from [cyan]{source_path}[/cyan]...")
     build_cmd = DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path, "build"]
