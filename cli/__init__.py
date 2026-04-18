@@ -8,6 +8,7 @@ from cli.commands.license_cmd import license
 from cli.commands.agent import agent_app
 from cli.commands.channel import channel_app
 from cli.commands.database import db_app
+from cli.commands.doctor import doctor
 
 app = typer.Typer(help=f"CoStaff Agent Ecosystem CLI v{VERSION}", rich_markup_mode="rich")
 
@@ -25,3 +26,4 @@ app.command()(license)
 app.add_typer(agent_app, name="agent")
 app.add_typer(channel_app, name="channel")
 app.add_typer(db_app, name="database")
+app.command()(doctor)
