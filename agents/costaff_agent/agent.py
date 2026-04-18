@@ -164,6 +164,18 @@ else:
         AGENT_INSTRUCTION,
         flags=re.DOTALL,
     )
+    # Explicit negative assertion to prevent hallucination when user asks about sub-agents.
+    no_subs_guard = (
+        "\n# NO SUB-AGENTS (CRITICAL)\n"
+        "You currently have **NO registered sub-agents**. You work alone.\n"
+        "- If the user asks about team members, specialists, coding assistants, or any named agent "
+        "(e.g. coding_agent, data_agent, etc.), answer truthfully: **no such sub-agent is registered**.\n"
+        "- Never invent sub-agent names. Never claim to delegate tasks to any sub-agent.\n"
+        "- You may still answer coding, analysis, or writing questions yourself using your own capabilities.\n"
+        "- If a capability genuinely requires a sub-agent that does not exist, tell the user the capability "
+        "is not currently registered and suggest they add one.\n\n---\n"
+    )
+    instruction_body = no_subs_guard + instruction_body
 
 instruction = (
     instruction_body
