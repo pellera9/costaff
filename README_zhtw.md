@@ -11,7 +11,7 @@
 
 **CoStaff** 是一個自架、隱私優先的 AI Agent 平台，基於 **Google ADK（Agent Development Kit）** 和 **Model Context Protocol（MCP）** 構建。它連接你偏好的聊天平台——**Telegram、Discord 和 Line**——並提供功能完整的 Web 儀表板，讓操作者管理 Agent、工具、使用者與對話。
 
-外部 Agent（如 [`costaff-coding-agent`](https://github.com/CoStaffAI/costaff-coding-agent) 和 [`costaff-viz-report-agent`](https://github.com/CoStaffAI/costaff-viz-report-agent)）透過 **A2A 協議**整合，在不修改核心的情況下擴展平台能力。
+外部 Agent（如 [`costaff-agent-coding`](https://github.com/costaff-ai/costaff-agent-coding) 和 [`costaff-agent-business-analysis`](https://github.com/costaff-ai/costaff-agent-business-analysis)）透過 **A2A 協議**整合，在不修改核心的情況下擴展平台能力。
 
 ---
 
@@ -129,8 +129,8 @@ costaff agent list
 
 | Agent | Repository | 職責 |
 |-------|------------|------|
-| Coding Agent | [costaff-coding-agent](https://github.com/CoStaffAI/costaff-coding-agent) | 沙盒 Python 程式碼執行 |
-| Viz Report Agent | [costaff-viz-report-agent](https://github.com/CoStaffAI/costaff-viz-report-agent) | 圖表生成與 HTML/PDF 報告 |
+| Coding Agent | [costaff-agent-coding](https://github.com/costaff-ai/costaff-agent-coding) | 沙盒 Python 程式碼執行 |
+| Business Analysis Agent | [costaff-agent-business-analysis](https://github.com/costaff-ai/costaff-agent-business-analysis) | BI 報告生成與數據視覺化 |
 
 ---
 

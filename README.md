@@ -11,7 +11,7 @@
 
 **CoStaff** is a self-hosted, privacy-first AI agent platform built on **Google ADK (Agent Development Kit)** and **Model Context Protocol (MCP)**. It connects your preferred chat platforms — **Telegram, Discord, and Line** — while exposing a full-featured web dashboard for operators to manage agents, tools, users, and sessions.
 
-External agents (such as [`costaff-coding-agent`](https://github.com/CoStaffAI/costaff-coding-agent) and [`costaff-viz-report-agent`](https://github.com/CoStaffAI/costaff-viz-report-agent)) integrate via the **A2A protocol**, extending the platform's capabilities without modifying the core.
+External agents (such as [`costaff-agent-coding`](https://github.com/costaff-ai/costaff-agent-coding) and [`costaff-agent-business-analysis`](https://github.com/costaff-ai/costaff-agent-business-analysis)) integrate via the **A2A protocol**, extending the platform's capabilities without modifying the core.
 
 ---
 
@@ -129,8 +129,8 @@ costaff agent list
 
 | Agent | Repository | Role |
 |-------|------------|------|
-| Coding Agent | [costaff-coding-agent](https://github.com/CoStaffAI/costaff-coding-agent) | Sandboxed Python code execution |
-| Viz Report Agent | [costaff-viz-report-agent](https://github.com/CoStaffAI/costaff-viz-report-agent) | Chart generation & HTML/PDF reports |
+| Coding Agent | [costaff-agent-coding](https://github.com/costaff-ai/costaff-agent-coding) | Sandboxed Python code execution |
+| Business Analysis Agent | [costaff-agent-business-analysis](https://github.com/costaff-ai/costaff-agent-business-analysis) | BI reporting & visualization |
 
 ---
 

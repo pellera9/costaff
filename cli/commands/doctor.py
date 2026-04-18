@@ -33,42 +33,40 @@ def _print_logs(console: Console, output: str):
 
 def _mcp_healthcheck(console: Console, mcp_secret: str):
     """Probe MCP endpoint from inside the agent container (MCP is not host-exposed)."""
-    # Unauthenticated GET should be 401
-    probe_unauth = (
+    # FastMCP streamable-http typically expects POST.
+    # We use a minimal python script that catches HTTPErrors to print the code.
+    probe_script = (
         "import urllib.request,urllib.error\n"
-        "try:\n"
-        "    urllib.request.urlopen('http://mcp-costaff:8081/mcp', timeout=5)\n"
-        "    print('200')\n"
-        "except urllib.error.HTTPError as e:\n"
-        "    print(e.code)\n"
-        "except Exception as e:\n"
-        "    print(f'ERR:{e}')\n"
+        "def probe(url, auth=None):\n"
+        "    try:\n"
+        "        headers = {'Accept': 'application/json'}\n"
+        "        if auth: headers['Authorization'] = f'Bearer {auth}'\n"
+        "        req = urllib.request.Request(url, data=b'{}', headers=headers, method='POST')\n"
+        "        with urllib.request.urlopen(req, timeout=5) as r: print(r.status)\n"
+        "    except urllib.error.HTTPError as e: print(e.code)\n"
+        "    except Exception as e: print(f'ERR:{e}')\n"
     )
-    r = _run(["docker", "exec", "costaff-agent", "python", "-c", probe_unauth])
+
+    # 1. Unauthenticated probe (expected 401)
+    cmd_unauth = probe_script + "probe('http://mcp-costaff:8081/mcp')\n"
+    r = _run(["docker", "exec", "costaff-agent", "python3", "-c", cmd_unauth])
     code = (r.stdout or r.stderr).strip()
     if code == "401":
         console.print(f"[green]✔[/green] MCP /mcp unauth → {code} (expected 401)")
     else:
         console.print(f"[yellow]⚠[/yellow] MCP /mcp unauth → {code} (expected 401)")
 
+    # 2. Authenticated probe
     if not mcp_secret:
         console.print("[yellow]MCP_SECRET_KEY not set — skipping authenticated probe[/yellow]")
         return
 
-    probe_auth = (
-        "import urllib.request,urllib.error\n"
-        f"req=urllib.request.Request('http://mcp-costaff:8081/mcp',headers={{'Authorization':'Bearer {mcp_secret}'}})\n"
-        "try:\n"
-        "    r=urllib.request.urlopen(req, timeout=5)\n"
-        "    print(r.status)\n"
-        "except urllib.error.HTTPError as e:\n"
-        "    print(e.code)\n"
-        "except Exception as e:\n"
-        "    print(f'ERR:{e}')\n"
-    )
-    r = _run(["docker", "exec", "costaff-agent", "python", "-c", probe_auth])
+    cmd_auth = probe_script + f"probe('http://mcp-costaff:8081/mcp', '{mcp_secret}')\n"
+    r = _run(["docker", "exec", "costaff-agent", "python3", "-c", cmd_auth])
     code = (r.stdout or r.stderr).strip()
-    if code.isdigit() and 200 <= int(code) < 500:
+    
+    # Any 2xx or 4xx (like 400 Bad Request) indicates the server is alive and talking
+    if code.isdigit() and int(code) < 500:
         console.print(f"[green]✔[/green] MCP /mcp Bearer → {code}")
     else:
         console.print(f"[red]✖[/red] MCP /mcp Bearer → {code}")
