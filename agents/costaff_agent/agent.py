@@ -172,18 +172,23 @@ instruction = (
 )
 
 # Define the root agent
+description_parts = [
+    "CoStaff Agent: a personal AI assistant for scheduling, reminders, profile management, "
+    "and general knowledge.",
+    "Responsible for: answering questions with general knowledge; managing user profile and identity; "
+    "creating and managing reminders and scheduled messages; managing Kanban tasks for recurring "
+    "automated work; calling user-registered external APIs; discovering and invoking registered Skills.",
+]
+if sub_agents:
+    description_parts.append(
+        "Also orchestrates registered sub-agents for specialised tasks."
+    )
+description_parts.append("Communicates with users via Telegram, Discord, or Line.")
+
 root_agent = LlmAgent(
     model=selected_model,
     name="costaff_agent",
-    description=(
-        "CoStaff Agent: a personal AI assistant for scheduling, reminders, profile management, "
-        "and general knowledge. "
-        "Responsible for: answering questions with general knowledge; managing user profile and identity; "
-        "creating and managing reminders and scheduled messages; managing Kanban tasks for recurring "
-        "automated work; calling user-registered external APIs; discovering and invoking registered Skills; "
-        "orchestrating sub-agents for tasks requiring code execution, data analysis, or report generation. "
-        "Communicates with users via Telegram, Discord, or Line."
-    ),
+    description=" ".join(description_parts),
     instruction=instruction,
     tools=tools,
     sub_agents=sub_agents,
