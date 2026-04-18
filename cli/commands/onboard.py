@@ -118,6 +118,13 @@ def onboard():
     if not existing.get("API_HEADERS_KEY"):
         set_key(PATHS["env"], "API_HEADERS_KEY", secrets.token_hex(32))
         console.print("[green]Generated API_HEADERS_KEY[/green]")
+    
+    # Security: Ensure ID_SALT is randomized
+    current_salt = existing.get("ID_SALT", "").strip("'\"")
+    if not current_salt or current_salt == "change-me-to-a-random-string":
+        new_salt = secrets.token_hex(32)
+        set_key(PATHS["env"], "ID_SALT", new_salt)
+        console.print("[green]Security: Generated a random ID_SALT.[/green]")
 
     # docker-compose.yaml lives in _project_root (= _runtime_root = ~/.costaff)
     # No copy or path-rewriting needed.

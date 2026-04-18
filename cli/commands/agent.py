@@ -83,8 +83,9 @@ def agent_add(
     conf.setdefault("external_agents", {})[name] = entry
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
-    threading.Thread(target=DockerManager.run_action, args=("costaff-agent", "restart"), daemon=True).start()
+    
     console.print(f"[green]Agent '{name}' deployed and registered.[/green]")
+    console.print("[yellow]Important: Please run '[bold]costaff restart[/bold]' to let the core agent recognize the new team member.[/yellow]")
 
 
 @agent_app.command("list")

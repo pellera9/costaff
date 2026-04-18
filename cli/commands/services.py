@@ -20,7 +20,7 @@ def start(build: bool = typer.Option(True, "--build/--no-build")):
         services.append(f"mcp-{m}")
 
     compose_cwd = DockerManager.get_compose_cwd("docker-compose.yaml")
-    cmd = DockerManager.get_cmd() + ["-f", "docker-compose.yaml", "up", "-d"]
+    cmd = DockerManager.get_cmd() + ["-f", "docker-compose.yaml", "up", "-d", "--remove-orphans"]
     if build:
         cmd.append("--build")
     cmd.extend(services)
@@ -39,7 +39,7 @@ def start(build: bool = typer.Option(True, "--build/--no-build")):
         main_compose = str(__import__("pathlib").Path(compose_cwd) / "docker-compose.yaml")
         ch_cmd = DockerManager.get_cmd() + [
             "-f", main_compose, "-f", fragment_path,
-            "up", "-d",
+            "up", "-d", "--remove-orphans",
         ] + container_names
         console.print(f"Starting channel {name}...")
         subprocess.run(ch_cmd, cwd=compose_cwd)
@@ -50,7 +50,7 @@ def start(build: bool = typer.Option(True, "--build/--no-build")):
 def stop():
     """Stop all services."""
     compose_cwd = DockerManager.get_compose_cwd("docker-compose.yaml")
-    subprocess.run(DockerManager.get_cmd() + ["-f", "docker-compose.yaml", "down"], check=True, cwd=compose_cwd)
+    subprocess.run(DockerManager.get_cmd() + ["-f", "docker-compose.yaml", "down", "--remove-orphans"], check=True, cwd=compose_cwd)
     # Kill any dashboard process holding port 8501
     try:
         result = subprocess.run(["lsof", "-ti", ":8501"], capture_output=True, text=True)
@@ -60,6 +60,31 @@ def stop():
                 subprocess.run(["kill", pid], capture_output=True)
     except Exception:
         pass
+
+
+def restart():
+    """Restart all services."""
+    console.print("Restarting CoStaff services...")
+    compose_cwd = DockerManager.get_compose_cwd("docker-compose.yaml")
+    # 1. Restart core stack
+    subprocess.run(DockerManager.get_cmd() + ["-f", "docker-compose.yaml", "restart"], check=True, cwd=compose_cwd)
+    
+    # 2. Restart dynamic channels
+    conf = ConfigManager.get_config()
+    for name, entry in conf.get("dynamic_channels", {}).items():
+        if not entry.get("enabled"):
+            continue
+        fragment_path = entry.get("fragment_path")
+        container_names = entry.get("container_names", [])
+        if fragment_path and container_names:
+            main_compose = str(__import__("pathlib").Path(compose_cwd) / "docker-compose.yaml")
+            ch_cmd = DockerManager.get_cmd() + [
+                "-f", main_compose, "-f", fragment_path, "restart"
+            ] + container_names
+            console.print(f"Restarting channel {name}...")
+            subprocess.run(ch_cmd, cwd=compose_cwd)
+    
+    console.print("[bold green]SUCCESS: CoStaff restarted![/bold green]")
 
 
 def status():
