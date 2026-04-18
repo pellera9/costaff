@@ -62,6 +62,9 @@ class ConfigManager:
         conf = ConfigManager.get_config()
         urls = {}
 
+        load_dotenv(PATHS["env"], override=True)
+        mcp_secret = os.getenv("MCP_SECRET_KEY", "").strip()
+
         for m in conf.get("mcp", []):
             if m == "costaff":
                 path = os.path.join("mcp_servers", "server.json")
@@ -78,7 +81,16 @@ class ConfigManager:
                     pass
 
             default_port = 8081 if m == "costaff" else 8080
-            urls[m] = custom_url or f"http://mcp-{m}:{default_port}/mcp"
+            url = custom_url or f"http://mcp-{m}:{default_port}/mcp"
+            # Internal MCPs require Bearer auth. Emit Dive-format dict so agent sends header.
+            if mcp_secret:
+                urls[m] = {
+                    "url": url,
+                    "transport": "sse" if url.rstrip("/").endswith("/sse") else "streamable",
+                    "headers": {"Authorization": f"Bearer {mcp_secret}"},
+                }
+            else:
+                urls[m] = url
 
         # external_mcp supports both legacy string URLs and Dive-format objects
         for name, val in conf.get("external_mcp", {}).items():

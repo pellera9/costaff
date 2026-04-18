@@ -38,16 +38,20 @@ def get_connection_params(entry):
       - a Dive-format dict: { url, transport, headers, enabled }
     """
     if isinstance(entry, str):
-        url, headers, transport = entry, None, "sse" if "/mcp" in entry else "streamable"
+        url, headers, transport = entry, None, None
     else:
         url       = entry.get("url", "")
         headers   = entry.get("headers") or None
-        transport = entry.get("transport", "streamable")
+        transport = entry.get("transport")
 
     if not url:
         raise ValueError("MCP entry has no URL")
 
-    if transport == "sse" or "/mcp" in url:
+    # Infer transport from URL path when not explicitly set: /sse → SSE, /mcp → streamable-http.
+    if transport is None:
+        transport = "sse" if url.rstrip("/").endswith("/sse") else "streamable"
+
+    if transport == "sse":
         logger.info(f"Using SSE for {url}")
         return SseServerParams(url=url, headers=headers)
 
