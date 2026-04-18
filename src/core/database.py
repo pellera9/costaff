@@ -59,11 +59,17 @@ def init_db():
             if "session_id" not in cols:
                 from .models import IdentityMap
                 IdentityMap.__table__.drop(engine)
-            elif "is_approved" not in cols:
-                conn.execute(text(
-                    "ALTER TABLE identity_maps ADD COLUMN is_approved BOOLEAN NOT NULL DEFAULT FALSE"
-                ))
-                conn.commit()
+            else:
+                if "is_approved" not in cols:
+                    conn.execute(text(
+                        "ALTER TABLE identity_maps ADD COLUMN is_approved BOOLEAN NOT NULL DEFAULT FALSE"
+                    ))
+                    conn.commit()
+                if "updated_at" not in cols:
+                    conn.execute(text(
+                        "ALTER TABLE identity_maps ADD COLUMN updated_at TIMESTAMP"
+                    ))
+                    conn.commit()
 
         # api_configs / skill_configs: add agent_ids if missing
         for tbl in ("api_configs", "skill_configs"):
