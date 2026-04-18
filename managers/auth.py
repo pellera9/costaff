@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import hashlib
 import secrets
 from typing import Optional
@@ -7,9 +8,19 @@ from fastapi import HTTPException, Header
 
 from utils.helpers import PATHS
 
+_SESSION_TTL = int(os.getenv("SESSION_TOKEN_TTL_HOURS", "24")) * 3600
+
 
 class AuthManager:
-    SESSION_TOKEN = secrets.token_hex(16)
+    _session_token: str = ""
+    _token_expires: float = 0.0
+
+    @classmethod
+    def rotate_token(cls) -> str:
+        """Generate a new session token and set its expiry. Returns the new token."""
+        cls._session_token = secrets.token_hex(16)
+        cls._token_expires = time.time() + _SESSION_TTL
+        return cls._session_token
 
     @staticmethod
     def hash_password(password: str, salt: Optional[str] = None):
@@ -35,6 +46,10 @@ class AuthManager:
 
     @staticmethod
     def verify_token(authorization: str = Header(None)):
-        if authorization != f"Bearer {AuthManager.SESSION_TOKEN}":
+        if not AuthManager._session_token:
+            raise HTTPException(status_code=401, detail="Not logged in")
+        if time.time() > AuthManager._token_expires:
+            raise HTTPException(status_code=401, detail="Session expired, please log in again")
+        if authorization != f"Bearer {AuthManager._session_token}":
             raise HTTPException(status_code=401, detail="Unauthorized")
         return True

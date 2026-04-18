@@ -44,6 +44,38 @@ def _serialize_row(d: dict) -> dict:
     return {k: _dt_to_z(v) if isinstance(v, datetime) else v for k, v in d.items()}
 
 
+def _validate_cron(cron: str) -> None:
+    """Raises ValueError if the cron expression is not a valid 5-field format."""
+    import re
+    pattern = re.compile(
+        r'^(\*|[0-9*/,\-]+)\s+'   # minute
+        r'(\*|[0-9*/,\-]+)\s+'   # hour
+        r'(\*|[0-9?*/,\-L]+)\s+' # day-of-month
+        r'(\*|[0-9*/,\-]+)\s+'   # month
+        r'(\*|[0-9?*/,\-L]+)$'   # day-of-week
+    )
+    if not pattern.match(cron.strip()):
+        raise ValueError(
+            f"Invalid cron expression: '{cron}'. "
+            "Expected 5 fields: minute hour day-of-month month day-of-week"
+        )
+
+
+def _validate_a2a_url(url: str) -> None:
+    """Raises ValueError if the URL is not a safe external http/https endpoint."""
+    from urllib.parse import urlparse
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        raise ValueError("Invalid URL format")
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("URL must use http or https scheme")
+    hostname = (parsed.hostname or "").lower()
+    blocked = {"localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "::1", ""}
+    if hostname in blocked:
+        raise ValueError(f"URL hostname '{hostname}' is not allowed")
+
+
 def _next_available_port(conf: dict) -> int:
     used = {a.get("public_port") for a in conf.get("external_agents", {}).values() if a.get("public_port")}
     for p in range(18100, 18200):
@@ -60,6 +92,113 @@ def _next_available_channel_port(conf: dict) -> int:
     raise RuntimeError("No available ports in range 18090-18099")
 
 
+DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview"
+
+
+def _prompt_model_config(manifest: dict, plugin_envs: dict, core_envs: dict) -> dict:
+    """Prompt user to select model provider and model for this agent. Returns updated plugin_envs."""
+    model_env_var = manifest.get("model_env_var")
+    if not model_env_var:
+        return plugin_envs
+
+    current_provider = plugin_envs.get("COSTAFF_AGENT_MODEL_PROVIDER") or core_envs.get("COSTAFF_AGENT_MODEL_PROVIDER", "gemini")
+    current_model = plugin_envs.get(model_env_var) or core_envs.get(model_env_var, "")
+
+    provider = questionary.select(
+        f"Model provider for {manifest.get('name', 'this agent')}:",
+        choices=["gemini", "litellm"],
+        default=current_provider,
+    ).ask()
+    if not provider:
+        return plugin_envs
+
+    plugin_envs["COSTAFF_AGENT_MODEL_PROVIDER"] = provider
+
+    if provider == "gemini":
+        model = questionary.text(
+            "Gemini model name:",
+            default=current_model or DEFAULT_GEMINI_MODEL,
+        ).ask()
+        if model:
+            plugin_envs[model_env_var] = model
+
+    elif provider == "litellm":
+        model = questionary.text(
+            "LiteLLM model name (e.g. openai/gpt-4o):",
+            default=current_model or "",
+        ).ask()
+        api_base = questionary.text(
+            "LiteLLM API base URL:",
+            default=plugin_envs.get("LITELLM_API_BASE") or core_envs.get("LITELLM_API_BASE", ""),
+        ).ask()
+        api_key = questionary.password("LiteLLM API key:").ask()
+        if model:
+            plugin_envs[model_env_var] = model
+            plugin_envs["LITELLM_MODEL_NAME"] = model
+        if api_base:
+            plugin_envs["LITELLM_API_BASE"] = api_base
+        if api_key:
+            plugin_envs["LITELLM_API_KEY"] = api_key
+
+    return plugin_envs
+
+
+def _prompt_and_write_plugin_env(manifest: dict, fragment_dir: str, predefined_envs: dict = None) -> str:
+    """Prompt user for env vars defined in manifest and write to plugin .env. Returns plugin env path."""
+    from dotenv import dotenv_values, set_key
+    plugin_env_path = os.path.join(fragment_dir, ".env")
+    core_envs = dict(dotenv_values(PATHS["env"]))
+    plugin_envs = dict(dotenv_values(plugin_env_path)) if os.path.exists(plugin_env_path) else {}
+
+    if predefined_envs:
+        plugin_envs.update(predefined_envs)
+
+    env_required = manifest.get("env_required", [])
+    env_optional = manifest.get("env_optional", [])
+
+    # Required vars — always prompt if missing
+    for k in env_required:
+        current = plugin_envs.get(k) or core_envs.get(k, "")
+        if not current:
+            val = questionary.password(f"[Required] {k}:").ask()
+            if not val:
+                raise ValueError(f"Required env var {k} not provided")
+            plugin_envs[k] = val
+        else:
+            update = questionary.confirm(f"[Required] {k} is already set. Update?", default=False).ask()
+            if update:
+                val = questionary.password(f"{k}:", default="").ask()
+                if val:
+                    plugin_envs[k] = val
+
+    # Model config — only for agents (manifest has model_env_var)
+    if manifest.get("model_env_var"):
+        plugin_envs = _prompt_model_config(manifest, plugin_envs, core_envs)
+
+    # Optional vars — ask if user wants to configure
+    if env_optional:
+        configure_optional = questionary.confirm("Configure optional variables?", default=False).ask()
+        if configure_optional:
+            for k in env_optional:
+                current = plugin_envs.get(k) or core_envs.get(k, "")
+                val = questionary.text(f"[Optional] {k}:", default=current).ask()
+                if val is not None:
+                    plugin_envs[k] = val
+
+    # Write plugin .env
+    os.makedirs(fragment_dir, exist_ok=True)
+    with open(plugin_env_path, "w") as f:
+        for k, v in plugin_envs.items():
+            f.write(f"{k}={v}\n")
+
+    # Also write required vars to core .env for YAML variable substitution
+    for k in env_required:
+        if plugin_envs.get(k):
+            set_key(PATHS["env"], k, plugin_envs[k])
+
+    return plugin_env_path
+
+
 def _deploy_local_channel(name: str, source_path: str, conf: dict, predefined_envs: dict = None) -> dict:
     """Build and start a local-path communication channel following CoStaff Convention."""
     import yaml as _yaml
@@ -71,7 +210,7 @@ def _deploy_local_channel(name: str, source_path: str, conf: dict, predefined_en
     if not os.path.exists(manifest_path):
         # Fallback to agent manifest if channel manifest not found
         manifest_path = os.path.join(source_path, "costaff.agent.json")
-    
+
     compose_path = os.path.join(source_path, "docker-compose.yaml")
 
     if not os.path.exists(manifest_path):
@@ -86,14 +225,12 @@ def _deploy_local_channel(name: str, source_path: str, conf: dict, predefined_en
     port = manifest.get("port", 80)
     description = manifest.get("description", "")
 
-    if predefined_envs:
-        for k, v in predefined_envs.items():
-            set_key(PATHS["env"], k, v)
-        load_dotenv(PATHS["env"], override=True)
-
     public_port = _next_available_channel_port(conf)
     fragment_dir = os.path.join(_project_root, ".costaff", "dynamic-channels", name)
     os.makedirs(fragment_dir, exist_ok=True)
+
+    plugin_env_path = _prompt_and_write_plugin_env(manifest, fragment_dir, predefined_envs)
+    load_dotenv(PATHS["env"], override=True)
 
     with open(compose_path) as f:
         src_compose = _yaml.safe_load(f)
@@ -133,6 +270,11 @@ def _deploy_local_channel(name: str, source_path: str, conf: dict, predefined_en
             new_vols.append(vol)
         svc_def["volumes"] = new_vols
         services_fragment[ext_svc] = svc_def
+
+    # Inject env_file into all services
+    core_env_path = PATHS["env"]
+    for svc_def in services_fragment.values():
+        svc_def["env_file"] = [core_env_path, plugin_env_path]
 
     fragment = {
         "services": services_fragment,
@@ -187,37 +329,17 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
     description = manifest.get("description", "")
     version = manifest.get("version", "")
 
-    # Handle predefined envs first
-    if predefined_envs:
-        for k, v in predefined_envs.items():
-            set_key(PATHS["env"], k, v)
-        load_dotenv(PATHS["env"], override=True)
-
-    # Check env_required
-    load_dotenv(PATHS["env"])
-    missing = [k for k in manifest.get("env_required", []) if not os.getenv(k)]
-    if missing:
-        for k in missing:
-            val = questionary.password(f"Required env var {k}:").ask()
-            if not val:
-                raise ValueError(f"Required env var {k} not provided")
-            set_key(PATHS["env"], k, val)
-        load_dotenv(PATHS["env"], override=True)
-
     public_port = _next_available_port(conf)
     fragment_dir = os.path.join(_project_root, ".costaff", "external-agents", name)
     os.makedirs(fragment_dir, exist_ok=True)
+
+    plugin_env_path = _prompt_and_write_plugin_env(manifest, fragment_dir, predefined_envs)
+    load_dotenv(PATHS["env"], override=True)
 
     # Read source compose to get all service names
     with open(compose_path) as f:
         src_compose = _yaml.safe_load(f)
     service_names = list(src_compose.get("services", {}).keys())
-
-    # Build env injection from env_required + env_optional
-    env_vars = []
-    for k in manifest.get("env_required", []) + manifest.get("env_optional", []):
-        v = os.getenv(k, "")
-        env_vars.append(f"      - {k}={v}")
 
     # Generate compose fragment
     services_fragment = {}
@@ -237,14 +359,10 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
         svc_def.setdefault("networks", [])
         if isinstance(svc_def["networks"], list) and "costaff_default" not in svc_def["networks"]:
             svc_def["networks"].append("costaff_default")
-        # Inject env vars into a2a service
+        # Inject fixed runtime vars into a2a service
         if svc == a2a_service:
             svc_def.setdefault("environment", [])
             svc_def["environment"] += [f"PORT={port}", f"PUBLIC_HOST=costaff-ext-{name}"]
-            for k in manifest.get("env_required", []) + manifest.get("env_optional", []):
-                v = os.getenv(k, "")
-                if v:
-                    svc_def["environment"].append(f"{k}={v}")
             svc_def["ports"] = [f"127.0.0.1:{public_port}:{port}"]
         # Rename depends_on references
         if "depends_on" in svc_def:
@@ -274,6 +392,11 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
                         continue
             new_vols.append(vol)
         svc_def["volumes"] = new_vols
+
+    # Inject env_file into all services
+    core_env_path = PATHS["env"]
+    for svc_def in services_fragment.values():
+        svc_def["env_file"] = [core_env_path, plugin_env_path]
 
     fragment = {
         "services": services_fragment,

@@ -4,10 +4,10 @@ set -e
 # =============================================================================
 # CoStaff - Installer
 # Supports: macOS (12+), Ubuntu (20.04 / 22.04 / 24.04)
-# Usage: curl -fsSL https://YOUR_DOMAIN/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/costaff-ai/costaff/main/install.sh | bash
 # =============================================================================
 
-REPO_URL="https://github.com/YOUR_USERNAME/costaff-agent.git"  # TODO: update before release
+REPO_URL="${COSTAFF_REPO_URL:-https://github.com/costaff-ai/costaff.git}"
 COSTAFF_DIR="$HOME/.costaff-agent"
 VENV_DIR="$COSTAFF_DIR/.venv"
 PYTHON_VERSION="3.11"
@@ -227,7 +227,6 @@ run_onboard() {
     fi
 
     echo -e "${BOLD}Starting costaff onboard...${RESET}\n"
-    source "$SHELL_RC" 2>/dev/null || true
     costaff onboard
 }
 

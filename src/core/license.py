@@ -173,7 +173,7 @@ class LicenseManager:
 
         # Parse expiry
         expires_raw = data.get("expires_at")
-        if expires_raw and str(expires_raw) != "null":
+        if expires_raw is not None and expires_raw != "null":
             if isinstance(expires_raw, str):
                 expires_at = date.fromisoformat(expires_raw)
             elif isinstance(expires_raw, date):

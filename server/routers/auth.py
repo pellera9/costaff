@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
 from managers.auth import AuthManager
+from managers.audit import audit
 from models.requests import LoginRequest, SetupRequest
 from utils.helpers import VERSION
 
@@ -29,5 +30,8 @@ def setup_account(req: SetupRequest):
 def login(req: LoginRequest):
     auth = AuthManager.get_auth()
     if auth and req.username == auth["username"] and AuthManager.hash_password(req.password, auth["salt"])[0] == auth["hashed"]:
-        return {"token": AuthManager.SESSION_TOKEN}
+        token = AuthManager.rotate_token()
+        audit("login.success", username=req.username)
+        return {"token": token}
+    audit("login.failure", username=req.username)
     raise HTTPException(status_code=401, detail="Invalid credentials")

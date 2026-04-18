@@ -202,11 +202,7 @@ def agent_restart(name: str = typer.Argument(..., help="Agent name to restart"))
         raise typer.Exit(1)
 
 
-GEMINI_MODELS = [
-    "gemini-2.5-flash",
-    "gemini-3-flash-preview",
-    "gemini-3.1-pro-preview",
-]
+DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview"
 
 # core agent env var (not in config.json external_agents)
 _CORE_AGENT = {
@@ -327,12 +323,10 @@ def agent_model(
             raise typer.Exit(0)
 
     if final_provider == "gemini" and not final_model:
-        final_model = questionary.select(
-            "Select Gemini model:",
-            choices=GEMINI_MODELS + ["custom (enter manually)"],
+        final_model = questionary.text(
+            "Gemini model name:",
+            default=DEFAULT_GEMINI_MODEL,
         ).ask()
-        if final_model == "custom (enter manually)":
-            final_model = questionary.text("Enter model name:").ask()
         if not final_model:
             raise typer.Exit(0)
 

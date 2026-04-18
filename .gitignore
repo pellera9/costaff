@@ -56,6 +56,7 @@ costaff_cli.egg-info/
 
 # costaff project runtime folder (never commit)
 .costaff/
+.costaff_backup/
 
 # License tools (internal, never commit — lives in costaff-license repo)
 tools/

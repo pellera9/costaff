@@ -5,9 +5,11 @@ import httpx
 from fastapi import APIRouter, HTTPException, Depends
 
 from managers.auth import AuthManager
+from managers.audit import audit
 from managers.config import ConfigManager
 from managers.docker import DockerManager
 from models.requests import ExternalAgentAddRequest, ExternalAgentUpdateRequest
+from utils.helpers import _validate_a2a_url
 
 router = APIRouter()
 
@@ -64,6 +66,10 @@ def add_external_agent(req: ExternalAgentAddRequest, auth: bool = Depends(AuthMa
     name = req.name.strip().lower().replace(" ", "-")
     if not re.match(r'^[a-z0-9][a-z0-9_-]*$', name):
         raise HTTPException(400, "Agent name must be lowercase alphanumeric with hyphens/underscores.")
+    try:
+        _validate_a2a_url(req.a2a_url)
+    except ValueError as e:
+        raise HTTPException(400, f"Invalid a2a_url: {e}")
     conf = ConfigManager.get_config()
     if name in conf.get("external_agents", {}):
         raise HTTPException(400, f"Agent '{name}' already exists.")
@@ -76,6 +82,7 @@ def add_external_agent(req: ExternalAgentAddRequest, auth: bool = Depends(AuthMa
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
     threading.Thread(target=DockerManager.run_action, args=("costaff-agent", "restart"), daemon=True).start()
+    audit("agent.add", name=name, url=req.a2a_url)
     return {"status": "ok", "name": name}
 
 
@@ -86,6 +93,10 @@ def update_external_agent(name: str, req: ExternalAgentUpdateRequest, auth: bool
         raise HTTPException(404, f"Agent '{name}' not found.")
     agent = conf["external_agents"][name]
     if req.a2a_url is not None:
+        try:
+            _validate_a2a_url(req.a2a_url)
+        except ValueError as e:
+            raise HTTPException(400, f"Invalid a2a_url: {e}")
         agent["a2a_url"] = req.a2a_url
     if req.description is not None:
         agent["description"] = req.description
@@ -96,6 +107,7 @@ def update_external_agent(name: str, req: ExternalAgentUpdateRequest, auth: bool
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
     threading.Thread(target=DockerManager.run_action, args=("costaff-agent", "restart"), daemon=True).start()
+    audit("agent.update", name=name, changes={k: v for k, v in req.dict(exclude_unset=True).items()})
     return {"status": "ok"}
 
 
@@ -110,6 +122,7 @@ def remove_external_agent(name: str, auth: bool = Depends(AuthManager.verify_tok
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
     threading.Thread(target=DockerManager.run_action, args=("costaff-agent", "restart"), daemon=True).start()
+    audit("agent.delete", name=name)
     return {"status": "ok"}
 
 

@@ -1,4 +1,6 @@
 import os
+import json
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,11 +10,35 @@ from fastapi.responses import FileResponse
 from utils.helpers import PATHS
 from server.routers import auth, system, config, tasks, agents, users, diary
 
+
+def _setup_logging() -> None:
+    class _JSONFormatter(logging.Formatter):
+        def format(self, record: logging.LogRecord) -> str:
+            data = {
+                "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
+                "level": record.levelname,
+                "logger": record.name,
+                "msg": record.getMessage(),
+            }
+            if record.exc_info:
+                data["exc"] = self.formatException(record.exc_info)
+            return json.dumps(data, ensure_ascii=False)
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(_JSONFormatter())
+    logging.basicConfig(
+        level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
+        handlers=[handler],
+        force=True,
+    )
+
+_setup_logging()
+
 server = FastAPI(title="CoStaff Dashboard")
+_allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
 server.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

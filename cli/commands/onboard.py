@@ -110,6 +110,29 @@ def onboard():
 
     set_key(PATHS["env"], "ADK_SESSION_SERVICE_URI", db_uri)
 
+    # Generate .costaff/docker-compose.yaml BEFORE deploying channels,
+    # because channel deploy runs `docker compose -f <this file>` immediately.
+    base_compose_file = "docker-compose.yaml"
+    src_compose = os.path.join(_project_root, base_compose_file)
+    costaff_dir = os.path.join(_project_root, ".costaff")
+    dest_compose = os.path.join(costaff_dir, base_compose_file)
+
+    with open(src_compose, "r") as f:
+        compose_content = f.read()
+
+    compose_content = compose_content.replace(
+        "build: .", "build: .."
+    ).replace(
+        "context: .", "context: .."
+    ).replace(
+        "- ./src", "- ../src"
+    ).replace(
+        "- ./mcp_servers", "- ../mcp_servers"
+    )
+
+    with open(dest_compose, "w") as f:
+        f.write(compose_content)
+
     conf = ConfigManager.get_config()
     conf.setdefault("dynamic_channels", {})
 
@@ -165,27 +188,6 @@ def onboard():
     ConfigManager.update_external_agents_env()
 
     console.print(Panel.fit("🤖 [bold blue]Docker Setup[/bold blue]"))
-    base_compose_file = "docker-compose.yaml"
-    src_compose = os.path.join(_project_root, base_compose_file)
-    costaff_dir = os.path.join(_project_root, ".costaff")
-    dest_compose = os.path.join(costaff_dir, base_compose_file)
-
-    with open(src_compose, "r") as f:
-        compose_content = f.read()
-
-    compose_content = compose_content.replace(
-        "build: .", "build: .."
-    ).replace(
-        "context: .", "context: .."
-    ).replace(
-        "- ./src", "- ../src"
-    ).replace(
-        "- ./mcp_servers", "- ../mcp_servers"
-    )
-
-    with open(dest_compose, "w") as f:
-        f.write(compose_content)
-
     console.print(f"[bold green]Generated {dest_compose}[/bold green]")
 
     if questionary.confirm("Do you want to build Docker images now?").ask():

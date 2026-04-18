@@ -16,7 +16,8 @@ from models.requests import (
     ProjectTaskCreateRequest,
     ProjectTaskUpdateRequest,
 )
-from utils.helpers import _serialize_row
+from managers.audit import audit
+from utils.helpers import _serialize_row, _validate_cron
 
 router = APIRouter()
 
@@ -43,6 +44,10 @@ def list_regular_works(auth: bool = Depends(AuthManager.verify_token)):
 
 @router.post("/api/regular-works")
 def create_regular_work_api(req: RegularWorkCreateRequest, auth: bool = Depends(AuthManager.verify_token)):
+    try:
+        _validate_cron(req.cron)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     engine = DatabaseManager.get_engine()
     if not engine:
         raise HTTPException(status_code=500, detail="Database connection failed")
@@ -61,6 +66,7 @@ def create_regular_work_api(req: RegularWorkCreateRequest, auth: bool = Depends(
                 "status": "active", "now": now
             })
             conn.commit()
+        audit("work.create", id=wid, title=req.title, cron=req.cron)
         return {"status": "success", "id": wid}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -68,6 +74,11 @@ def create_regular_work_api(req: RegularWorkCreateRequest, auth: bool = Depends(
 
 @router.put("/api/regular-works/{work_id}")
 def update_regular_work_api(work_id: str, req: RegularWorkUpdateRequest, auth: bool = Depends(AuthManager.verify_token)):
+    if req.cron is not None:
+        try:
+            _validate_cron(req.cron)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
     engine = DatabaseManager.get_engine()
     if not engine:
         raise HTTPException(status_code=500, detail="Database connection failed")
@@ -83,6 +94,7 @@ def update_regular_work_api(work_id: str, req: RegularWorkUpdateRequest, auth: b
         with engine.connect() as conn:
             conn.execute(text(f"UPDATE regular_works SET {', '.join(set_clauses)} WHERE id = :id"), updates)
             conn.commit()
+        audit("work.update", id=work_id, changes={k: v for k, v in updates.items() if k not in ("id", "now")})
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -97,6 +109,7 @@ def delete_regular_work_api(work_id: str, auth: bool = Depends(AuthManager.verif
         with engine.connect() as conn:
             conn.execute(text("DELETE FROM regular_works WHERE id = :id"), {"id": work_id})
             conn.commit()
+        audit("work.delete", id=work_id)
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
