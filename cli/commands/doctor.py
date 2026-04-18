@@ -39,7 +39,12 @@ def doctor():
         if not db_uri:
             console.print("[red]ADK_SESSION_SERVICE_URI not set in .env[/red]")
         else:
-            sync_uri = db_uri.replace("postgresql+asyncpg://", "postgresql://")
+            # Replace Docker-internal service name with localhost for host-side connection
+            sync_uri = (
+                db_uri
+                .replace("postgresql+asyncpg://", "postgresql://")
+                .replace("@postgres:", "@localhost:")
+            )
             engine = create_engine(sync_uri, connect_args={"connect_timeout": 5})
             with engine.connect() as conn:
                 # Schema
