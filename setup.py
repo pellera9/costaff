@@ -18,6 +18,7 @@ setup(
         "cryptography",
         "pyyaml",
         "psutil",
+        "psycopg2-binary",
     ],
     entry_points={
         "console_scripts": [
