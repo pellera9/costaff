@@ -99,7 +99,7 @@ async def execute_project_task(task_id: str):
             if task.assigned_agent:
                 asyncio.create_task(_advance_agent_queue(task.assigned_agent, task.user_id, finished_task_id=task_id))
 
-            except Exception as e:
+        except Exception as e:
             logger.error(f"ProjectTask execution failed {task_id}: {e}")
             task.status = "failed"
             task.updated_at = datetime.utcnow()
