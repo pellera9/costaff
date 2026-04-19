@@ -48,8 +48,8 @@ def _mcp_healthcheck(console: Console, mcp_secret: str):
     )
 
     # 1. Unauthenticated probe (expected 401)
-    cmd_unauth = probe_script + "probe('http://mcp-costaff:8081/mcp')\n"
-    r = _run(["docker", "exec", "costaff-agent", "python3", "-c", cmd_unauth])
+    cmd_unauth = probe_script + "probe('http://costaff-mcp-costaff:8081/mcp')\n"
+    r = _run(["docker", "exec", "costaff-agent-costaff", "python3", "-c", cmd_unauth])
     code = (r.stdout or r.stderr).strip()
     if code == "401":
         console.print(f"[green]✔[/green] MCP /mcp unauth → {code} (expected 401)")
@@ -61,8 +61,8 @@ def _mcp_healthcheck(console: Console, mcp_secret: str):
         console.print("[yellow]MCP_SECRET_KEY not set — skipping authenticated probe[/yellow]")
         return
 
-    cmd_auth = probe_script + f"probe('http://mcp-costaff:8081/mcp', '{mcp_secret}')\n"
-    r = _run(["docker", "exec", "costaff-agent", "python3", "-c", cmd_auth])
+    cmd_auth = probe_script + f"probe('http://costaff-mcp-costaff:8081/mcp', '{mcp_secret}')\n"
+    r = _run(["docker", "exec", "costaff-agent-costaff", "python3", "-c", cmd_auth])
     code = (r.stdout or r.stderr).strip()
     
     # Any 2xx or 4xx (like 400 Bad Request) indicates the server is alive and talking
@@ -230,7 +230,7 @@ def doctor():
 
     # 7. Core container logs (agent + mcp) ────────────────────────────────────
     console.print("\n[bold]7. Core Logs (last 50 lines)[/bold]")
-    for cname in ["costaff-agent", "costaff-mcp-costaff"]:
+    for cname in ["costaff-agent-costaff", "costaff-mcp-costaff"]:
         console.print(f"\n[cyan]── {cname} ──[/cyan]")
         r = _run(["docker", "logs", "--tail", "50", cname])
         _print_logs(console, r.stdout + r.stderr)

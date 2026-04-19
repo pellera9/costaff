@@ -1,5 +1,5 @@
 services:
-  mcp-costaff:
+  costaff-mcp-costaff:
     build: .
     container_name: costaff-mcp-costaff
     restart: always
@@ -9,17 +9,17 @@ services:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
-      - ADK_API_BASE_URL=http://costaff-agent:8080
+      - ADK_API_BASE_URL=http://costaff-agent-costaff:8080
       - PYTHONPATH=/app
       - MCP_SECRET_KEY=${MCP_SECRET_KEY}
       - API_HEADERS_KEY=${API_HEADERS_KEY}
     command: python mcp_servers/server.py
 
-  costaff-agent:
+  costaff-agent-costaff:
     build:
       context: .
       dockerfile: agents/costaff_agent/Dockerfile
-    container_name: costaff-agent
+    container_name: costaff-agent-costaff
     restart: on-failure
     ports:
       - "${COSTAFF_AGENT_PORT:-18080}:8080"
@@ -34,7 +34,7 @@ services:
       - CODING_A2A_URL=${CODING_A2A_URL:-}
     command: ["adk", "web", "--host", "0.0.0.0", "--port", "8080", "--session_service_uri", "${ADK_SESSION_SERVICE_URI}", "."]
     depends_on:
-      - mcp-costaff
+      - costaff-mcp-costaff
 
   postgres:
     image: postgres:15-alpine

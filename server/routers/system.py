@@ -124,7 +124,7 @@ def get_license(auth: bool = Depends(AuthManager.verify_token)):
 
 @router.post("/api/services/{service}/action")
 def service_action(service: str, req: ServiceActionRequest, auth: bool = Depends(AuthManager.verify_token)):
-    if req.action == "stop" and service in ["mcp-costaff", "costaff-agent", "postgres"]:
+    if req.action == "stop" and service in ["costaff-mcp-costaff", "costaff-agent-costaff", "postgres"]:
         raise HTTPException(status_code=400, detail="Cannot stop core service.")
     try:
         DockerManager.run_action(service, req.action)

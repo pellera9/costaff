@@ -38,7 +38,7 @@ class DockerManager:
 
         # Determine services to act upon
         target_services = [service]
-        if service == "costaff-agent" and action == "restart":
+        if service == "costaff-agent-costaff" and action == "restart":
             # If agent restarts, also restart all bots to reset sessions
             for p in conf.get("channels", []):
                 bot_service = BOT_SERVICE.get(p, f"bot-{p}")

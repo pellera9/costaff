@@ -65,7 +65,7 @@ def set_coding_agent(req: dict, auth: bool = Depends(AuthManager.verify_token)):
                     cmd_base + ["stop", "coding-agent", "mcp-coding"],
                     check=False, cwd=compose_cwd
                 )
-            DockerManager.run_action("costaff-agent", "restart")
+            DockerManager.run_action("costaff-agent-costaff", "restart")
         threading.Thread(target=_apply_docker, daemon=True).start()
 
     return {"status": "ok", "coding_agent_enabled": conf["coding_agent_enabled"]}
@@ -246,7 +246,7 @@ def update_agent_mcp_config(req: AgentMCPConfigRequest, auth: bool = Depends(Aut
         threading.Thread(target=_restart_ext_agent, daemon=True).start()
     else:
         # Internal agent (costaff-agent, coding-agent legacy, etc.)
-        docker_name_map = {"costaff_agent": "costaff-agent", "coding_agent": "coding-agent"}
+        docker_name_map = {"costaff_agent": "costaff-agent-costaff", "coding_agent": "coding-agent"}
         docker_service = docker_name_map.get(req.agent_id)
         if docker_service:
             threading.Thread(target=DockerManager.run_action, args=(docker_service, "restart"), daemon=True).start()

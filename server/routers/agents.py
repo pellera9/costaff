@@ -81,7 +81,7 @@ def add_external_agent(req: ExternalAgentAddRequest, auth: bool = Depends(AuthMa
     }
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
-    threading.Thread(target=DockerManager.run_action, args=("costaff-agent", "restart"), daemon=True).start()
+    threading.Thread(target=DockerManager.run_action, args=("costaff-agent-costaff", "restart"), daemon=True).start()
     audit("agent.add", name=name, url=req.a2a_url)
     return {"status": "ok", "name": name}
 
@@ -106,7 +106,7 @@ def update_external_agent(name: str, req: ExternalAgentUpdateRequest, auth: bool
             conf["coding_agent_enabled"] = req.enabled
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
-    threading.Thread(target=DockerManager.run_action, args=("costaff-agent", "restart"), daemon=True).start()
+    threading.Thread(target=DockerManager.run_action, args=("costaff-agent-costaff", "restart"), daemon=True).start()
     audit("agent.update", name=name, changes={k: v for k, v in req.dict(exclude_unset=True).items()})
     return {"status": "ok"}
 
@@ -121,7 +121,7 @@ def remove_external_agent(name: str, auth: bool = Depends(AuthManager.verify_tok
     del conf["external_agents"][name]
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
-    threading.Thread(target=DockerManager.run_action, args=("costaff-agent", "restart"), daemon=True).start()
+    threading.Thread(target=DockerManager.run_action, args=("costaff-agent-costaff", "restart"), daemon=True).start()
     audit("agent.delete", name=name)
     return {"status": "ok"}
 

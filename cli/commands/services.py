@@ -13,7 +13,7 @@ console = Console()
 def start(build: bool = typer.Option(True, "--build/--no-build")):
     """Start CoStaff services."""
     conf = ConfigManager.get_config()
-    services = ["costaff-agent", "postgres"]
+    services = ["costaff-agent-costaff", "postgres"]
     for p in conf.get("channels", []):
         services.append(f"bot-{'telegram' if p=='tg' else 'discord' if p=='dc' else 'line'}")
     for m in conf.get("mcp", []):

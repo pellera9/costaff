@@ -131,7 +131,7 @@ def agent_remove(name: str = typer.Argument(..., help="Agent name to remove")):
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
     console.print(f"[green]Agent '{name}' removed.[/green]")
-    console.print("[yellow]Restart costaff-agent to apply: costaff start[/yellow]")
+    console.print("[yellow]Restart costaff-agent-costaff to apply: costaff start[/yellow]")
 
 
 @agent_app.command("enable")
@@ -147,7 +147,7 @@ def agent_enable(name: str = typer.Argument(...)):
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
     console.print(f"[green]Agent '{name}' enabled.[/green]")
-    console.print("[yellow]Restart costaff-agent to apply changes.[/yellow]")
+    console.print("[yellow]Restart costaff-agent-costaff to apply changes.[/yellow]")
 
 
 @agent_app.command("disable")
@@ -163,7 +163,7 @@ def agent_disable(name: str = typer.Argument(...)):
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
     console.print(f"[green]Agent '{name}' disabled.[/green]")
-    console.print("[yellow]Restart costaff-agent to apply changes.[/yellow]")
+    console.print("[yellow]Restart costaff-agent-costaff to apply changes.[/yellow]")
 
 
 @agent_app.command("restart")
@@ -207,7 +207,7 @@ DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview"
 
 # core agent env var (not in config.json external_agents)
 _CORE_AGENT = {
-    "name": "costaff-agent",
+    "name": "costaff-agent-costaff",
     "model_env_var": "COSTAFF_AGENT_GEMINI_MODEL",
     "provider_env_var": "COSTAFF_AGENT_MODEL_PROVIDER",
 }
@@ -273,7 +273,7 @@ def agent_model(
         # core agent
         core_provider = _read_env_key(env_path, _CORE_AGENT["provider_env_var"]) or global_provider
         core_model = _read_env_key(env_path, _CORE_AGENT["model_env_var"]) or "gemini-2.5-flash"
-        table.add_row("costaff-agent (core)", core_provider, core_model, "—")
+        table.add_row("costaff-agent-costaff (core)", core_provider, core_model, "—")
 
         for agent_name, agent_conf in agents.items():
             p_var = agent_conf.get("provider_env_var", "")
@@ -298,7 +298,7 @@ def agent_model(
                 "model_env_var": agent_conf.get("model_env_var", ""),
                 "provider_env_var": agent_conf.get("provider_env_var", ""),
             })
-    elif name == "costaff-agent":
+    elif name == "costaff-agent-costaff":
         targets.append(_CORE_AGENT)
     else:
         if name not in agents:
@@ -365,7 +365,7 @@ def agent_model(
     agent_label = name or "all agents"
     console.print(f"[green]Model updated for {agent_label}: provider=[bold]{final_provider}[/bold], model=[bold]{final_model}[/bold][/green]")
 
-    if name and name != "costaff-agent" and agents.get(name, {}).get("type") == "github":
+    if name and name != "costaff-agent-costaff" and agents.get(name, {}).get("type") == "github":
         console.print(f"[yellow]Run 'costaff agent restart {name}' to apply changes.[/yellow]")
     else:
         console.print("[yellow]Run 'costaff start' or restart the affected agent to apply changes.[/yellow]")
