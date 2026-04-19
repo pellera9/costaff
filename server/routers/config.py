@@ -37,7 +37,7 @@ def set_coding_agent(req: dict, auth: bool = Depends(AuthManager.verify_token)):
         enabled = bool(req["enabled"])
         conf["coding_agent_enabled"] = enabled
         # Keep external_agents in sync
-        coding_a2a_url = os.getenv("CODING_A2A_INTERNAL_URL", "http://coding-agent:8081")
+        coding_a2a_url = os.getenv("CODING_A2A_INTERNAL_URL", "http://costaff-agent-coding:8081")
         conf.setdefault("external_agents", {}).setdefault("coding-agent", {
             "type": "github",
             "a2a_url": coding_a2a_url,

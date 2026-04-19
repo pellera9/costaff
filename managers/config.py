@@ -53,7 +53,7 @@ class ConfigManager:
         if not conf.get("coding_agent_enabled"):
             return False  # never enabled, nothing to migrate
         load_dotenv(PATHS["env"])
-        a2a_url = os.getenv("CODING_A2A_URL", "").strip() or os.getenv("CODING_A2A_INTERNAL_URL", "http://coding-agent:8081")
+        a2a_url = os.getenv("CODING_A2A_URL", "").strip() or os.getenv("CODING_A2A_INTERNAL_URL", "http://costaff-agent-coding:8081")
         conf.setdefault("external_agents", {})["coding-agent"] = {
             "type": "github",
             "a2a_url": a2a_url,
