@@ -40,7 +40,7 @@ def _wait_for_containers(container_names: list, timeout: int = 30):
 
 
 def start(build: bool = typer.Option(True, "--build/--no-build")):
-    """Start CoStaff services with correct tiered sequence."""
+    """Start CoStaff services with fine-grained tiered sequence."""
     conf = ConfigManager.get_config()
     compose_cwd = DockerManager.get_compose_cwd("docker-compose.yaml")
     main_compose = str(__import__("pathlib").Path(compose_cwd) / "docker-compose.yaml")
@@ -48,42 +48,27 @@ def start(build: bool = typer.Option(True, "--build/--no-build")):
     ConfigManager.update_mcp_urls()
     
     # Tier 1: Infrastructure (Postgres)
-    console.print("🚀 [bold]Step 1: Starting Infrastructure...[/bold]")
+    console.print("🚀 [bold]Step 1: Starting Infrastructure (Postgres)...[/bold]")
     infra_cmd = DockerManager.get_cmd() + ["-f", "docker-compose.yaml", "up", "-d", "postgres"]
     subprocess.run(infra_cmd, check=True, cwd=compose_cwd)
 
-    # Tier 2: External Agents & Channels (The Employees)
-    employee_containers = []
-    
-    # External Agents
+    # Tier 2: External Agents
+    agent_containers = []
     for name, entry in conf.get("external_agents", {}).items():
         if not entry.get("enabled"): continue
         fragment_path = entry.get("fragment_path")
         container_names = entry.get("container_names", [])
         if fragment_path and container_names:
-            console.print(f"🚀 [bold]Step 2: Starting Agent {name}...[/bold]")
+            console.print(f"🚀 [bold]Step 2: Starting External Agent {name}...[/bold]")
             agent_cmd = DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path, "up", "-d"]
             if build: agent_cmd.append("--build")
             agent_cmd.extend(container_names)
             subprocess.run(agent_cmd, cwd=compose_cwd)
-            employee_containers.extend(container_names)
+            agent_containers.extend(container_names)
 
-    # Dynamic Channels
-    for name, entry in conf.get("dynamic_channels", {}).items():
-        if not entry.get("enabled"): continue
-        fragment_path = entry.get("fragment_path")
-        container_names = entry.get("container_names", [])
-        if fragment_path and container_names:
-            console.print(f"🚀 [bold]Step 2: Starting Channel {name}...[/bold]")
-            ch_cmd = DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path, "up", "-d"]
-            if build: ch_cmd.append("--build")
-            ch_cmd.extend(container_names)
-            subprocess.run(ch_cmd, cwd=compose_cwd)
-            employee_containers.extend(container_names)
-
-    # Wait for Tier 2 to be ready
-    if employee_containers:
-        _wait_for_containers(employee_containers)
+    # Wait for External Agents to be ready
+    if agent_containers:
+        _wait_for_containers(agent_containers)
 
     # Tier 3: Core Agent (The Manager)
     console.print("🚀 [bold]Step 3: Starting CoStaff Manager...[/bold]")
@@ -92,8 +77,25 @@ def start(build: bool = typer.Option(True, "--build/--no-build")):
     if build: core_cmd.append("--build")
     core_cmd.extend(core_services)
     subprocess.run(core_cmd, check=True, cwd=compose_cwd)
+    
+    # Wait for Core Manager to be ready before starting channels
+    _wait_for_containers(core_services)
 
-    console.print("[bold green]SUCCESS: CoStaff started in correct sequence![/bold green]")
+    # Tier 4: Dynamic Channels
+    channel_containers = []
+    for name, entry in conf.get("dynamic_channels", {}).items():
+        if not entry.get("enabled"): continue
+        fragment_path = entry.get("fragment_path")
+        container_names = entry.get("container_names", [])
+        if fragment_path and container_names:
+            console.print(f"🚀 [bold]Step 4: Starting Channel {name}...[/bold]")
+            ch_cmd = DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path, "up", "-d"]
+            if build: ch_cmd.append("--build")
+            ch_cmd.extend(container_names)
+            subprocess.run(ch_cmd, cwd=compose_cwd)
+            channel_containers.extend(container_names)
+
+    console.print("[bold green]SUCCESS: CoStaff started in tiered sequence (Agents -> Manager -> Channels)![/bold green]")
 
 
 def stop():
