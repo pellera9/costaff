@@ -16,9 +16,6 @@ def start(build: bool = typer.Option(True, "--build/--no-build")):
     services = ["costaff-agent-costaff", "postgres"]
     for p in conf.get("channels", []):
         services.append(f"bot-{'telegram' if p=='tg' else 'discord' if p=='dc' else 'line'}")
-    for m in conf.get("mcp", []):
-        services.append(f"mcp-{m}")
-
     compose_cwd = DockerManager.get_compose_cwd("docker-compose.yaml")
     cmd = DockerManager.get_cmd() + ["-f", "docker-compose.yaml", "up", "-d", "--remove-orphans"]
     if build:
