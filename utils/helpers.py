@@ -354,11 +354,20 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
         src_compose = _yaml.safe_load(f)
     service_names = list(src_compose.get("services", {}).keys())
 
-    # Generate compose fragment
+    # Generate compose fragment — use container_name from repo if defined, else derive from service key
+    def _svc_to_container(svc, svc_def):
+        explicit = svc_def.get("container_name")
+        if explicit:
+            return explicit
+        return f"costaff-{svc}" if svc.startswith("costaff-") else f"costaff-{svc}"
+
+    a2a_container_name = _svc_to_container(a2a_service, src_compose["services"].get(a2a_service, {}))
+
     services_fragment = {}
     for svc in service_names:
-        ext_svc = f"costaff-{name}-{svc}" if svc != a2a_service else f"costaff-{name}"
-        svc_def = src_compose["services"][svc].copy()
+        src_def = src_compose["services"][svc]
+        ext_svc = _svc_to_container(svc, src_def)
+        svc_def = src_def.copy()
         # Rewrite build context to absolute path
         if "build" in svc_def:
             build = svc_def["build"]
@@ -375,16 +384,18 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
         # Inject fixed runtime vars into a2a service
         if svc == a2a_service:
             svc_def.setdefault("environment", [])
-            svc_def["environment"] += [f"PORT={port}", f"PUBLIC_HOST=costaff-{name}"]
+            svc_def["environment"] += [f"PORT={port}", f"PUBLIC_HOST={ext_svc}"]
             svc_def["ports"] = [f"127.0.0.1:{public_port}:{port}"]
-        # Rename depends_on references
+        # Rename depends_on references to use resolved container names
         if "depends_on" in svc_def:
             old_deps = svc_def["depends_on"]
             if isinstance(old_deps, list):
                 svc_def["depends_on"] = [
-                    f"costaff-{name}-{d}" if d != a2a_service else f"costaff-{name}"
+                    _svc_to_container(d, src_compose["services"].get(d, {}))
                     for d in old_deps
                 ]
+        # Force container_name to match the resolved name
+        svc_def["container_name"] = ext_svc
         services_fragment[ext_svc] = svc_def
 
     # Volumes: map agent-specific data volumes to the global costaff_data volume
@@ -457,7 +468,7 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
         "type": "github",
         "source_path": source_path,
         "fragment_path": fragment_path,
-        "a2a_url": f"http://costaff-{name}:{port}",
+        "a2a_url": f"http://{a2a_container_name}:{port}",
         "public_port": public_port,
         "description": description,
         "version": version,
