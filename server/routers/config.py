@@ -29,7 +29,7 @@ def get_api_config(auth: bool = Depends(AuthManager.verify_token)):
     return conf
 
 
-@router.post("/api/config/coding-agent")
+@router.post("/api/config/costaff-agent-coding")
 def set_coding_agent(req: dict, auth: bool = Depends(AuthManager.verify_token)):
     conf = ConfigManager.get_config()
     enabled_changed = "enabled" in req
@@ -38,13 +38,13 @@ def set_coding_agent(req: dict, auth: bool = Depends(AuthManager.verify_token)):
         conf["coding_agent_enabled"] = enabled
         # Keep external_agents in sync
         coding_a2a_url = os.getenv("CODING_A2A_INTERNAL_URL", "http://costaff-agent-coding:8081")
-        conf.setdefault("external_agents", {}).setdefault("coding-agent", {
+        conf.setdefault("external_agents", {}).setdefault("costaff-agent-coding", {
             "type": "github",
             "a2a_url": coding_a2a_url,
             "description": "寫程式並執行來解決需要計算、資料處理或程式邏輯的問題，回傳執行結果與產生的檔案路徑。",
             "container_names": ["costaff-agent-coding", "costaff-mcp-coding"],
         })["enabled"] = enabled
-        conf["external_agents"]["coding-agent"]["a2a_url"] = coding_a2a_url
+        conf["external_agents"]["costaff-agent-coding"]["a2a_url"] = coding_a2a_url
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
 
@@ -225,7 +225,7 @@ def update_agent_mcp_config(req: AgentMCPConfigRequest, auth: bool = Depends(Aut
             print(f"[MCP] Restarted external agent {ext_name} ({primary_service})")
         threading.Thread(target=_restart_ext_agent, daemon=True).start()
     else:
-        # Internal agent (costaff-agent, coding-agent legacy, etc.)
+        # Internal agent (costaff-agent, costaff-agent-coding legacy, etc.)
         docker_name_map = {"costaff_agent": "costaff-agent-costaff", "coding_agent": "costaff-agent-coding"}
         docker_service = docker_name_map.get(req.agent_id)
         if docker_service:

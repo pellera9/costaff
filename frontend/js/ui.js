@@ -1245,7 +1245,7 @@ const UI = {
     // Map Docker container name (may include project prefix) to config agent_id
     _agentConfigId(dockerName) {
         if (dockerName.includes('costaff-agent') || dockerName.includes('costaff_agent')) return 'costaff_agent';
-        if (dockerName.includes('coding-agent') || dockerName.includes('coding_agent')) return 'coding_agent';
+        if (dockerName.includes('costaff-agent-coding') || dockerName.includes('coding_agent')) return 'coding_agent';
         return dockerName.replace(/-/g, '_');
     },
 

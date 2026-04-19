@@ -48,13 +48,13 @@ class ConfigManager:
     @staticmethod
     def _migrate_coding_agent(conf: Dict) -> bool:
         """One-time migration: coding_agent_enabled → external_agents entry. Returns True if migrated."""
-        if "coding-agent" in conf.get("external_agents", {}):
+        if "costaff-agent-coding" in conf.get("external_agents", {}):
             return False  # already migrated
         if not conf.get("coding_agent_enabled"):
             return False  # never enabled, nothing to migrate
         load_dotenv(PATHS["env"])
         a2a_url = os.getenv("CODING_A2A_URL", "").strip() or os.getenv("CODING_A2A_INTERNAL_URL", "http://costaff-agent-coding:8081")
-        conf.setdefault("external_agents", {})["coding-agent"] = {
+        conf.setdefault("external_agents", {})["costaff-agent-coding"] = {
             "type": "github",
             "a2a_url": a2a_url,
             "description": "寫程式並執行來解決需要計算、資料處理或程式邏輯的問題，回傳執行結果與產生的檔案路徑。",

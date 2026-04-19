@@ -28,7 +28,7 @@ def list_external_agents(auth: bool = Depends(AuthManager.verify_token)):
     conf = ConfigManager.get_config()
     result = []
     for name, agent in conf.get("external_agents", {}).items():
-        # Skip legacy migrated entries that have no public_port (old compose-managed coding-agent)
+        # Skip legacy migrated entries that have no public_port (old compose-managed costaff-agent-coding)
         if agent.get("type") == "github" and not agent.get("public_port"):
             continue
         health = False
@@ -102,7 +102,7 @@ def update_external_agent(name: str, req: ExternalAgentUpdateRequest, auth: bool
         agent["description"] = req.description
     if req.enabled is not None:
         agent["enabled"] = req.enabled
-        if name == "coding-agent":
+        if name == "costaff-agent-coding":
             conf["coding_agent_enabled"] = req.enabled
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()

@@ -129,7 +129,7 @@ def agent_remove(name: str = typer.Argument(..., help="Agent name to remove")):
     if not questionary.confirm(f"Remove agent '{name}'?").ask():
         return
     del conf["external_agents"][name]
-    if name == "coding-agent":
+    if name == "costaff-agent-coding":
         conf["coding_agent_enabled"] = False
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
@@ -145,7 +145,7 @@ def agent_enable(name: str = typer.Argument(...)):
         console.print(f"[red]Error: Agent '{name}' not found.[/red]")
         raise typer.Exit(1)
     conf["external_agents"][name]["enabled"] = True
-    if name == "coding-agent":
+    if name == "costaff-agent-coding":
         conf["coding_agent_enabled"] = True
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
@@ -161,7 +161,7 @@ def agent_disable(name: str = typer.Argument(...)):
         console.print(f"[red]Error: Agent '{name}' not found.[/red]")
         raise typer.Exit(1)
     conf["external_agents"][name]["enabled"] = False
-    if name == "coding-agent":
+    if name == "costaff-agent-coding":
         conf["coding_agent_enabled"] = False
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()

@@ -448,7 +448,7 @@ def get_service_logs(service: str, tail: int = 100, auth: bool = Depends(AuthMan
     conf = ConfigManager.get_config()
     ext_agents = conf.get("external_agents", {})
 
-    # Resolve external agent config key (e.g. "coding-agent") → actual Docker container name
+    # Resolve external agent config key (e.g. "costaff-agent-coding") → actual Docker container name
     # Docker Compose adds project prefix + replica suffix, so use `docker ps --filter` to find it
     actual_service = service
     if service in ext_agents:

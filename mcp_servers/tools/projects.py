@@ -388,7 +388,7 @@ async def update_task_queue(user_id: str, assigned_agent: str, task_ids_ordered:
         updated_count = 0
         first_task_id = None
         
-        # Normalize agent name (handle coding-agent vs coding_agent)
+        # Normalize agent name (handle costaff-agent-coding vs coding_agent)
         norm_agent = assigned_agent.replace("-", "_")
 
         for idx, task_id in enumerate(task_ids_ordered):
