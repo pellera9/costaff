@@ -161,7 +161,7 @@ def _prompt_and_write_plugin_env(manifest: dict, fragment_dir: str, predefined_e
             if not val:
                 raise ValueError(f"Required env var {k} not provided")
             plugin_envs[k] = val
-        elif k not in predefined_envs:
+        elif not predefined_envs or k not in predefined_envs:
             update = questionary.confirm(f"[Required] {k} is already set. Update?", default=False).ask()
             if update:
                 val = questionary.password(f"{k}:", default="").ask()
