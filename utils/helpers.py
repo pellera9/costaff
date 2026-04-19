@@ -357,7 +357,7 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
     # Generate compose fragment
     services_fragment = {}
     for svc in service_names:
-        ext_svc = f"costaff-ext-{name}-{svc}" if svc != a2a_service else f"costaff-ext-{name}"
+        ext_svc = f"costaff-{name}-{svc}" if svc != a2a_service else f"costaff-{name}"
         svc_def = src_compose["services"][svc].copy()
         # Rewrite build context to absolute path
         if "build" in svc_def:
@@ -375,14 +375,14 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
         # Inject fixed runtime vars into a2a service
         if svc == a2a_service:
             svc_def.setdefault("environment", [])
-            svc_def["environment"] += [f"PORT={port}", f"PUBLIC_HOST=costaff-ext-{name}"]
+            svc_def["environment"] += [f"PORT={port}", f"PUBLIC_HOST=costaff-{name}"]
             svc_def["ports"] = [f"127.0.0.1:{public_port}:{port}"]
         # Rename depends_on references
         if "depends_on" in svc_def:
             old_deps = svc_def["depends_on"]
             if isinstance(old_deps, list):
                 svc_def["depends_on"] = [
-                    f"costaff-ext-{name}-{d}" if d != a2a_service else f"costaff-ext-{name}"
+                    f"costaff-{name}-{d}" if d != a2a_service else f"costaff-{name}"
                     for d in old_deps
                 ]
         services_fragment[ext_svc] = svc_def
@@ -457,7 +457,7 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
         "type": "github",
         "source_path": source_path,
         "fragment_path": fragment_path,
-        "a2a_url": f"http://costaff-ext-{name}:{port}",
+        "a2a_url": f"http://costaff-{name}:{port}",
         "public_port": public_port,
         "description": description,
         "version": version,

@@ -179,7 +179,7 @@ def agent_restart(name: str = typer.Argument(..., help="Agent name to restart"))
         raise typer.Exit(1)
 
     fragment_path = agent_conf["fragment_path"]
-    container_names = agent_conf.get("container_names", [f"costaff-ext-{name}"])
+    container_names = agent_conf.get("container_names", [f"costaff-{name}"])
     main_compose = os.path.join(_runtime_root, "docker-compose.yaml")
     load_dotenv(PATHS["env"], override=True)
 
@@ -388,7 +388,7 @@ def agent_rebuild(
         raise typer.Exit(1)
 
     fragment_path = agent_conf["fragment_path"]
-    container_names = agent_conf.get("container_names", [f"costaff-ext-{name}"])
+    container_names = agent_conf.get("container_names", [f"costaff-{name}"])
     source_path = agent_conf.get("source_path", "(unknown)")
     main_compose = os.path.join(_runtime_root, "docker-compose.yaml")
     load_dotenv(PATHS["env"], override=True)
