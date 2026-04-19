@@ -161,7 +161,7 @@ def _prompt_and_write_plugin_env(manifest: dict, fragment_dir: str, predefined_e
             if not val:
                 raise ValueError(f"Required env var {k} not provided")
             plugin_envs[k] = val
-        else:
+        elif k not in predefined_envs:
             update = questionary.confirm(f"[Required] {k} is already set. Update?", default=False).ask()
             if update:
                 val = questionary.password(f"{k}:", default="").ask()
@@ -169,11 +169,11 @@ def _prompt_and_write_plugin_env(manifest: dict, fragment_dir: str, predefined_e
                     plugin_envs[k] = val
 
     # Model config — only for agents (manifest has model_env_var)
-    if manifest.get("model_env_var"):
+    if manifest.get("model_env_var") and sys.stdin.isatty():
         plugin_envs = _prompt_model_config(manifest, plugin_envs, core_envs)
 
     # Optional vars — ask if user wants to configure
-    if env_optional:
+    if env_optional and sys.stdin.isatty():
         configure_optional = questionary.confirm("Configure optional variables?", default=False).ask()
         if configure_optional:
             for k in env_optional:
