@@ -57,9 +57,9 @@ def agent_add(
     if github:
         target_src = os.path.join(_runtime_root, "src", name)
         if os.path.exists(target_src):
-            if not questionary.confirm(f"Source directory {target_src} already exists. Overwrite?").ask():
+            import shutil, sys
+            if sys.stdin.isatty() and not questionary.confirm(f"Source directory {target_src} already exists. Overwrite?").ask():
                 raise typer.Exit(0)
-            import shutil
             shutil.rmtree(target_src)
         
         os.makedirs(os.path.dirname(target_src), exist_ok=True)
