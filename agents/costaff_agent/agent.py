@@ -177,13 +177,8 @@ if sub_agents:
         if meta.get("skills"):
             skill_list = ", ".join([f"`{s}`" for s in meta["skills"]])
             roster_lines.append(f"- **具備技能**: {skill_list}")
-        
-        if "coding" in a2a_name:
-            roster_lines.append("- **核心能力**: [CRITICAL] 這是你唯一具備編寫程式、處理檔案、修復 CSV 與執行數學運算的能力來源。")
-        if "ba_agent" in a2a_name or "business" in a2a_name:
-            roster_lines.append("- **核心能力**: [CRITICAL] 這是你唯一具備生成視覺化圖表與 BI 報告的能力來源。")
             
-        roster_lines.append(f"- **調用指令**: 只要任務涉及上述能力，你「必須」立即呼叫 `transfer_to_agent(agent_name='{a2a_name}')`。")
+        roster_lines.append(f"- **調用指令**: 只要任務涉及上述「職責描述」中的專長，你「必須」優先調用此專家：`transfer_to_agent(agent_name='{a2a_name}')`。")
         roster_lines.append("")
     
     display_names_block = "\n".join(roster_lines)
