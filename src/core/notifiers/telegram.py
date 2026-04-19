@@ -40,6 +40,11 @@ def send_telegram_notification(recipient_id: str, message: str, session_id: str 
     import re
     message = re.sub(r'<br\s*/?>', '\n', message, flags=re.IGNORECASE)
 
+    # Telegram max message length is 4096 chars
+    MAX_LEN = 4096
+    if len(message) > MAX_LEN:
+        message = message[:MAX_LEN - 100] + "\n\n...(訊息過長，已截斷)"
+
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {"chat_id": final_recipient, "text": message, "parse_mode": "HTML"}
 
