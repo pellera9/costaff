@@ -39,7 +39,7 @@ def start(build: bool = typer.Option(True, "--build/--no-build")):
         main_compose = str(__import__("pathlib").Path(compose_cwd) / "docker-compose.yaml")
         ch_cmd = DockerManager.get_cmd() + [
             "-f", main_compose, "-f", fragment_path,
-            "up", "-d", "--remove-orphans",
+            "up", "-d",
         ] + container_names
         console.print(f"Starting channel {name}...")
         subprocess.run(ch_cmd, cwd=compose_cwd)
