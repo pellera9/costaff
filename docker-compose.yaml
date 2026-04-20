@@ -51,4 +51,6 @@ services:
 
 volumes:
   costaff_data:
+    name: costaff_data
   costaff_db_data:
+    name: costaff_db_data
