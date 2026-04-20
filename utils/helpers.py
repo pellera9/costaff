@@ -400,25 +400,46 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
 
     # Volumes: map agent-specific data volumes to the global costaff_data volume
     SHARED_VOLUME = "costaff_data"
+    AGENT_WORKSPACE = f"/app/data/agent-{name}"
+    # Generate a unique environment variable key for this agent
+    # e.g., agent-coding -> AGENT_CODING_WORKSPACE_DIR
+    UNIQUE_ENV_KEY = f"AGENT_{name.upper().replace('-', '_')}_WORKSPACE_DIR"
     
     for svc_name, svc_def in services_fragment.items():
+        # [NEW] Enforce standardized workspace environment variable
+        svc_def.setdefault("environment", [])
+        updated_envs = []
+        
+        # 1. Update existing legacy workspace-related variables (if any)
+        # We redirect them to the new standard path for backward compatibility
+        for env in svc_def["environment"]:
+            if any(k in env for k in ["WORKSPACE_DIR", "REPORTS_DIR", "DATA_DIR"]):
+                key = env.split("=")[0]
+                updated_envs.append(f"{key}={AGENT_WORKSPACE}")
+            else:
+                updated_envs.append(env)
+        
+        # 2. Inject the UNIQUE standard AGENT_{NAME}_WORKSPACE_DIR
+        if not any(f"{UNIQUE_ENV_KEY}=" in e for e in updated_envs):
+            updated_envs.append(f"{UNIQUE_ENV_KEY}={AGENT_WORKSPACE}")
+            
+        # 3. Also inject a generic AGENT_WORKSPACE_DIR for internal agent code usage
+        if not any("AGENT_WORKSPACE_DIR=" in e for e in updated_envs):
+            updated_envs.append(f"AGENT_WORKSPACE_DIR={AGENT_WORKSPACE}")
+        
+        svc_def["environment"] = updated_envs
+
         new_vols = []
-        has_shared_mount = False
+        # Mount the entire shared volume to /app/data for cross-expert access
+        new_vols.append(f"{SHARED_VOLUME}:/app/data")
         
         for vol in svc_def.get("volumes", []):
             if ":" in str(vol):
                 local_part, container_part = vol.split(":", 1)
-                # If any volume maps to /app/data, redirect it to SHARED_VOLUME
+                # Remove agent-specific mounts in app/data, replaced by root /app/data
                 if container_part.startswith("/app/data"):
-                    new_vols.append(f"{SHARED_VOLUME}:{container_part}")
-                    has_shared_mount = True
                     continue
             new_vols.append(vol)
-        
-        # [NEW] Proactive injection: If no shared workspace is defined, add it.
-        # This ensures even "lazy" agents can see the shared data.
-        if not has_shared_mount:
-            new_vols.append(f"{SHARED_VOLUME}:/app/data")
             
         svc_def["volumes"] = new_vols
 
@@ -430,7 +451,7 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
     fragment = {
         "services": services_fragment,
         "networks": {"costaff_default": {"external": True}},
-        "volumes": {SHARED_VOLUME: {"external": True}},
+        "volumes": {SHARED_VOLUME: {"external": True, "name": SHARED_VOLUME}},
     }
     fragment_path = os.path.join(fragment_dir, "compose-fragment.yaml")
     with open(fragment_path, "w") as f:
