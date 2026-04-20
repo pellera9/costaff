@@ -264,6 +264,9 @@ def _write_channel_fragment(name: str, source_path: str, public_port: int, plugi
     }
     fragment_dir = os.path.dirname(plugin_env_path)
     fragment_path = os.path.join(fragment_dir, "compose-fragment.yaml")
+    if os.path.exists(fragment_path):
+        os.remove(fragment_path)
+
     with open(fragment_path, "w") as f:
         _yaml.dump(fragment, f, default_flow_style=False, allow_unicode=True)
 
@@ -303,7 +306,7 @@ def _deploy_local_channel(name: str, source_path: str, conf: dict, predefined_en
         cmd = DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path, "build"] + ext_services
         console.print(f"Building channel {name}...")
     else:
-        cmd = DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path, "up", "-d", "--build"] + ext_services
+        cmd = DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path, "up", "-d", "--build", "--force-recreate"]
         console.print(f"Building and starting channel {name}...")
     subprocess.run(cmd, cwd=_project_root)
 
@@ -453,17 +456,23 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
         "networks": {"costaff_default": {"external": True}},
         "volumes": {SHARED_VOLUME: {"external": True, "name": SHARED_VOLUME}},
     }
+    # 1. Clean up old fragment to ensure fresh generation
+    fragment_dir = os.path.dirname(plugin_env_path)
     fragment_path = os.path.join(fragment_dir, "compose-fragment.yaml")
+    if os.path.exists(fragment_path):
+        os.remove(fragment_path)
+
     with open(fragment_path, "w") as f:
         _yaml.dump(fragment, f, default_flow_style=False, allow_unicode=True)
 
-    # Build & start
+    # 2. Build & start
     import httpx
     from rich.console import Console
     console = Console()
     main_compose = os.path.join(_runtime_root, "docker-compose.yaml")
     ext_services = list(services_fragment.keys())
-    cmd = DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path, "up", "-d", "--build"] + ext_services
+    # Add --force-recreate to ensure new environment variables are applied
+    cmd = DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path, "up", "-d", "--build", "--force-recreate"]
     console.print(f"Building and starting {name}...")
     import subprocess
     result = subprocess.run(cmd, cwd=_project_root)
