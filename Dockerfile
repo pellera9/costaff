@@ -15,5 +15,4 @@ COPY . .
 
 ENV PYTHONPATH=/app
 
-# Command will be overridden by docker-compose
-CMD ["python", "src/mcp/server.py"]
+CMD ["python", "mcp_servers/server.py"]

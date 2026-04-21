@@ -1,7 +1,7 @@
 """
 CoStaff CLI entry point.
 
-setup.py entry point: cst=costaff:app
+setup.py entry point: costaff=costaff:app
 """
 import sys
 from pathlib import Path

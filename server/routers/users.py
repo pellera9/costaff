@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from typing import Any, Dict
@@ -492,7 +493,7 @@ def get_service_logs(service: str, tail: int = 100, auth: bool = Depends(AuthMan
 async def proxy_run_sse(req: dict = Body(...), auth: bool = Depends(AuthManager.verify_token)):
     async def gen():
         async with httpx.AsyncClient(timeout=None) as client:
-            async with client.stream("POST", "http://localhost:18080/run_sse", json=req) as r:
+            async with client.stream("POST", f"http://localhost:{os.getenv('COSTAFF_AGENT_PORT', '18080')}/run_sse", json=req) as r:
                 async for line in r.aiter_lines():
                     if line:
                         yield f"{line}\n\n"
@@ -502,5 +503,5 @@ async def proxy_run_sse(req: dict = Body(...), auth: bool = Depends(AuthManager.
 @router.post("/api/proxy/sessions/{app_name}/{user_id}/{session_id}")
 async def proxy_create_session(app_name: str, user_id: str, session_id: str, auth: bool = Depends(AuthManager.verify_token)):
     async with httpx.AsyncClient() as client:
-        res = await client.post(f"http://localhost:18080/apps/{app_name}/users/{user_id}/sessions/{session_id}", json={"state": {}})
+        res = await client.post(f"http://localhost:{os.getenv('COSTAFF_AGENT_PORT', '18080')}/apps/{app_name}/users/{user_id}/sessions/{session_id}", json={"state": {}})
         return res.json()

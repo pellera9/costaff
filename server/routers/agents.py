@@ -1,3 +1,4 @@
+import os
 import re
 import threading
 
@@ -18,7 +19,7 @@ router = APIRouter()
 def get_available_agents(auth: bool = Depends(AuthManager.verify_token)):
     try:
         with httpx.Client(timeout=5.0) as client:
-            return client.get("http://localhost:18080/list-apps").json()
+            return client.get(f"http://localhost:{os.getenv('COSTAFF_AGENT_PORT', '18080')}/list-apps").json()
     except Exception:
         return []
 

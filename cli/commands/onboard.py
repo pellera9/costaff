@@ -58,7 +58,7 @@ def onboard():
         set_key(PATHS["env"], "COSTAFF_AGENT_MODEL_PROVIDER", "litellm")
         model_name = questionary.text("LiteLLM Model Name (e.g., ollama/llama3):", default="ollama/llama3").ask()
         if model_name:
-            set_key(PATHS["env"], "LITELLM_MODEL", model_name)
+            set_key(PATHS["env"], "LITELLM_MODEL_NAME", model_name)
         api_base = questionary.text("LiteLLM API Base URL (e.g., http://host.docker.internal:11434 for Ollama):").ask()
         if api_base:
             set_key(PATHS["env"], "LITELLM_API_BASE", api_base)

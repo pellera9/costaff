@@ -275,14 +275,14 @@ def agent_model(
 
         # core agent
         core_provider = _read_env_key(env_path, _CORE_AGENT["provider_env_var"]) or global_provider
-        core_model = _read_env_key(env_path, _CORE_AGENT["model_env_var"]) or "gemini-2.5-flash"
+        core_model = _read_env_key(env_path, _CORE_AGENT["model_env_var"]) or "gemini-3-flash-preview"
         table.add_row("costaff-agent-costaff (core)", core_provider, core_model, "—")
 
         for agent_name, agent_conf in agents.items():
             p_var = agent_conf.get("provider_env_var", "")
             m_var = agent_conf.get("model_env_var", "")
             p_val = (_read_env_key(env_path, p_var) if p_var else "") or global_provider
-            m_val = (_read_env_key(env_path, m_var) if m_var else "") or "gemini-2.5-flash"
+            m_val = (_read_env_key(env_path, m_var) if m_var else "") or "gemini-3-flash-preview"
             api = _read_env_key(env_path, "LITELLM_API_BASE") if p_val == "litellm" else "—"
             table.add_row(agent_name, p_val, m_val, api or "—")
 

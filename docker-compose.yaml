@@ -54,3 +54,7 @@ volumes:
     name: costaff_data
   costaff_db_data:
     name: costaff_db_data
+
+networks:
+  default:
+    name: costaff_default
