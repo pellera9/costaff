@@ -62,50 +62,40 @@ if model_provider == "litellm":
 else:
     selected_model = model_name
 
-# --- Sub-Agents (Consuming via A2A per Quickstart) ---
+# --- Sub-Agents (Consuming via A2A) ---
 sub_agents = []
 agent_meta_cache = {} 
 raw_agents = os.getenv("EXTERNAL_AGENTS_CONFIG", "").strip()
 
 if raw_agents:
     try:
-        # Compatibility hack for A2A SDK version mismatch if needed
-        try:
-            import a2a.client
-            if not hasattr(a2a.client, 'ClientEvent'):
-                logger.info("Mocking missing a2a.client.ClientEvent for SDK compatibility")
-                class MockEvent: pass
-                a2a.client.ClientEvent = MockEvent
-        except ImportError: pass
-
+        # Standard imports after requirements.txt is fixed
         from google.adk.agents.remote_a2a_agent import RemoteA2aAgent, AGENT_CARD_WELL_KNOWN_PATH
         
         agents_config = json.loads(raw_agents)
         for agent_name, agent_cfg in agents_config.items():
             a2a_url = agent_cfg.get("a2a_url", "").strip()
-            # Use provided description if available, fall back to default
             description = agent_cfg.get("description", f"Specialist: {agent_name}").strip()
             
             if not a2a_url: continue
             
             try:
                 a2a_name = agent_name.replace("-", "_")
-                logger.info(f"Consuming remote agent '{a2a_name}' via A2A at {a2a_url}")
+                logger.info(f"Registering sub-agent '{a2a_name}' via A2A at {a2a_url}")
                 
-                # Following A2A Quickstart (Consuming) logic
                 remote_agent = RemoteA2aAgent(
                     name=a2a_name,
                     description=description,
                     agent_card=f"{a2a_url.rstrip('/')}{AGENT_CARD_WELL_KNOWN_PATH}",
-                    use_legacy=False, # Use the new reliable A2A integration
+                    use_legacy=False,
                 )
                 sub_agents.append(remote_agent)
                 agent_meta_cache[a2a_name] = {"description": description}
-                logger.info(f"Successfully connected to sub-agent '{a2a_name}'")
+                logger.info(f"Successfully registered sub-agent '{a2a_name}'")
             except Exception as e:
-                logger.error(f"Could not initialize sub-agent '{agent_name}': {e}")
+                logger.error(f"Failed to load sub-agent '{agent_name}': {e}")
     except Exception as e:
-        logger.error(f"A2A Sub-agent system failed to initialize: {e}")
+        logger.error(f"A2A system failure: {e}")
 
 # Construct dynamic instruction
 import re
@@ -124,7 +114,7 @@ if sub_agents:
 else:
     display_names_block = ""
     instruction_body = re.sub(r"<!--\s*BEGIN_SUB_AGENTS\s*-->.*?<!--\s*END_SUB_AGENTS\s*-->", "", AGENT_INSTRUCTION, flags=re.DOTALL)
-    instruction_body = "\n# NO SUB-AGENTS\nOnly handle tasks yourself.\n\n" + instruction_body
+    instruction_body = "\n# NO SUB-AGENTS\nYou work alone.\n\n" + instruction_body
 
 instruction = instruction_body.replace("{SUB_AGENT_DISPLAY_NAMES}", display_names_block).replace("{PREFERRED_LANGUAGE}", preferred_lang)
 

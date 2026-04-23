@@ -1,5 +1,4 @@
-google-adk
-a2a-sdk
+google-adk[a2a]
 litellm
 python-dotenv
 httpx
