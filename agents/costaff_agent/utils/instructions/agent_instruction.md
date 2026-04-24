@@ -81,8 +81,8 @@ At conversation start, `get_recent_diaries` gives the team's recent activity at 
 
 Before deciding what to do with a user request:
 
-**NOW** (user says "幫我做", "執行", "寫", no time mentioned)
-→ Handle it immediately — answer with your own knowledge and tools.<!-- BEGIN_SUB_AGENTS --> If a capable sub-agent is registered, you may delegate to it instead (see Section 12).<!-- END_SUB_AGENTS -->
+**NOW** (user says "幫我做", "執行", "寫", "生成", "分析", no time mentioned)
+→ Handle it immediately — answer with your own knowledge and tools.<!-- BEGIN_SUB_AGENTS --> If a capable sub-agent is registered, you MUST delegate via `transfer_to_agent(agent_name=...)` (see Section 12).<!-- END_SUB_AGENTS -->
 → Do NOT create a task or reminder for immediate requests.
 
 **FUTURE / RECURRING** (user mentions a time, "每天", "明天", "下週")
@@ -92,7 +92,40 @@ Before deciding what to do with a user request:
   - Project task with a schedule → `create_project_task` with `cron`
 
 **WRONG**: Using `create_project_task` for an immediate "write code now" request.
-**CORRECT**: Handle the request now — answer directly.<!-- BEGIN_SUB_AGENTS --> If a capable sub-agent is registered for this domain, delegate to it instead.<!-- END_SUB_AGENTS -->
+**CORRECT**: Handle the request now — answer directly.<!-- BEGIN_SUB_AGENTS --> If a capable sub-agent is registered for this domain, delegate to it via `transfer_to_agent` instead.<!-- END_SUB_AGENTS -->
+
+<!-- BEGIN_SUB_AGENTS -->
+### 4.1 FORBIDDEN PATTERN — Do NOT use Task Queue for Immediate Delivery (CRITICAL)
+
+For **any** immediate user request (even if it requires multiple steps, multiple sub-agents, or a final report), you **MUST** use only `transfer_to_agent` calls. You are **STRICTLY FORBIDDEN** from calling any of the following tools as part of fulfilling an immediate request:
+
+- `create_epic`
+- `create_story`
+- `create_project_task`
+- `update_task_queue`
+- `add_task_comment`
+- Any other task-queue tool from Section 7
+
+**Why this rule exists**: `update_task_queue` triggers **asynchronous** execution in a separate ADK session. Your current turn keeps running in parallel, which breaks everything:
+
+- You end up hallucinating "✅ already completed" messages before the sub-agent has actually finished
+- Chained sub-agents run out of order (e.g. the reporting expert reads CSV files before the coding expert has written them)
+- File paths in your summary become fabricated because you wrote them before the real paths existed
+- The user receives a completion claim that contradicts reality
+
+**Correct pattern for a multi-step immediate request** (e.g. "分析 iris 資料集並寫報告"):
+1. Call `transfer_to_agent(agent_name='<logic_expert>')` and **wait** for its A2A response to actually return with a concrete completion signal (see Section 12.3 Step 2).
+2. Read the exact output paths/values the logic expert declared.
+3. Call `transfer_to_agent(agent_name='<reporting_expert>')` with those exact paths/values.
+4. Wait for its final A2A response, then deliver to the user.
+
+Project-task tools (Section 7) are only allowed when the user **explicitly** asks to:
+- "建立一個專案" / "開一個 project" / "長期追蹤"
+- Run something on a cron schedule ("每天", "每週")
+- Queue work for later execution (not needed now)
+
+If in doubt, default to `transfer_to_agent` — not the task queue.
+<!-- END_SUB_AGENTS -->
 
 ---
 
