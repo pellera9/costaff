@@ -4,7 +4,7 @@ services:
     container_name: costaff-mcp-costaff
     restart: always
     volumes:
-      - costaff_data:/app/data
+      - ${COSTAFF_WORKSPACE_DIR}:/app/data
     env_file:
       - .env
     environment:
@@ -26,7 +26,7 @@ services:
     env_file:
       - .env
     volumes:
-      - costaff_data:/app/data
+      - ${COSTAFF_WORKSPACE_DIR}/shared:/app/data/shared
     environment:
       - MCP_SERVER_URLS=${MCP_SERVER_URLS}
       - ADK_SESSION_SERVICE_URI=${ADK_SESSION_SERVICE_URI:?ADK_SESSION_SERVICE_URI must be set in .env}
@@ -50,12 +50,6 @@ services:
       - costaff_db_data:/var/lib/postgresql/data
 
 volumes:
-  costaff_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ${COSTAFF_WORKSPACE_DIR}
   costaff_db_data:
     name: costaff_db_data
 

@@ -221,14 +221,16 @@ def _write_channel_fragment(name: str, source_path: str, public_port: int, plugi
     with open(compose_path) as f:
         src_compose = _yaml.safe_load(f)
 
-    SHARED_VOLUME = "costaff_data"
+    # Plan B: channels get shared bind mount only (read agent results, accept uploads)
+    shared_host_dir = os.path.join(_workspace_root, "shared")
+    os.makedirs(shared_host_dir, exist_ok=True)
+    CONTAINER_SHARED = "/app/data/shared"
+
     services_fragment = {}
     for svc, svc_def in src_compose.get("services", {}).items():
         ext_svc = f"costaff-channel-{name}-{svc}" if svc != a2a_service else f"costaff-channel-{name}"
         svc_def = svc_def.copy()
-        # Force the container_name to match the service key so downstream tooling
-        # (doctor, rebuild, logs) can find containers by the names stored in config.json,
-        # regardless of what the source repo's docker-compose.yaml specifies.
+        # Force container_name so downstream tooling can find containers by names in config.json
         svc_def["container_name"] = ext_svc
         if "build" in svc_def:
             build = svc_def["build"]
@@ -247,15 +249,27 @@ def _write_channel_fragment(name: str, source_path: str, public_port: int, plugi
             svc_def["environment"] += [f"PORT={port}"]
             svc_def["ports"] = [f"0.0.0.0:{public_port}:{port}"]
 
+        # Inject SHARED_DIR env var
+        env_list = svc_def.get("environment", [])
+        if not any("SHARED_DIR=" in e for e in env_list if isinstance(e, str)):
+            env_list.append(f"SHARED_DIR={CONTAINER_SHARED}")
+        svc_def["environment"] = env_list
+
+        # Replace all /app/data mounts with shared bind mount
         new_vols = []
+        has_shared = False
         for vol in svc_def.get("volumes", []):
             if ":" in str(vol):
                 local_part, container_part = vol.split(":", 1)
                 if not local_part.startswith("/") and not local_part.startswith("./"):
                     if container_part.startswith("/app/data"):
-                        new_vols.append(f"{SHARED_VOLUME}:{container_part}")
+                        if not has_shared:
+                            new_vols.append(f"{shared_host_dir}:{CONTAINER_SHARED}")
+                            has_shared = True
                         continue
             new_vols.append(vol)
+        if not has_shared:
+            new_vols.append(f"{shared_host_dir}:{CONTAINER_SHARED}")
         svc_def["volumes"] = new_vols
         svc_def["env_file"] = [PATHS["env"], plugin_env_path]
         services_fragment[ext_svc] = svc_def
@@ -263,7 +277,6 @@ def _write_channel_fragment(name: str, source_path: str, public_port: int, plugi
     fragment = {
         "services": services_fragment,
         "networks": {"costaff_default": {"external": True}},
-        "volumes": {SHARED_VOLUME: {"external": True}},
     }
     fragment_dir = os.path.dirname(plugin_env_path)
     fragment_path = os.path.join(fragment_dir, "compose-fragment.yaml")
@@ -328,7 +341,6 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
     """Build and start a local-path agent following CoStaff Agent Convention."""
     import yaml as _yaml
     from dotenv import load_dotenv
-    from utils.helpers import PATHS, _project_root, _next_available_port
     from managers.docker import DockerManager
 
     source_path = os.path.abspath(source_path)
@@ -355,19 +367,34 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
     plugin_env_path = _prompt_and_write_plugin_env(manifest, fragment_dir, predefined_envs)
     load_dotenv(PATHS["env"], override=True)
 
-    # Read source compose to get all service names
+    # Plan B workspace directories: private per-agent + shared
+    agent_container_name = f"costaff-agent-{name}"
+    private_host_dir = os.path.join(_workspace_root, agent_container_name)
+    shared_host_dir = os.path.join(_workspace_root, "shared")
+    agent_shared_host_dir = os.path.join(shared_host_dir, agent_container_name)
+    os.makedirs(private_host_dir, exist_ok=True)
+    os.makedirs(agent_shared_host_dir, exist_ok=True)
+
+    # Env vars inside container (Plan B naming convention)
+    NAME_UPPER = name.upper().replace("-", "_")
+    AGENT_WORKSPACE_ENV_KEY = f"AGENT_WORKSPACE_DIR_{NAME_UPPER}"
+    COSTAFF_SHARED_ENV_KEY = f"COSTAFF_SHARED_DIR_{NAME_UPPER}"
+    CONTAINER_WORKSPACE = "/app/data"
+    CONTAINER_SHARED = "/app/data/shared"
+    CONTAINER_MY_SHARED = f"/app/data/shared/{agent_container_name}"
+
+    # Read source compose
     with open(compose_path) as f:
         src_compose = _yaml.safe_load(f)
     service_names = list(src_compose.get("services", {}).keys())
 
-    # Generate compose fragment — use container_name from repo if defined, else derive from service key
     def _svc_to_container(svc, svc_def):
         explicit = svc_def.get("container_name")
         if explicit:
             return explicit
         return f"costaff-{svc}" if svc.startswith("costaff-") else f"costaff-{svc}"
 
-    a2a_container_name = _svc_to_container(a2a_service, src_compose["services"].get(a2a_service, {}))
+    a2a_container_name_val = _svc_to_container(a2a_service, src_compose["services"].get(a2a_service, {}))
 
     services_fragment = {}
     for svc in service_names:
@@ -392,7 +419,7 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
             svc_def.setdefault("environment", [])
             svc_def["environment"] += [f"PORT={port}", f"PUBLIC_HOST={ext_svc}"]
             svc_def["ports"] = [f"127.0.0.1:{public_port}:{port}"]
-        # Rename depends_on references to use resolved container names
+        # Rename depends_on references
         if "depends_on" in svc_def:
             old_deps = svc_def["depends_on"]
             if isinstance(old_deps, list):
@@ -400,80 +427,51 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
                     _svc_to_container(d, src_compose["services"].get(d, {}))
                     for d in old_deps
                 ]
-        # Force container_name to match the resolved name
         svc_def["container_name"] = ext_svc
         services_fragment[ext_svc] = svc_def
 
-    # Volumes: map agent-specific data volumes to the global costaff_data volume
-    SHARED_VOLUME = "costaff_data"
-    AGENT_SPECIFIC_WORKSPACE = f"/app/data/agent-{name}"
-    GLOBAL_WORKSPACE = "/app/data"
-    
-    # Generate a unique environment variable key for this agent
-    # e.g., agent-coding -> AGENT_CODING_WORKSPACE_DIR
-    UNIQUE_ENV_KEY = f"AGENT_{name.upper().replace('-', '_')}_WORKSPACE_DIR"
-    
+    # Inject Plan B env vars and volumes into all services
+    skip_env_keys = {"WORKSPACE_DIR", "DATA_DIR", "SHARED_DIR", AGENT_WORKSPACE_ENV_KEY, COSTAFF_SHARED_ENV_KEY}
     for svc_name, svc_def in services_fragment.items():
-        # [NEW] Enforce standardized workspace environment variable
         svc_def.setdefault("environment", [])
-        updated_envs = []
-        
-        # 1. Update existing workspace-related variables (if any)
-        # WORKSPACE_DIR points to /app/data (global access).
-        # Specific keys like REPORTS_DIR or AGENT_XXX_WORKSPACE_DIR point to /app/data/agent-{name}.
-        for env in svc_def["environment"]:
-            if "=" not in env:
-                updated_envs.append(env)
-                continue
-                
-            key, val = env.split("=", 1)
-            if key in ("WORKSPACE_DIR", "DATA_DIR"):
-                updated_envs.append(f"{key}={GLOBAL_WORKSPACE}")
-            elif key == "REPORTS_DIR" or key == UNIQUE_ENV_KEY or key.endswith("_WORKSPACE_DIR"):
-                updated_envs.append(f"{key}={AGENT_SPECIFIC_WORKSPACE}")
-            else:
-                updated_envs.append(env)
-        
-        # 2. Inject the UNIQUE standard AGENT_{NAME}_WORKSPACE_DIR
-        if not any(f"{UNIQUE_ENV_KEY}=" in e for e in updated_envs):
-            updated_envs.append(f"{UNIQUE_ENV_KEY}={AGENT_SPECIFIC_WORKSPACE}")
-            
-        # 3. Also inject a generic AGENT_WORKSPACE_DIR for internal agent code usage (pointing to specific)
-        if not any("AGENT_WORKSPACE_DIR=" in e for e in updated_envs):
-            updated_envs.append(f"AGENT_WORKSPACE_DIR={AGENT_SPECIFIC_WORKSPACE}")
-        
-        # 4. Ensure WORKSPACE_DIR is present if not already added
-        if not any("WORKSPACE_DIR=" in e for e in updated_envs):
-            updated_envs.append(f"WORKSPACE_DIR={GLOBAL_WORKSPACE}")
-        
+        # Strip old workspace-related vars that we'll replace
+        updated_envs = [
+            e for e in svc_def["environment"]
+            if not ("=" in e and (
+                e.split("=", 1)[0] in skip_env_keys
+                or e.split("=", 1)[0].endswith("_WORKSPACE_DIR")
+                or e.split("=", 1)[0].startswith("COSTAFF_SHARED_DIR_")
+            ))
+        ]
+        updated_envs += [
+            f"WORKSPACE_DIR={CONTAINER_WORKSPACE}",
+            f"SHARED_DIR={CONTAINER_SHARED}",
+            f"{COSTAFF_SHARED_ENV_KEY}={CONTAINER_MY_SHARED}",
+            f"{AGENT_WORKSPACE_ENV_KEY}={CONTAINER_WORKSPACE}",
+        ]
         svc_def["environment"] = updated_envs
 
-        new_vols = []
-        # Mount the entire shared volume to /app/data for cross-expert access
-        new_vols.append(f"{SHARED_VOLUME}:/app/data")
-        
+        # Plan B volumes: private bind mount + shared bind mount
+        new_vols = [
+            f"{private_host_dir}:{CONTAINER_WORKSPACE}",
+            f"{shared_host_dir}:{CONTAINER_SHARED}",
+        ]
         for vol in svc_def.get("volumes", []):
             if ":" in str(vol):
-                local_part, container_part = vol.split(":", 1)
-                # Remove agent-specific mounts in app/data, replaced by root /app/data
+                _, container_part = str(vol).split(":", 1)
                 if container_part.startswith("/app/data"):
                     continue
             new_vols.append(vol)
-            
         svc_def["volumes"] = new_vols
 
     # Inject env_file into all services
-    core_env_path = PATHS["env"]
     for svc_def in services_fragment.values():
-        svc_def["env_file"] = [core_env_path, plugin_env_path]
+        svc_def["env_file"] = [PATHS["env"], plugin_env_path]
 
     fragment = {
         "services": services_fragment,
         "networks": {"costaff_default": {"external": True}},
-        "volumes": {SHARED_VOLUME: {"external": True, "name": SHARED_VOLUME}},
     }
-    # 1. Clean up old fragment to ensure fresh generation
-    fragment_dir = os.path.dirname(plugin_env_path)
     fragment_path = os.path.join(fragment_dir, "compose-fragment.yaml")
     if os.path.exists(fragment_path):
         os.remove(fragment_path)
@@ -481,13 +479,12 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
     with open(fragment_path, "w") as f:
         _yaml.dump(fragment, f, default_flow_style=False, allow_unicode=True)
 
-    # 2. Build & start
+    # Build & start
     import httpx
     from rich.console import Console
     console = Console()
     main_compose = os.path.join(_runtime_root, "docker-compose.yaml")
     ext_services = list(services_fragment.keys())
-    # Add --force-recreate to ensure new environment variables are applied
     cmd = DockerManager.get_cmd() + ["-f", main_compose, "-f", fragment_path, "up", "-d", "--build", "--force-recreate"]
     console.print(f"Building and starting {name}...")
     import subprocess
@@ -510,19 +507,18 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
     else:
         console.print("[yellow]Warning: health check timed out. Agent may still be starting.[/yellow]")
 
-    result = {
+    result_dict = {
         "type": "github",
         "source_path": source_path,
         "fragment_path": fragment_path,
-        "a2a_url": f"http://{a2a_container_name}:{port}",
+        "a2a_url": f"http://{a2a_container_name_val}:{port}",
         "public_port": public_port,
         "description": description,
         "version": version,
         "enabled": True,
         "container_names": ext_services,
     }
-    # Read mcp_configurable capability from manifest
     if manifest.get("mcp_configurable"):
-        result["mcp_configurable"] = True
-        result["mcp_env_var"] = manifest.get("mcp_env_var", name.replace("-", "_").upper() + "_MCP_URLS")
-    return result
+        result_dict["mcp_configurable"] = True
+        result_dict["mcp_env_var"] = manifest.get("mcp_env_var", name.replace("-", "_").upper() + "_MCP_URLS")
+    return result_dict

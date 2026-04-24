@@ -159,6 +159,7 @@ install_costaff() {
     mkdir -p "$COSTAFF_BASE/costaff-agent"
     mkdir -p "$COSTAFF_BASE/costaff-channel"
     mkdir -p "$COSTAFF_BASE/workspace"
+    mkdir -p "$COSTAFF_BASE/workspace/shared"
     success "Runtime directories ready at $COSTAFF_BASE"
 
     # Clone repo
