@@ -141,7 +141,7 @@ class ConfigManager:
             
             selected = agent_mcps.get(agent_key)
             if selected is None:
-                # Default: Specialist can see itself + Root Tools
+                # Default: Specialist can see itself + Root Tools (costaff)
                 selected = ["costaff", ext_name]
             
             extra_urls = {k: v for k, v in urls.items() if k in selected}
