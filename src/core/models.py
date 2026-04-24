@@ -53,6 +53,7 @@ class IdentityMap(Base):
     hashed_id = Column(String, nullable=False, index=True)
     real_id = Column(String, nullable=False)
     is_approved = Column(Boolean, default=False, nullable=False)
+    active_session_id = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
