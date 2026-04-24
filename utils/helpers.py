@@ -190,6 +190,10 @@ def _prompt_and_write_plugin_env(manifest: dict, fragment_dir: str, predefined_e
     with open(plugin_env_path, "w") as f:
         for k, v in plugin_envs.items():
             f.write(f"{k}={v}\n")
+        # Ensure Specialist path context is available for ADK Template injection
+        NAME_UPPER = name.upper().replace("-", "_")
+        f.write(f"COSTAFF_SHARED_DIR_{NAME_UPPER}=/app/data/shared/costaff-agent-{name}\n")
+        f.write(f"AGENT_WORKSPACE_DIR_{NAME_UPPER}=/app/data\n")
 
     # Also write required vars to core .env for YAML variable substitution
     for k in env_required:
