@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -8,6 +9,8 @@ from src.core import models
 from src.core.database import SessionLocal
 from mcp_servers.core import mcp
 from mcp_servers.executors.project_task import execute_project_task
+
+logger = logging.getLogger("costaff-agent-engine")
 
 
 @mcp.tool()
@@ -272,6 +275,7 @@ async def create_project_task(
 
     The task starts with status='backlog'. Use update_task_queue to enqueue it.
     """
+    logger.info(f"[create_project_task] epic={epic_id} agent={assigned_agent} title={title!r}")
     db = SessionLocal()
     try:
         # Fallback spec if agent did not provide one
@@ -331,9 +335,12 @@ async def create_project_task(
         db.add(task)
         db.commit()
         db.refresh(task)
-        return f"Task '{title}' created (ID: {task.id}) in Epic {epic_id}."
+        result = f"Task '{title}' created (ID: {task.id}) in Epic {epic_id}."
+        logger.info(f"[create_project_task] OK → {result}")
+        return result
     except Exception as e:
         db.rollback()
+        logger.error(f"[create_project_task] Error: {e}")
         return f"Error: {str(e)}"
     finally:
         db.close()
@@ -373,13 +380,14 @@ async def update_task_queue(user_id: str, assigned_agent: str, task_ids_ordered:
     - task_ids_ordered: JSON array of task ID strings in desired execution order (first = highest priority)
       Example: ["uuid-1", "uuid-2", "uuid-3"]
     """
+    logger.info(f"[update_task_queue] agent={assigned_agent!r} task_ids={task_ids_ordered!r}")
     # Defensive: LLMs sometimes pass a JSON-encoded string instead of a list
     if isinstance(task_ids_ordered, str):
         try:
             task_ids_ordered = json.loads(task_ids_ordered)
         except Exception:
             return "Error: task_ids_ordered must be a JSON array of task ID strings."
-    
+
     if not isinstance(task_ids_ordered, list):
         return "Error: task_ids_ordered must be a list."
 
@@ -387,37 +395,42 @@ async def update_task_queue(user_id: str, assigned_agent: str, task_ids_ordered:
     try:
         updated_count = 0
         first_task_id = None
-        
+
         # Normalize agent name (handle costaff-agent-coding vs coding_agent)
         norm_agent = assigned_agent.replace("-", "_")
 
         for idx, task_id in enumerate(task_ids_ordered):
-            # Find task by ID. We allow user_id to be a partial match or from the same session
             task = db.query(models.ProjectTask).filter(models.ProjectTask.id == task_id).first()
-            
-            if task:
-                # Security/Logic check: is this task assigned to the correct agent?
-                # We normalize both to be sure.
-                if task.assigned_agent.replace("-", "_") != norm_agent:
-                    continue
 
-                task.queue_order = idx + 1
-                task.status = "queued"
-                task.updated_at = datetime.utcnow()
-                updated_count += 1
-                if idx == 0:
-                    first_task_id = task_id
-                    
+            if not task:
+                logger.warning(f"[update_task_queue] task {task_id} not found in DB")
+                continue
+
+            task_norm = task.assigned_agent.replace("-", "_")
+            if task_norm != norm_agent:
+                logger.warning(f"[update_task_queue] agent mismatch: task has {task.assigned_agent!r}, expected {assigned_agent!r}")
+                continue
+
+            task.queue_order = idx + 1
+            task.status = "queued"
+            task.updated_at = datetime.utcnow()
+            updated_count += 1
+            if idx == 0:
+                first_task_id = task_id
+
         db.commit()
-        
+
         # Trigger immediate execution for the first task in queue
         if first_task_id:
             asyncio.create_task(execute_project_task(first_task_id))
-            
-        return f"Queue updated for agent '{assigned_agent}': {updated_count} tasks marked as queued. Execution triggered."
+            logger.info(f"[update_task_queue] triggered execute_project_task for {first_task_id}")
+
+        result = f"Queue updated for agent '{assigned_agent}': {updated_count} tasks marked as queued. Execution triggered."
+        logger.info(f"[update_task_queue] OK → {result}")
+        return result
     except Exception as e:
         db.rollback()
-        logger.error(f"update_task_queue error: {e}")
+        logger.error(f"[update_task_queue] Error: {e}")
         return f"Internal Error: {str(e)}"
     finally:
         db.close()
