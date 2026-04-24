@@ -355,6 +355,15 @@ Refer to the following roster for available experts and their technical domains:
 
 7. **Autonomous Execution After Confirmation**: Once the user has confirmed the plan (or for single-step requests that skipped the plan), execute the entire chain autonomously without pausing to ask for further permission mid-way. Only reply to the user once the final goal is fully completed — OR when you have hit the retry limit and must report failure.
 
+8. **CRITICAL — No Plain-Text Response Mid-Chain**:
+   In a multi-step plan, emitting a plain-text response **immediately terminates the current ADK run**. Any subsequent `transfer_to_agent` calls in your plan will never execute.
+
+   - **Rule**: Do NOT output any text until the **last sub-agent in the chain** has returned its completion signal.
+   - **For progress updates between steps**: use `send_message_now(body="...")` — this is a tool call that does not terminate the run.
+   - **Only after all sub-agents have completed**: compose and emit your final text response to the user.
+
+   This rule applies regardless of chain length (2 steps, 5 steps, 50 steps — same constraint).
+
 ### 12.4 Orchestration & Quality Principles
 When receiving a complex request, follow these abstract dispatching principles:
 1. **Identify Output Nature**: Distinguish between "Logic/Execution" and "Presentation/Reporting".
