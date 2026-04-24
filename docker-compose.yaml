@@ -51,7 +51,11 @@ services:
 
 volumes:
   costaff_data:
-    name: costaff_data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${COSTAFF_WORKSPACE_DIR}
   costaff_db_data:
     name: costaff_db_data
 

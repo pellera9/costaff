@@ -8,9 +8,10 @@ set -e
 # =============================================================================
 
 REPO_URL="${COSTAFF_REPO_URL:-https://github.com/costaff-ai/costaff.git}"
-COSTAFF_DIR="$HOME/.costaff"       # source code + runtime data (git repo)
-RUNTIME_DIR="$HOME/.costaff"       # same directory
-VENV_DIR="$COSTAFF_DIR/.venv"
+COSTAFF_BASE="$HOME/.costaff"      # runtime parent directory
+COSTAFF_DIR="$COSTAFF_BASE/costaff"  # git clone target (CLI core)
+RUNTIME_DIR="$COSTAFF_DIR"
+VENV_DIR="$COSTAFF_BASE/.venv"
 PYTHON_VERSION="3.11"
 
 # --- Colors ---
@@ -153,12 +154,12 @@ install_ubuntu() {
 # Common: Clone & Install CLI
 # =============================================================================
 install_costaff() {
-    # Migrate from old .costaff-src layout
-    if [ -d "$HOME/.costaff-src/.git" ] && [ ! -d "$COSTAFF_DIR/.git" ]; then
-        warn "Found old installation at ~/.costaff-src — migrating to ~/.costaff..."
-        mv "$HOME/.costaff-src" "$COSTAFF_DIR"
-        success "Migrated source to ~/.costaff"
-    fi
+    # Create runtime directory structure
+    step "Creating runtime directory structure..."
+    mkdir -p "$COSTAFF_BASE/costaff-agent"
+    mkdir -p "$COSTAFF_BASE/costaff-channel"
+    mkdir -p "$COSTAFF_BASE/workspace"
+    success "Runtime directories ready at $COSTAFF_BASE"
 
     # Clone repo
     step "Downloading CoStaff Agent..."
@@ -178,6 +179,17 @@ install_costaff() {
         fi
     fi
     success "CoStaff Agent at $COSTAFF_DIR"
+
+    # Write COSTAFF_WORKSPACE_DIR to .env so docker-compose bind mount resolves correctly
+    ENV_FILE="$COSTAFF_DIR/.env"
+    if [ ! -f "$ENV_FILE" ] && [ -f "$COSTAFF_DIR/.env.template" ]; then
+        cp "$COSTAFF_DIR/.env.template" "$ENV_FILE"
+    fi
+    touch "$ENV_FILE"
+    if ! grep -q "^COSTAFF_WORKSPACE_DIR=" "$ENV_FILE" 2>/dev/null; then
+        echo "COSTAFF_WORKSPACE_DIR=$COSTAFF_BASE/workspace" >> "$ENV_FILE"
+        success "COSTAFF_WORKSPACE_DIR written to .env"
+    fi
 
     # Create venv & install CLI
     step "Installing CoStaff CLI..."

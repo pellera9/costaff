@@ -14,7 +14,7 @@ from rich.table import Table
 
 from managers.config import ConfigManager
 from managers.docker import DockerManager
-from utils.helpers import PATHS, _project_root, _runtime_root
+from utils.helpers import PATHS, _project_root, _runtime_root, _base_dir
 from utils.helpers import _deploy_local_channel, _write_channel_fragment
 
 console = Console()
@@ -67,12 +67,12 @@ def channel_add(
                 predefined_envs[k.strip()] = v.strip()
 
     if github:
-        target_src = os.path.join(_runtime_root, "src", "channels", name)
+        target_src = os.path.join(_base_dir, "costaff-channel", name, "src")
         if os.path.exists(target_src):
             if not questionary.confirm(f"Source directory {target_src} already exists. Overwrite?").ask():
                 raise typer.Exit(0)
             shutil.rmtree(target_src)
-        
+
         os.makedirs(os.path.dirname(target_src), exist_ok=True)
         console.print(f"Cloning channel [bold cyan]{github}[/bold cyan]...")
         try:
@@ -181,7 +181,7 @@ def channel_rebuild(
     # Regenerate compose-fragment.yaml from source so any docker-compose.yaml
     # changes (env vars, volumes, etc.) are picked up on rebuild.
     console.print(f"Regenerating compose fragment for [bold]{name}[/bold]...")
-    plugin_env_path = os.path.join(_runtime_root, "dynamic-channels", name, ".env")
+    plugin_env_path = os.path.join(_base_dir, "costaff-channel", name, ".env")
     public_port = chan_conf.get("public_port")
     try:
         fragment_path, ext_services, _ = _write_channel_fragment(

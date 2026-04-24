@@ -8,14 +8,17 @@ from datetime import datetime, timezone
 from typing import Optional
 from dotenv import set_key
 
-# _project_root  — source code directory (git clone at ~/.costaff)
-# _runtime_root  — runtime data directory (~/.costaff, same as _project_root)
-#   Override _runtime_root via COSTAFF_HOME env var.
+# _project_root  — source code directory (git clone at ~/.costaff/costaff)
+# _base_dir      — runtime parent directory (~/.costaff); override via COSTAFF_HOME
+# _runtime_root  — CLI core + config + compose (~/.costaff/costaff)
+# _workspace_root — bind-mounted data directory (~/.costaff/workspace)
 _project_root = str(Path(__file__).resolve().parent.parent)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-_runtime_root: str = os.environ.get("COSTAFF_HOME") or str(Path.home() / ".costaff")
+_base_dir: str = os.environ.get("COSTAFF_HOME") or str(Path.home() / ".costaff")
+_runtime_root: str = os.path.join(_base_dir, "costaff")
+_workspace_root: str = os.path.join(_base_dir, "workspace")
 
 # --- Constants ---
 VERSION = "0.2.4"
@@ -290,7 +293,7 @@ def _deploy_local_channel(name: str, source_path: str, conf: dict, predefined_en
     description = manifest.get("description", "")
 
     public_port = _next_available_channel_port(conf)
-    fragment_dir = os.path.join(_runtime_root, "dynamic-channels", name)
+    fragment_dir = os.path.join(_base_dir, "costaff-channel", name)
     os.makedirs(fragment_dir, exist_ok=True)
 
     plugin_env_path = _prompt_and_write_plugin_env(manifest, fragment_dir, predefined_envs)
@@ -346,7 +349,7 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
     version = manifest.get("version", "")
 
     public_port = _next_available_port(conf)
-    fragment_dir = os.path.join(_runtime_root, "external-agents", name)
+    fragment_dir = os.path.join(_base_dir, "costaff-agent", name)
     os.makedirs(fragment_dir, exist_ok=True)
 
     plugin_env_path = _prompt_and_write_plugin_env(manifest, fragment_dir, predefined_envs)

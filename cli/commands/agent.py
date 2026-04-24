@@ -14,7 +14,7 @@ from rich.table import Table
 
 from managers.config import ConfigManager
 from managers.docker import DockerManager
-from utils.helpers import PATHS, _project_root, _runtime_root
+from utils.helpers import PATHS, _project_root, _runtime_root, _base_dir
 from utils.helpers import _deploy_local_agent
 
 console = Console()
@@ -55,13 +55,13 @@ def agent_add(
                 predefined_envs[k.strip()] = v.strip()
 
     if github:
-        target_src = os.path.join(_runtime_root, "src", name)
+        target_src = os.path.join(_base_dir, "costaff-agent", name, "src")
         if os.path.exists(target_src):
             import shutil, sys
             if sys.stdin.isatty() and not questionary.confirm(f"Source directory {target_src} already exists. Overwrite?").ask():
                 raise typer.Exit(0)
             shutil.rmtree(target_src)
-        
+
         os.makedirs(os.path.dirname(target_src), exist_ok=True)
         console.print(f"Cloning [bold cyan]{github}[/bold cyan] to [bold]{target_src}[/bold]...")
         try:
