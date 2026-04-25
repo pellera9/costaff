@@ -2,6 +2,7 @@ import os
 import json
 import sys
 import logging
+import pathlib
 import httpx
 import time
 from datetime import datetime
@@ -16,6 +17,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from google.adk.agents import LlmAgent
 from google.adk.tools.mcp_tool import McpToolset
 from google.adk.tools.mcp_tool.mcp_session_manager import SseServerParams, StreamableHTTPServerParams
+from google.adk.skills import load_skill_from_dir
+from google.adk.tools import skill_toolset
 from utils.models.litellm_model.litellm_model_config import litellm_model
 from utils.instructions import AGENT_INSTRUCTION
 
@@ -53,6 +56,17 @@ for name, entry in mcp_config.items():
         logger.info(f"Registered MCP: {name}")
     except Exception as e:
         logger.error(f"FAILED to load MCP '{name}': {e}")
+
+# Load ADK Skills
+_skills_dir = pathlib.Path(__file__).parent / "utils" / "skills"
+_skills = [
+    load_skill_from_dir(d)
+    for d in sorted(_skills_dir.iterdir())
+    if d.is_dir() and (d / "SKILL.md").exists()
+]
+if _skills:
+    tools.append(skill_toolset.SkillToolset(skills=_skills))
+    logger.info(f"Loaded {len(_skills)} skill(s): {[d.name for d in sorted(_skills_dir.iterdir()) if d.is_dir() and (d / 'SKILL.md').exists()]}")
 
 model_provider = (os.getenv("COSTAFF_AGENT_MODEL_PROVIDER") or "gemini").lower()
 model_name = os.getenv("COSTAFF_AGENT_GEMINI_MODEL", "gemini-2.5-flash")

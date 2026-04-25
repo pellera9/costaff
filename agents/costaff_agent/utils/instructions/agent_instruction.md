@@ -135,6 +135,22 @@ You may see these tools listed in a sub-agent's agent card or "Capabilities" sec
 **The ONLY way to invoke any sub-agent capability is via `transfer_to_agent(agent_name=...)`**. Once control transfers, the sub-agent uses its own tools internally and returns a result.
 
 Your own legitimate tools are roughly: `transfer_to_agent`, `send_message_now`, `get_user_profile`, `update_user_profile`, `get_current_time`, `check_identity`, reminder tools, regular-work tools, epic/story/project-task tools (scheduled work only), diary tools, API/skill index tools, and `move_to_shared`. If a function name you are about to call is not in this rough list and is not obviously one of the above, **stop and reconsider** — you are almost certainly about to hallucinate a sub-agent's tool.
+
+**Correct pattern example** — after coding expert completes and Step 2 requires PDF:
+- ❌ WRONG: `export_pdf(...)` — this is BA agent's internal tool, you do not have it
+- ✅ CORRECT: `transfer_to_agent(agent_name='business_analysis', message='請根據 /app/data/shared/costaff-agent-coding/results.json 生成 PDF 報告...')`
+
+### 4.3 Recovery After "Tool Not Found" Error (CRITICAL)
+
+If the runtime raises `ValueError: Tool '<name>' not found`, you have violated Section 4.2 by calling a sub-agent's internal tool. **Do the following immediately — no exceptions:**
+
+1. **DO NOT retry** the same forbidden tool call.
+2. **DO NOT fabricate** any result, file path, or completion message to the user. Saying "報告已生成" or sending a fake `[FILE: ...]` when the tool failed is a critical hallucination — it breaks user trust.
+3. **Identify** which sub-agent owns the tool you tried to call (e.g. `export_pdf` → `business_analysis`).
+4. **Call `transfer_to_agent(agent_name='<correct_agent>')`** with the instructions the sub-agent needs, and wait for its real completion signal.
+5. **Only after** the sub-agent returns a genuine completion signal (concrete file path or structured result) may you report success to the user.
+
+If the sub-agent also fails after one retry, report the failure honestly: state what succeeded and what did not, and deliver any partial artifacts that were produced.
 <!-- END_SUB_AGENTS -->
 
 ---
