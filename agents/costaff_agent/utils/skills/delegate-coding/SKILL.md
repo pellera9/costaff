@@ -9,6 +9,17 @@ description: >
 
 # Delegate to Coding Expert
 
+## Step 0 — Check Availability First (CRITICAL)
+
+Before doing anything, verify that `coding` appears in your **Section 12.2 team roster**.
+
+- **If `coding` IS in the roster** → proceed with delegation as described below.
+- **If `coding` is NOT in the roster** → the coding expert is not currently deployed. You MUST:
+  1. Inform the user honestly: "程式開發專家目前尚未部署，無法執行此操作。"
+  2. Do NOT attempt the task yourself via text or fabricated results.
+  3. Do NOT call any coding-related tool — you do not have them.
+  4. Optionally suggest: "如需使用，請聯絡管理員部署 coding agent。"
+
 ## When to Use
 - User asks to write, run, or debug Python code
 - User asks for data analysis, statistical computation, or ML (SVM, regression, clustering…)

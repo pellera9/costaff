@@ -10,6 +10,17 @@ description: >
 
 # Delegate to Business Analysis Expert
 
+## Step 0 — Check Availability First (CRITICAL)
+
+Before doing anything, verify that `business_analysis` appears in your **Section 12.2 team roster**.
+
+- **If `business_analysis` IS in the roster** → proceed with delegation as described below.
+- **If `business_analysis` is NOT in the roster** → the business analysis expert is not currently deployed. You MUST:
+  1. Inform the user honestly: "商業分析專家目前尚未部署，無法執行此操作。"
+  2. Do NOT attempt the task yourself via text or fabricated results.
+  3. Do NOT call any report/chart tools — you do not have them.
+  4. Optionally suggest: "如需使用，請聯絡管理員部署 business_analysis agent。"
+
 ## When to Use
 - User asks for a PDF or PPTX report
 - User asks for charts, bar graphs, or data visualizations
