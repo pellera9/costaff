@@ -1,80 +1,172 @@
 ---
 name: multi-agent-chain
 description: >
-  Use when a task requires chaining two or more sub-agents in sequence — where one
-  agent's output becomes the next agent's input. Covers the correct sequential
-  delegation pattern, how to distinguish progress signals from completion signals,
-  how to pass results between agents, and what to do when a step fails.
+  Activate for ANY request involving sub-agent delegation — single or multi-step.
+  Contains the complete orchestration SOP: plan-and-confirm format, sequential
+  execution rules, progress vs completion signal distinction, forbidden tool patterns,
+  recovery from errors, retry limits, file delivery rules, and output presentation.
 ---
 
-# Multi-Agent Chain Orchestration
+# Multi-Agent Orchestration SOP
 
 ## When to Use
-- A task requires two or more specialists to execute **in order**
-- The output from one agent (file path, computed value, structured data) becomes the input to the next
+- A task requires delegating to one or more sub-agents via `transfer_to_agent`
+- Two or more agents need to work in sequence (output of one → input of next)
 - User asks to combine multiple specialist capabilities in a single workflow
 
-## Core Principles
+---
 
-### Principle 1 — Present the Plan Before Acting
+## Principle 1 — Present a Plan First (multi-step only)
 
-Before calling any agent, present the full execution plan to the user and wait for confirmation.
-Do NOT call any tool in the same turn as the plan presentation.
+When a request requires **two or more** sub-agent calls (any file or data hand-off between agents), present a written plan and wait for user confirmation **before calling any agent tool**.
 
-### Principle 2 — Execute One Agent at a Time
+**Skip the plan (proceed immediately) when**:
+- A single sub-agent fulfils the whole request
+- User already confirmed a plan earlier in this session
+- User says "直接做", "不用計劃", "go ahead", or similar
 
-Call only one agent per step. Wait for the A2A call to **fully resolve** before proceeding.
+**Plan format (Telegram HTML — use exactly):**
+```
+📋 <b>執行計劃</b>
+
+<b>Step 1: [專家職稱] (agent: <code>&lt;a2a_name&gt;</code>)</b>
+• 任務：...
+• 輸入：...
+• 預期產出：<code>/app/data/shared/costaff-agent-&lt;hyphen-name&gt;/xxx.ext</code>
+
+<b>Step 2: [專家職稱] (agent: <code>&lt;a2a_name&gt;</code>)</b>
+• 任務：...
+• 輸入：Step 1 的產出
+• 預期產出：<code>...</code>
+
+請回覆「OK」開始執行，或告訴我需要調整的地方（工具、順序、輸出格式等）。
+```
+
+After presenting the plan: **STOP**. Do not call any tool. Wait for the user's next message.
+- Confirmation ("OK", "好", "同意", "開始", "go") → proceed to execute
+- Change request → update plan, present again for re-confirmation
+- Clarifying question → answer it, then re-confirm the (possibly revised) plan
+
+---
+
+## Principle 2 — Execute One Agent at a Time, In Order
+
+Call only one agent per step via `transfer_to_agent`. **Wait for the A2A call to fully resolve** before proceeding to the next.
 
 Each agent emits two types of events — you MUST distinguish them:
 
 | Event type | Characteristics | Action |
 |---|---|---|
-| **Progress signal** (mid-task) | Status messages like "安裝中…", "執行中…", sent via `send_message_now` | Keep waiting — the agent is still running |
-| **Completion signal** (final response) | Contains a file path, computed result, or explicit failure message | Proceed to the next step |
+| **Progress signal** (mid-task) | Status messages sent via `send_message_now` — "安裝中…", "正在執行…", "🔍 開始調查" | Keep waiting — the agent is still running |
+| **Completion signal** (final A2A response) | Contains a file path, computed result, structured summary, or explicit failure message | Proceed to next step |
 
-A completion signal always includes at least one of:
-- An absolute file path (e.g. `/app/data/shared/<agent-slot>/<filename>`)
-- A concrete computed value or structured summary
-- An explicit failure message explaining what went wrong
+A valid completion signal always includes at least one of:
+- An absolute output file path (e.g. `/app/data/shared/costaff-agent-coding/result.csv`)
+- A concrete computed result or value
+- A structured analysis, summary, or conclusion
+- An explicit failure declaration explaining why the task cannot be completed
 
-### Principle 3 — Pass Exact Results, Never Reconstruct
+If you only have progress signals, the task is **still in progress**. While in this state, you are **strictly forbidden** from fabricating results, calling the next agent, or telling the user the task is done.
 
-Extract the **exact** output from the completion signal — file path, value, or identifier — and pass it verbatim to the next agent.
+---
 
-Never reconstruct, guess, or retype an output. If the path or value came from the agent, copy it character-for-character.
+## Principle 3 — Pass Exact Results, Never Reconstruct
 
-### Principle 4 — No Plain Text Between Agent Calls
+Extract the **exact** output from the completion signal (file path, value, identifier) and pass it verbatim to the next agent. Never retype, reconstruct, or guess.
 
-Do NOT emit a plain text reply between two `transfer_to_agent` calls. Doing so terminates the ADK run, and the next agent will never execute.
+**Path naming (CRITICAL — common bug source)**:
+- Filesystem paths use **hyphens**: `costaff-agent-business-analysis`
+- `transfer_to_agent(agent_name=...)` uses **underscores**: `business_analysis`
+- Never derive one from the other
 
-If you need to communicate mid-chain progress to the user, use `send_message_now(body='...')` instead.
+---
 
-### Principle 5 — Deliver a Single Final Reply
+## Principle 4 — No Plain Text Between Agent Calls
 
-After all agents have returned completion signals, send one consolidated reply containing:
-- A brief summary of what was accomplished
-- All output file paths in `` [FILE: /absolute/path] `` format
-- Any key findings or metrics from the results
+Emitting a plain-text response in a multi-step chain **immediately terminates the current ADK run**. Subsequent `transfer_to_agent` calls will never execute.
 
-### Principle 6 — Check Roster Before Each Agent
+- **Between steps**: use `send_message_now(body="...")` for progress updates — this is a tool call, not a text response
+- **Only after ALL agents complete**: compose and emit your final text response to the user
 
-Before each `transfer_to_agent` call, verify the target agent appears in your **Section 12.2 team roster**.
-If an agent is not in the roster, do not attempt to call it — inform the user honestly and stop the chain at that step.
+---
 
-## Error Handling
+## Principle 5 — Deliver a Single Final Reply
 
-If any agent in the chain fails:
-1. Retry that specific agent **once**.
-2. If it fails again, stop and report: what succeeded, what failed, and deliver any partial artifacts that were produced.
-3. Never fabricate a file path or claim a task is complete when it is not.
+After all agents have returned completion signals, send one consolidated response containing:
+- A 1–2 sentence summary of which specialists collaborated (no jargon)
+- **All output file paths** in `[FILE: /absolute/path]` format — including intermediate files (CSV/JSON), not just the final PDF
+- Any key insights or findings from the results
 
-## Common Mistakes
+**In partial success**: if the chain fails mid-way, still deliver every artifact produced by successful steps. Never omit intermediate files.
+
+---
+
+## Principle 6 — Check Roster Before Each Agent Call
+
+Before each `transfer_to_agent` call, verify the target agent appears in the **Team Roster** (Section 6.2 of the main instruction).
+- If the agent is in the roster → proceed
+- If the agent is NOT in the roster → inform the user it is not deployed and stop the chain at that step
+
+---
+
+## Principle 7 — Forbidden: Sub-Agent Internal Tools
+
+Sub-agent MCP tools are **NOT** available in your toolset. Calling them raises `ValueError: Tool '<name>' not found` and crashes the run. You may see these tools listed in a sub-agent's agent card — that is purely informational.
+
+**Common forbidden tools by agent:**
+
+| Tool | Belongs to |
+|---|---|
+| `export_pdf`, `export_pptx`, `create_html_report`, `create_report_from_markdown`, `generate_chart`, `read_csv`, `analyze_data` | business_analysis |
+| `run_python_code`, `write_file`, `patch_file`, `lint_file`, `run_shell`, `pip_install`, `run_pytest` | coding |
+| `run_query`, `get_schema`, `list_tables`, `execute_sql` | database |
+
+**Your legitimate tools**: `transfer_to_agent`, `send_message_now`, `get_user_profile`, `update_user_profile`, `get_current_time`, `check_identity`, reminder tools, regular-work tools, epic/story/task tools, diary tools, API/skill index tools, `move_to_shared`.
+
+If a function name you are about to call is not in this list and is not obviously one of the above — stop. You are about to call a sub-agent's internal tool.
+
+### Recovery: "Tool Not Found" Error
+
+If you receive `ValueError: Tool '<name>' not found`:
+
+1. **DO NOT retry** the same forbidden tool call
+2. **DO NOT fabricate** any result, file path, or completion message to the user
+3. Identify which agent owns the tool (see table above)
+4. Call `transfer_to_agent(agent_name='<correct_agent>', message='...')` and wait for its genuine completion signal
+5. Only after receiving the real response → report to user
+
+If the sub-agent also fails after one retry → report partial results honestly and stop.
+
+---
+
+## Principle 8 — Retry Limits
+
+- Each sub-agent may be retried **at most once** on failure
+- If the same sub-agent fails **twice consecutively** → stop immediately
+- Do NOT attempt workarounds (different paths, alternative directories)
+- Report failure honestly: what succeeded, what failed, what partial artifacts were produced
+- Each distinct `transfer_to_agent` call to the same agent counts as one attempt
+
+---
+
+## Output Presentation
+
+1. Extract only content wrapped in `[RESULT_START]` / `[RESULT_END]` tags from sub-agent responses
+2. Filter out: `_Thinking:_` prefixes, raw JSON, tool call logs, code blocks
+3. Deliver ALL files using `[FILE: /app/data/shared/costaff-agent-<name>/file.ext]` format
+4. Use `{PREFERRED_LANGUAGE}` and Telegram HTML (`<b>`, `<i>`, `<code>`)
+5. Never output raw JSON, `_Thinking:_`, or tool call logs to the user
+
+---
+
+## Common Mistakes Summary
 
 | Mistake | Consequence |
 |---|---|
-| Calling an agent's internal MCP tool directly instead of `transfer_to_agent` | `ValueError: Tool '<name>' not found` → run crashes |
-| Emitting a plain text reply between two `transfer_to_agent` calls | ADK run terminates — subsequent agents never execute |
-| Treating a progress signal as a completion signal | Next agent receives missing or incomplete input |
-| Reconstructing or guessing an output path instead of copying it | Wrong path delivered — downstream agent fails or produces garbage |
+| Calling a sub-agent's internal MCP tool directly | `ValueError` → run crashes |
+| Emitting plain text between two `transfer_to_agent` calls | ADK run terminates — next agent never executes |
+| Treating a progress signal as a completion signal | Next agent receives incomplete input |
+| Reconstructing or guessing an output path | Wrong path → downstream agent fails |
 | Fabricating a result after a tool error | Critical hallucination — user receives false information |
-| Skipping roster check before calling an agent | Agent not deployed, call fails with no meaningful error |
+| Skipping roster check | Agent not deployed, call fails with no meaningful error |
+| Using hyphens in `agent_name` / underscores in file path | Path or agent not found |

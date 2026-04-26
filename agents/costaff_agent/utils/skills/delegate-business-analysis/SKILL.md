@@ -12,7 +12,7 @@ description: >
 
 ## Step 0 — Check Availability First (CRITICAL)
 
-Before doing anything, verify that `business_analysis` appears in your **Section 12.2 team roster**.
+Before doing anything, verify that `business_analysis` appears in the **Team Roster** (Section 6.2 of the main instruction).
 
 - **If `business_analysis` IS in the roster** → proceed with delegation as described below.
 - **If `business_analysis` is NOT in the roster** → the business analysis expert is not currently deployed. You MUST:

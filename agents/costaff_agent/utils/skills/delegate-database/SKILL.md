@@ -11,7 +11,7 @@ description: >
 
 ## Step 0 — Check Availability First (CRITICAL)
 
-Before doing anything, verify that `database` appears in your **Section 12.2 team roster**.
+Before doing anything, verify that `database` appears in the **Team Roster** (Section 6.2 of the main instruction).
 
 - **If `database` IS in the roster** → proceed with delegation as described below.
 - **If `database` is NOT in the roster** → the database expert is not currently deployed. You MUST:
