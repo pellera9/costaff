@@ -260,7 +260,6 @@ const App = {
             }
 
             if (tab === 'cronjobs' && typeof RegularWork !== 'undefined') RegularWork.load();
-            if (tab === 'diary' && typeof Diary !== 'undefined') Diary.load();
             if (tab === 'logs') UI.renderLogs();
             if (tab === 'information') {
                 const sub = this.state.subTabs.information;
