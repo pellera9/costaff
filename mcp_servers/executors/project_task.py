@@ -6,7 +6,7 @@ from datetime import datetime
 from src.core import models
 from src.core.database import SessionLocal
 from src.core.adk_client import run_adk_prompt
-from src.core.license import LicenseManager, ExecutionWarning
+from src.core.license import LicenseManager
 from mcp_servers.core import logger
 from mcp_servers.utils import _send_notification, _get_user_channel_info, _build_task_spec
 
@@ -33,18 +33,6 @@ async def execute_project_task(task_id: str):
         recipient = task.recipient
         if not channel:
             channel, recipient = _get_user_channel_info(task.user_id, db)
-
-        try:
-            LicenseManager.check_execution_limit(task.user_id, db)
-        except ExecutionWarning as w:
-            if channel and recipient:
-                asyncio.create_task(_send_notification(channel, recipient, f"⚠️ {str(w)}", None))
-        except ValueError as e:
-            task.status = "backlog"
-            db.commit()
-            if channel and recipient:
-                asyncio.create_task(_send_notification(channel, recipient, f"🚫 {str(e)}", None))
-            return
 
         task.status = "doing"
         task.updated_at = datetime.utcnow()

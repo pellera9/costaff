@@ -6,7 +6,7 @@ from datetime import datetime
 from src.core import models
 from src.core.database import SessionLocal
 from src.core.adk_client import run_adk_prompt
-from src.core.license import LicenseManager, ExecutionWarning
+from src.core.license import LicenseManager
 from mcp_servers.core import logger
 from mcp_servers.utils import _send_notification
 
@@ -54,18 +54,6 @@ async def _run_for_user(regular_work_id: str, work, user_id: str):
         recipient = work.recipient
         if not channel:
             channel, recipient = _get_user_channel_info(user_id, db)
-
-        # Check monthly execution limit
-        try:
-            LicenseManager.check_execution_limit(user_id, db)
-        except ExecutionWarning as w:
-            if channel and recipient:
-                asyncio.create_task(_send_notification(channel, recipient, f"⚠️ {str(w)}", work.session_id))
-        except ValueError as e:
-            if channel and recipient:
-                asyncio.create_task(_send_notification(channel, recipient, f"🚫 {str(e)}", work.session_id))
-            logger.warning(f"RegularWork {regular_work_id} blocked for user {user_id}: limit reached.")
-            return
 
         app_name = os.getenv("ADK_APP_NAME", "costaff_agent")
         session_id = f"rwork_{regular_work_id}_{user_id[:8]}"
