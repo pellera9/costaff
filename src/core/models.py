@@ -117,6 +117,7 @@ class RegularWork(Base):
     channel = Column(String, nullable=True)
     recipient = Column(String, nullable=True)
     status = Column(String, default="active")   # active / paused
+    silent = Column(Boolean, default=False)     # True = internal only, skip user notification
     last_run = Column(DateTime, nullable=True)
     next_run = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

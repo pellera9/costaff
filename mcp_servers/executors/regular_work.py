@@ -90,7 +90,7 @@ async def _run_for_user(regular_work_id: str, work, user_id: str):
             db.add(new_log)
             db.commit()
 
-            if channel and recipient:
+            if channel and recipient and not work.silent:
                 await _send_notification(channel, recipient, result_text, session_id)
 
         except Exception as e:

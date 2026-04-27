@@ -136,6 +136,7 @@ _DEFAULT_REGULAR_WORKS = [
         "agent_id": "costaff_agent",
         "channel": None,
         "recipient": None,
+        "silent": True,
     },
     {
         "title": "晨間團隊摘要報告",
@@ -171,7 +172,7 @@ _DEFAULT_REGULAR_WORKS = [
             "整理成月報並使用 send_message_now 發送給使用者。\n"
             "格式請使用 Telegram HTML，標題為「🗓 本月工作回顧」。"
         ),
-        "cron": "0 21 28-31 * *",
+        "cron": "0 21 28 * *",
         "agent_id": "costaff_agent",
         "channel": None,
         "recipient": None,
@@ -202,6 +203,7 @@ def _ensure_default_regular_works(user_id: str = None):
                 agent_id=w["agent_id"],
                 channel=w["channel"],
                 recipient=w["recipient"],
+                silent=w.get("silent", False),
                 status="active",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow(),
