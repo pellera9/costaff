@@ -57,10 +57,12 @@ def get_license(auth: bool = Depends(AuthManager.verify_token)):
 
     def _current_usage() -> dict:
         conf = ConfigManager.get_config()
-        # extra_mcp: count external MCPs that are enabled
-        ext = conf.get("external_mcp", {})
-        used_mcp = sum(1 for v in ext.values() if (v.get("enabled", True) if isinstance(v, dict) else True))
-        # users: count rows in user_contacts
+        # agents: count enabled external agents
+        used_agents = sum(
+            1 for v in conf.get("external_agents", {}).values()
+            if v.get("enabled", True)
+        )
+        # users: count approved identity_maps rows
         used_users = 0
         try:
             engine = DatabaseManager.get_engine()
@@ -70,55 +72,47 @@ def get_license(auth: bool = Depends(AuthManager.verify_token)):
                     used_users = result.scalar() or 0
         except Exception:
             pass
-        # channels: count explicitly enabled channels in config
-        used_channels = len(conf.get("channels", []))
-        # apis and skills: count rows in their tables
-        used_apis = 0
+        # skills: count rows in skill_configs
         used_skills = 0
         try:
             engine = DatabaseManager.get_engine()
             if engine:
                 with engine.connect() as conn:
-                    used_apis   = conn.execute(text("SELECT COUNT(*) FROM api_configs")).scalar() or 0
                     used_skills = conn.execute(text("SELECT COUNT(*) FROM skill_configs")).scalar() or 0
         except Exception:
             pass
         return {
-            "monthly_executions": _monthly_used(),
-            "extra_mcp":          used_mcp,
-            "users":              used_users,
-            "enabled_channels":   used_channels,
-            "apis":               used_apis,
-            "skills":             used_skills,
+            "agents": used_agents,
+            "users":  used_users,
+            "skills": used_skills,
         }
 
     try:
         info = LicenseManager.load(license_path)
         if info:
             return {
-                "plan":         info.plan,
-                "issued_to":    info.issued_to,
-                "expires_at":   str(info.expires_at) if info.expires_at else None,
-                "is_expired":   info.is_expired,
+                "plan":          info.plan,
+                "issued_to":     info.issued_to,
+                "contact_phone": info.contact_phone,
+                "expires_at":    str(info.expires_at) if info.expires_at else None,
+                "is_expired":    info.is_expired,
                 "limits": {
-                    "extra_mcp":          info.extra_mcp,
-                    "monthly_executions": info.monthly_executions,
-                    "max_users":          info.max_users,
-                    "enabled_channels":   info.enabled_channels,
-                    "max_apis":           info.max_apis,
-                    "max_skills":         info.max_skills,
+                    "max_agents": info.max_agents,
+                    "max_users":  info.max_users,
+                    "max_skills": info.max_skills,
                 },
                 "usage": _current_usage(),
             }
     except ValueError as e:
         return {"plan": "invalid", "error": str(e)}
     return {
-        "plan":      "oss",
-        "issued_to": None,
-        "expires_at": None,
-        "is_expired": False,
-        "limits":    OSS_LIMITS,
-        "usage":     _current_usage(),
+        "plan":          "oss",
+        "issued_to":     None,
+        "contact_phone": None,
+        "expires_at":    None,
+        "is_expired":    False,
+        "limits":        OSS_LIMITS,
+        "usage":         _current_usage(),
     }
 
 

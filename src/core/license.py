@@ -21,12 +21,9 @@ _PUBLIC_KEY_B64 = "L2TjTtry0aSRj9nEBXWZ7CwYRZHPn0teBVE5PgdWT2Y="
 
 # --- OSS Plan limits ---
 OSS_LIMITS = {
-    "extra_mcp":          1,
-    "monthly_executions": 30,
-    "max_users":          1,
-    "enabled_channels":   1,
-    "max_apis":           5,
-    "max_skills":         5,
+    "max_agents": 1,
+    "max_users":  1,
+    "max_skills": 5,
 }
 
 
@@ -71,23 +68,23 @@ def _canonical(data: dict) -> bytes:
         f"license_id={data.get('license_id', '')}",
         f"plan={data.get('plan', '')}",
         f"issued_to={data.get('issued_to', '')}",
+        f"contact_phone={data.get('contact_phone', '')}",
         f"issued_at={data.get('issued_at', '')}",
         f"expires_at={data.get('expires_at', '')}",
         f"machine_id={data.get('machine_id', '')}",
-        f"extra_mcp={data.get('limits', {}).get('extra_mcp', 0)}",
-        f"monthly_executions={data.get('limits', {}).get('monthly_executions', 0)}",
+        f"max_agents={data.get('limits', {}).get('max_agents', 0)}",
         f"max_users={data.get('limits', {}).get('max_users', 0)}",
-        f"enabled_channels={data.get('limits', {}).get('enabled_channels', 0)}",
-        f"max_apis={data.get('limits', {}).get('max_apis', 0)}",
         f"max_skills={data.get('limits', {}).get('max_skills', 0)}",
     ]
     return "\n".join(fields).encode("utf-8")
 
 
 class LicenseInfo:
-    def __init__(self, plan: str, issued_to: str, expires_at: Optional[date], limits: dict):
+    def __init__(self, plan: str, issued_to: str, expires_at: Optional[date], limits: dict,
+                 contact_phone: str = ""):
         self.plan = plan
         self.issued_to = issued_to
+        self.contact_phone = contact_phone
         self.expires_at = expires_at
         self.limits = limits
 
@@ -98,24 +95,12 @@ class LicenseInfo:
         return date.today() > self.expires_at
 
     @property
-    def extra_mcp(self) -> int:
-        return self.limits.get("extra_mcp", OSS_LIMITS["extra_mcp"])
-
-    @property
-    def monthly_executions(self) -> int:
-        return self.limits.get("monthly_executions", OSS_LIMITS["monthly_executions"])
+    def max_agents(self) -> int:
+        return self.limits.get("max_agents", OSS_LIMITS["max_agents"])
 
     @property
     def max_users(self) -> int:
         return self.limits.get("max_users", OSS_LIMITS["max_users"])
-
-    @property
-    def enabled_channels(self) -> int:
-        return self.limits.get("enabled_channels", OSS_LIMITS["enabled_channels"])
-
-    @property
-    def max_apis(self) -> int:
-        return self.limits.get("max_apis", OSS_LIMITS["max_apis"])
 
     @property
     def max_skills(self) -> int:
@@ -187,24 +172,22 @@ class LicenseManager:
         info = LicenseInfo(
             plan=data.get("plan", "enterprise"),
             issued_to=data.get("issued_to", "Unknown"),
+            contact_phone=data.get("contact_phone", ""),
             expires_at=expires_at,
             limits={
-                "extra_mcp":          int(limits.get("extra_mcp", OSS_LIMITS["extra_mcp"])),
-                "monthly_executions": int(limits.get("monthly_executions", OSS_LIMITS["monthly_executions"])),
-                "max_users":          int(limits.get("max_users", OSS_LIMITS["max_users"])),
-                "enabled_channels":   int(limits.get("enabled_channels", OSS_LIMITS["enabled_channels"])),
-                "max_apis":           int(limits.get("max_apis", OSS_LIMITS["max_apis"])),
-                "max_skills":         int(limits.get("max_skills", OSS_LIMITS["max_skills"])),
+                "max_agents": int(limits.get("max_agents", OSS_LIMITS["max_agents"])),
+                "max_users":  int(limits.get("max_users",  OSS_LIMITS["max_users"])),
+                "max_skills": int(limits.get("max_skills", OSS_LIMITS["max_skills"])),
             },
         )
 
         if info.is_expired:
             raise ValueError(
                 f"License expired on {info.expires_at}. "
-                "Please renew your Enterprise License or revert to the OSS Plan."
+                "Please renew your license or revert to the OSS Plan."
             )
 
-        logger.info(f"Enterprise License loaded: issued_to={info.issued_to}, expires_at={info.expires_at}")
+        logger.info(f"License loaded: issued_to={info.issued_to}, expires_at={info.expires_at}")
         cls._license = info
         return info
 
@@ -224,6 +207,17 @@ class LicenseManager:
         )
 
     @classmethod
+    def check_agent_limit(cls, current_count: int) -> None:
+        """Raises ValueError if adding one more agent would exceed the license limit."""
+        limit = cls.get().max_agents
+        if current_count >= limit:
+            plan = cls.get().plan.upper()
+            raise ValueError(
+                f"Agent limit reached ({current_count}/{limit}) under the {plan} Plan. "
+                "Please upgrade to add more agents."
+            )
+
+    @classmethod
     def check_user_limit(cls, db) -> None:
         """Raises ValueError if the total number of user profiles has reached the license limit."""
         from src.core.models import UserContact
@@ -234,19 +228,6 @@ class LicenseManager:
             raise ValueError(
                 f"User limit reached ({count}/{limit}) under the {plan} Plan. "
                 "Please upgrade to add more users."
-            )
-
-    @classmethod
-    def check_api_limit(cls, db) -> None:
-        """Raises ValueError if the total number of API configs has reached the license limit."""
-        from src.core.models import ApiConfig
-        limit = cls.get().max_apis
-        count = db.query(ApiConfig).count()
-        if count >= limit:
-            plan = cls.get().plan.upper()
-            raise ValueError(
-                f"API 整合數量已達上限（{count}/{limit}）under the {plan} Plan。"
-                "請升級方案以新增更多 API。"
             )
 
     @classmethod
@@ -261,48 +242,3 @@ class LicenseManager:
                 f"Skills 數量已達上限（{count}/{limit}）under the {plan} Plan。"
                 "請升級方案以新增更多 Skill。"
             )
-
-    @classmethod
-    def check_execution_limit(cls, user_id: str, db) -> None:
-        """
-        Checks monthly successful execution count against the license limit.
-        - Raises ExecutionWarning at 80% usage (non-blocking, caller sends notification).
-        - Raises ValueError at 100% usage (blocking, caller must abort execution).
-        Counts: completed ProjectTasks + successful RegularWorkLogs this month.
-        Failed executions are not counted.
-        """
-        from src.core.models import ProjectTask, RegularWorkLog
-        limit = cls.get().monthly_executions
-        month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-        task_count = db.query(ProjectTask).filter(
-            ProjectTask.user_id == user_id,
-            ProjectTask.status == "done",
-            ProjectTask.updated_at >= month_start,
-        ).count()
-
-        work_count = db.query(RegularWorkLog).filter(
-            RegularWorkLog.user_id == user_id,
-            RegularWorkLog.status == "success",
-            RegularWorkLog.created_at >= month_start,
-        ).count()
-
-        used = task_count + work_count
-
-        if used >= limit:
-            plan = cls.get().plan.upper()
-            raise ValueError(
-                f"本月執行額度已用完（{used}/{limit}）。\n"
-                f"升級至更高方案以繼續使用，或等待下個月重置。"
-            )
-
-        if used >= int(limit * 0.8):
-            remaining = limit - used
-            raise ExecutionWarning(
-                f"執行額度即將用完，本月剩餘 {remaining} 次（{used}/{limit}）。"
-            )
-
-
-class ExecutionWarning(Exception):
-    """Raised when monthly execution usage reaches 80%. Non-blocking — caller sends notification."""
-    pass

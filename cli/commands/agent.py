@@ -46,6 +46,17 @@ def agent_add(
         console.print(f"[red]Error: Agent '{name}' already exists. Use 'costaff agent remove {name}' first.[/red]")
         raise typer.Exit(1)
 
+    # License check
+    try:
+        import sys as _sys
+        _sys.path.insert(0, _project_root)
+        from src.core.license import LicenseManager
+        current_count = len([a for a in conf.get("external_agents", {}).values() if a.get("enabled")])
+        LicenseManager.check_agent_limit(current_count)
+    except ValueError as e:
+        console.print(f"[red]✖ {e}[/red]")
+        raise typer.Exit(1)
+
     # Parse provided env vars
     predefined_envs = {}
     if env:

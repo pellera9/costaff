@@ -156,12 +156,9 @@ const UI = {
         };
 
         const metrics = [
-            { label: 'Monthly Executions', used: usage.monthly_executions ?? 0, limit: limits.monthly_executions ?? 30 },
-            { label: 'Extra MCP',          used: usage.extra_mcp ?? 0,           limit: limits.extra_mcp ?? 1 },
-            { label: 'Users',              used: usage.users ?? 0,               limit: limits.max_users ?? 1 },
-            { label: 'Channels',           used: usage.enabled_channels ?? 0,    limit: limits.enabled_channels ?? 1 },
-            { label: 'APIs',               used: usage.apis ?? 0,                limit: limits.max_apis ?? 5 },
-            { label: 'Skills',             used: usage.skills ?? 0,              limit: limits.max_skills ?? 5 },
+            { label: 'Agents',  used: usage.agents ?? 0, limit: limits.max_agents ?? 1 },
+            { label: 'Users',   used: usage.users  ?? 0, limit: limits.max_users  ?? 1 },
+            { label: 'Skills',  used: usage.skills ?? 0, limit: limits.max_skills ?? 5 },
         ];
 
         card.innerHTML = `
@@ -176,7 +173,7 @@ const UI = {
                                 <span class="text-lg font-headline font-bold text-slate-900">${planLabel} PLAN</span>
                                 ${isExpired ? '<span class="text-[10px] font-black uppercase bg-red-50 text-red-500 px-2 py-0.5 rounded-full">EXPIRED</span>' : ''}
                             </div>
-                            ${data.issued_to ? `<p class="text-xs text-slate-400 mt-0.5">${data.issued_to}</p>` : ''}
+                            ${data.issued_to ? `<p class="text-xs text-slate-400 mt-0.5">${data.issued_to}${data.contact_phone ? ` · ${data.contact_phone}` : ''}</p>` : ''}
                             <p class="text-xs ${expiryColor} mt-0.5">${expiryText}</p>
                         </div>
                     </div>

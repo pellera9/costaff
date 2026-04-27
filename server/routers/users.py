@@ -298,13 +298,6 @@ def create_api_config(req: ApiConfigCreateRequest, auth: bool = Depends(AuthMana
     if not engine:
         raise HTTPException(status_code=500, detail="Database connection failed")
     try:
-        sys.path.insert(0, _project_root)
-        from src.core.license import LicenseManager
-        with Session(engine) as _s:
-            LicenseManager.check_api_limit(_s)
-    except ValueError as e:
-        raise HTTPException(status_code=403, detail=str(e))
-    try:
         new_id = str(uuid.uuid4())
         headers_enc = encrypt_headers(req.headers) if req.headers else None
         effective_user_id = req.user_id or "__global__"

@@ -12,7 +12,7 @@ console = Console()
 
 
 def license(
-    action: str = typer.Argument(..., help="apply | status"),
+    action: str = typer.Argument(..., help="apply | status | machine-id"),
     path: str = typer.Argument(None, help="Path to costaff-license.yaml (for apply)"),
 ):
     """Manage your CoStaff Agent license."""
@@ -36,15 +36,13 @@ def license(
                 shutil.copy(path, dest)
                 console.print(Panel.fit(
                     f"[green]✔ License applied successfully[/green]\n\n"
-                    f"  Plan              : [bold]{info.plan.upper()}[/bold]\n"
-                    f"  Issued to         : {info.issued_to}\n"
-                    f"  Expires           : {info.expires_at or 'Never'}\n"
-                    f"  extra_mcp         : {info.extra_mcp}\n"
-                    f"  monthly_executions: {info.monthly_executions}\n"
-                    f"  max_users         : {info.max_users}\n"
-                    f"  enabled_channels  : {info.enabled_channels}\n"
-                    f"  max_apis          : {info.max_apis}\n"
-                    f"  max_skills        : {info.max_skills}",
+                    f"  Plan          : [bold]{info.plan.upper()}[/bold]\n"
+                    f"  Issued to     : {info.issued_to}\n"
+                    f"  Contact phone : {info.contact_phone or '(not provided)'}\n"
+                    f"  Expires       : {info.expires_at or 'Never'}\n"
+                    f"  max_agents    : {info.max_agents}\n"
+                    f"  max_users     : {info.max_users}\n"
+                    f"  max_skills    : {info.max_skills}",
                     title="CoStaff License"
                 ))
         except ValueError as e:
@@ -56,7 +54,7 @@ def license(
         mid = get_machine_id()
         console.print(Panel.fit(
             f"  Machine ID : [bold]{mid}[/bold]\n\n"
-            f"  Provide this to the licensor when purchasing an Enterprise License.",
+            f"  Provide this to the licensor when purchasing a license.",
             title="CoStaff Machine ID"
         ))
 
@@ -66,31 +64,26 @@ def license(
                 info = LicenseManager.load(dest)
                 expired_note = " [red](EXPIRED)[/red]" if info and info.is_expired else ""
                 console.print(Panel.fit(
-                    f"  Plan              : [bold]{info.plan.upper()}[/bold]{expired_note}\n"
-                    f"  Issued to         : {info.issued_to}\n"
-                    f"  Expires           : {info.expires_at or 'Never'}\n"
-                    f"  extra_mcp         : {info.extra_mcp}\n"
-                    f"  monthly_executions: {info.monthly_executions}\n"
-                    f"  max_users         : {info.max_users}\n"
-                    f"  enabled_channels  : {info.enabled_channels}\n"
-                    f"  max_apis          : {info.max_apis}\n"
-                    f"  max_skills        : {info.max_skills}",
+                    f"  Plan          : [bold]{info.plan.upper()}[/bold]{expired_note}\n"
+                    f"  Issued to     : {info.issued_to}\n"
+                    f"  Contact phone : {info.contact_phone or '(not provided)'}\n"
+                    f"  Expires       : {info.expires_at or 'Never'}\n"
+                    f"  max_agents    : {info.max_agents}\n"
+                    f"  max_users     : {info.max_users}\n"
+                    f"  max_skills    : {info.max_skills}",
                     title="CoStaff License"
                 ))
             except ValueError as e:
                 console.print(f"[red]License invalid: {e}[/red]")
         else:
             console.print(Panel.fit(
-                f"  Plan              : [bold]OSS[/bold]\n"
-                f"  extra_mcp         : {OSS_LIMITS['extra_mcp']}\n"
-                f"  monthly_executions: {OSS_LIMITS['monthly_executions']}\n"
-                f"  max_users         : {OSS_LIMITS['max_users']}\n"
-                f"  enabled_channels  : {OSS_LIMITS['enabled_channels']}\n"
-                f"  max_apis          : {OSS_LIMITS['max_apis']}\n"
-                f"  max_skills        : {OSS_LIMITS['max_skills']}\n\n"
+                f"  Plan          : [bold]OSS[/bold]\n"
+                f"  max_agents    : {OSS_LIMITS['max_agents']}\n"
+                f"  max_users     : {OSS_LIMITS['max_users']}\n"
+                f"  max_skills    : {OSS_LIMITS['max_skills']}\n\n"
                 f"  To upgrade, contact: simonliuyuwei@gmail.com",
                 title="CoStaff License"
             ))
     else:
-        console.print(f"[red]Unknown action: {action}. Use 'apply' or 'status'.[/red]")
+        console.print(f"[red]Unknown action: {action}. Use 'apply', 'status', or 'machine-id'.[/red]")
         raise typer.Exit(1)
