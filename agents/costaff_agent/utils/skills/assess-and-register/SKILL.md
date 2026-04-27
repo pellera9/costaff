@@ -48,9 +48,11 @@ Then confirm to the user in one short line:
 
 ## Step 3 — Per-Task Completion (CRITICAL: close each task immediately, do not batch)
 
-After **each** sub-agent returns a completion signal (file path or concrete result), execute these steps **before** moving to the next task:
+After **each** sub-agent returns a completion signal, run the `acceptance-check` skill **before** marking done:
 
-1. `update_task_status(task_id, "done")` — mark the completed task as done
+1. Activate `acceptance-check` skill — verify all required output files exist
+   - Files confirmed → proceed to step 2
+   - File missing → skill requeues and retries; only proceed to step 2 after retry passes or task is marked `failed`
 2. `add_task_comment(task_id, type="result", content="...")` — record the output file path or result summary
 3. `update_task_status(next_task_id, "doing")` — if a next task exists, mark it as doing **now**, then immediately call `transfer_to_agent` for it
 

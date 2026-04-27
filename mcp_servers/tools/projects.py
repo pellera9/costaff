@@ -266,6 +266,11 @@ async def create_project_task(
     - Include only the W/H items that are meaningful for each case; skip the rest.
     - Be specific: name actual components, endpoints, fields, or file paths where known.
     - Each use case should be independently understandable by the executing agent.
+    - CRITICAL — output file paths: if the task produces output files, the acceptance criteria
+      MUST include the full absolute path for each output file, using exactly this format:
+        - [ ] File exists at /app/data/shared/<agent-name>/<filename>
+      Never write just the filename alone (e.g. `report.pdf`) — always the full path.
+      This is required for automated acceptance checking.
 
     Other fields:
     - assigned_agent: 'coding_agent' for code/files; 'costaff_agent' for planning/coordination.
