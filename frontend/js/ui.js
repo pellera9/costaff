@@ -753,8 +753,8 @@ const UI = {
         const div = document.createElement('div');
         div.className = `flex flex-col ${author === 'user' ? 'items-end' : 'items-start'} mb-4 w-full`;
         div.innerHTML = `
-            <div class="px-5 py-3 max-w-[85%] ${bubbleClass} break-words">
-                <div class="chat-content text-[14px] leading-relaxed">${content}</div>
+            <div class="px-5 py-3 max-w-[85%] ${bubbleClass} break-words overflow-x-auto">
+                <div class="chat-content text-[14px] leading-relaxed [&_pre]:whitespace-pre-wrap [&_pre]:break-all">${content}</div>
             </div>
             <div class="text-[9px] text-slate-400 mt-1 uppercase font-bold tracking-widest px-1">
                 ${author} • ${customTime || ''}
