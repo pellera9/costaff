@@ -13,6 +13,16 @@ from mcp_servers.executors.project_task import execute_project_task
 logger = logging.getLogger("costaff-agent-engine")
 
 
+def _require_approved(user_id: str, db) -> "str | None":
+    """Returns denial message if user is unapproved; None grants access.
+    Users with no identity_maps record (admin/system) are always granted access.
+    """
+    mapping = db.query(models.IdentityMap).filter(models.IdentityMap.hashed_id == user_id).first()
+    if mapping is not None and not mapping.is_approved:
+        return "存取被拒絕：你的帳號尚未獲得授權，請聯絡管理員。"
+    return None
+
+
 @mcp.tool()
 async def create_epic(user_id: str, title: str, description: Optional[str] = None) -> str:
     """
@@ -21,6 +31,9 @@ async def create_epic(user_id: str, title: str, description: Optional[str] = Non
     """
     db = SessionLocal()
     try:
+        err = _require_approved(user_id, db)
+        if err:
+            return err
         epic = models.Epic(
             id=str(uuid.uuid4()),
             user_id=user_id,
@@ -73,12 +86,15 @@ async def update_epic(
 @mcp.tool()
 async def get_epics(user_id: str, status: Optional[str] = None) -> str:
     """
-    Lists all Epics for a user.
+    Lists all team Epics. Requires an approved account.
     - status: optional filter — 'active', 'completed', 'archived'
     """
     db = SessionLocal()
     try:
-        q = db.query(models.Epic).filter(models.Epic.user_id == user_id)
+        err = _require_approved(user_id, db)
+        if err:
+            return err
+        q = db.query(models.Epic)
         if status:
             q = q.filter(models.Epic.status == status)
         epics = q.order_by(models.Epic.created_at.desc()).all()
@@ -145,6 +161,9 @@ async def create_story(
     """
     db = SessionLocal()
     try:
+        err = _require_approved(user_id, db)
+        if err:
+            return err
         story = models.Story(
             id=str(uuid.uuid4()),
             epic_id=epic_id,
@@ -283,6 +302,9 @@ async def create_project_task(
     logger.info(f"[create_project_task] epic={epic_id} agent={assigned_agent} title={title!r}")
     db = SessionLocal()
     try:
+        err = _require_approved(user_id, db)
+        if err:
+            return err
         # Fallback spec if agent did not provide one
         if not spec:
             epic = db.query(models.Epic).filter(models.Epic.id == epic_id).first()
@@ -386,6 +408,13 @@ async def update_task_queue(user_id: str, assigned_agent: str, task_ids_ordered:
       Example: ["uuid-1", "uuid-2", "uuid-3"]
     """
     logger.info(f"[update_task_queue] agent={assigned_agent!r} task_ids={task_ids_ordered!r}")
+    db_check = SessionLocal()
+    try:
+        err = _require_approved(user_id, db_check)
+        if err:
+            return err
+    finally:
+        db_check.close()
     # Defensive: LLMs sometimes pass a JSON-encoded string instead of a list
     if isinstance(task_ids_ordered, str):
         try:
@@ -449,10 +478,12 @@ async def get_agent_queue(user_id: str, assigned_agent: str) -> str:
     """
     db = SessionLocal()
     try:
+        err = _require_approved(user_id, db)
+        if err:
+            return err
         tasks = (
             db.query(models.ProjectTask)
             .filter(
-                models.ProjectTask.user_id == user_id,
                 models.ProjectTask.assigned_agent == assigned_agent,
                 models.ProjectTask.status.in_(["backlog", "queued", "doing"])
             )
@@ -483,10 +514,12 @@ async def get_next_task(user_id: str, assigned_agent: str) -> str:
     """
     db = SessionLocal()
     try:
+        err = _require_approved(user_id, db)
+        if err:
+            return err
         tasks = (
             db.query(models.ProjectTask)
             .filter(
-                models.ProjectTask.user_id == user_id,
                 models.ProjectTask.assigned_agent == assigned_agent,
                 models.ProjectTask.status == "queued"
             )
@@ -524,6 +557,9 @@ async def add_task_comment(
     """
     db = SessionLocal()
     try:
+        err = _require_approved(user_id, db)
+        if err:
+            return err
         task = db.query(models.ProjectTask).filter(models.ProjectTask.id == task_id).first()
         if not task:
             return f"Task {task_id} not found."
@@ -583,7 +619,10 @@ async def get_project_tasks(
     """
     db = SessionLocal()
     try:
-        q = db.query(models.ProjectTask).filter(models.ProjectTask.user_id == user_id)
+        err = _require_approved(user_id, db)
+        if err:
+            return err
+        q = db.query(models.ProjectTask)
         if epic_id: q = q.filter(models.ProjectTask.epic_id == epic_id)
         if story_id: q = q.filter(models.ProjectTask.story_id == story_id)
         if assigned_agent: q = q.filter(models.ProjectTask.assigned_agent == assigned_agent)
