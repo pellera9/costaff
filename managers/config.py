@@ -57,7 +57,7 @@ class ConfigManager:
         conf.setdefault("external_agents", {})["costaff-agent-coding"] = {
             "type": "github",
             "a2a_url": a2a_url,
-            "description": "寫程式並執行來解決需要計算、資料處理或程式邏輯的問題，回傳執行結果與產生的檔案路徑。",
+            "description": "Writes and runs code to solve problems involving computation, data processing, or program logic. Returns execution results and generated file paths.",
             "enabled": bool(conf.get("coding_agent_enabled", False)),
             "container_names": ["costaff-agent-coding", "costaff-mcp-coding"],
         }

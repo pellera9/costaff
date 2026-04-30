@@ -125,12 +125,12 @@ async def poll_queued_tasks():
 
 _DEFAULT_REGULAR_WORKS = [
     {
-        "title": "夜間日記撰寫",
+        "title": "Nightly Diary",
         "spec": (
-            "請根據今日 ADK events 紀錄，幫 costaff_agent 撰寫每日日記。\n"
-            "呼叫 read_today_events(user_id) 取得今日對話摘要，\n"
-            "再呼叫 write_diary(user_id, agent_name='costaff_agent', date=<today>, done=<完成事項>, next=<明日計畫>, blocker=<阻礙事項>)。\n"
-            "若無任何事件，done 寫「今日無對話紀錄」，blocker 為 null。"
+            "Write today's daily diary for costaff_agent based on ADK event records.\n"
+            "Call read_today_events(user_id) to get a summary of today's conversations,\n"
+            "then call write_diary(user_id, agent_name='costaff_agent', date=<today>, done=<completed items>, next=<plan for tomorrow>, blocker=<blockers>).\n"
+            "If there are no events, set done to 'No conversation records today' and blocker to null."
         ),
         "cron": "0 23 * * *",
         "agent_id": "costaff_agent",
@@ -139,12 +139,12 @@ _DEFAULT_REGULAR_WORKS = [
         "silent": True,
     },
     {
-        "title": "晨間團隊摘要報告",
+        "title": "Morning Team Summary",
         "spec": (
-            "請呼叫 get_recent_diaries(user_id, days=1) 取得昨日所有 Agent 的日記，\n"
-            "整理成「📋 昨日團隊工作摘要」格式並使用 send_message_now 發送給使用者。\n"
-            "格式：每個 Agent 一段，包含 ✅ 完成項目、⚠️ 阻礙（若有）、→ 今日計畫。\n"
-            "若無日記，說明「昨日無工作紀錄」。"
+            "Call get_recent_diaries(user_id, days=1) to fetch yesterday's diaries for all agents,\n"
+            "format the output as '📋 Yesterday's Team Work Summary' and deliver via send_message_now.\n"
+            "Format: one section per agent, including ✅ completed items, ⚠️ blockers (if any), → today's plan.\n"
+            "If there are no diaries, state 'No work records from yesterday'."
         ),
         "cron": "0 8 * * *",
         "agent_id": "costaff_agent",
@@ -152,12 +152,12 @@ _DEFAULT_REGULAR_WORKS = [
         "recipient": None,
     },
     {
-        "title": "每週工作總結",
+        "title": "Weekly Work Summary",
         "spec": (
-            "請呼叫 get_recent_diaries(user_id, days=7) 取得本週所有日記，\n"
-            "整理成週報並使用 send_message_now 發送給使用者。\n"
-            "包含：本週完成事項、主要阻礙、下週計畫。\n"
-            "格式請使用 Telegram HTML，標題為「📊 本週工作總結」。"
+            "Call get_recent_diaries(user_id, days=7) to fetch this week's diaries,\n"
+            "compile a weekly report and deliver via send_message_now.\n"
+            "Include: items completed this week, main blockers, plan for next week.\n"
+            "Use Telegram HTML formatting with the title '📊 Weekly Work Summary'."
         ),
         "cron": "0 22 * * 0",
         "agent_id": "costaff_agent",
@@ -165,12 +165,12 @@ _DEFAULT_REGULAR_WORKS = [
         "recipient": None,
     },
     {
-        "title": "每月工作回顧",
+        "title": "Monthly Work Review",
         "spec": (
-            "請呼叫 get_recent_diaries(user_id, days=31) 取得本月所有日記，\n"
-            "以及 get_epics(user_id, status='active') 了解專案進度，\n"
-            "整理成月報並使用 send_message_now 發送給使用者。\n"
-            "格式請使用 Telegram HTML，標題為「🗓 本月工作回顧」。"
+            "Call get_recent_diaries(user_id, days=31) to fetch this month's diaries,\n"
+            "and get_epics(user_id, status='active') to review project progress,\n"
+            "compile a monthly report and deliver via send_message_now.\n"
+            "Use Telegram HTML formatting with the title '🗓 Monthly Work Review'."
         ),
         "cron": "0 21 28 * *",
         "agent_id": "costaff_agent",

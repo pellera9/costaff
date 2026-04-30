@@ -28,7 +28,7 @@ def send_email_notification(recipient_email: str, message: str, subject: str = N
         return False
 
     # Use default subject if not provided
-    email_subject = subject if subject else "ADK 定時提醒通知"
+    email_subject = subject if subject else "ADK Scheduled Reminder"
 
     msg = MIMEText(message)
     msg['Subject'] = email_subject

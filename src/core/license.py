@@ -23,7 +23,7 @@ _PUBLIC_KEY_B64 = "L2TjTtry0aSRj9nEBXWZ7CwYRZHPn0teBVE5PgdWT2Y="
 OSS_LIMITS = {
     "max_agents": 1,
     "max_users":  1,
-    "max_skills": 5,
+    "max_skills": 10,
 }
 
 
@@ -239,6 +239,6 @@ class LicenseManager:
         if count >= limit:
             plan = cls.get().plan.upper()
             raise ValueError(
-                f"Skills 數量已達上限（{count}/{limit}）under the {plan} Plan。"
-                "請升級方案以新增更多 Skill。"
+                f"Skill limit reached ({count}/{limit}) under the {plan} Plan. "
+                "Please upgrade your plan to add more Skills."
             )

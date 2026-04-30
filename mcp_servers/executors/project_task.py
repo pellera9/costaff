@@ -45,10 +45,10 @@ async def execute_project_task(task_id: str):
             user_id=task.user_id,
             author=task.assigned_agent or "costaff_agent",
             content=(
-                f"## 🚀 開始執行\n"
-                f"- **任務**：{task.title}\n"
-                f"- **指派 Agent**：{task.assigned_agent or 'costaff_agent'}\n"
-                f"- **任務說明**：{(task.spec or '').strip()[:300] or '—'}"
+                f"## 🚀 Started\n"
+                f"- **Task**: {task.title}\n"
+                f"- **Assigned Agent**: {task.assigned_agent or 'costaff_agent'}\n"
+                f"- **Description**: {(task.spec or '').strip()[:300] or '—'}"
             ),
             type="note",
             created_at=datetime.utcnow()
@@ -98,11 +98,11 @@ async def execute_project_task(task_id: str):
                 user_id=task.user_id,
                 author=task.assigned_agent or "costaff_agent",
                 content=(
-                    f"## ❌ 錯誤發生\n"
-                    f"- **錯誤類型**：{type(e).__name__}\n"
-                    f"- **錯誤訊息**：{str(e)}\n"
-                    f"- **發生位置**：Agent 執行階段（task_id={task_id}）\n"
-                    f"- **詳細 Traceback**：\n```\n{traceback.format_exc()[-1000:]}\n```"
+                    f"## ❌ Error Occurred\n"
+                    f"- **Error Type**: {type(e).__name__}\n"
+                    f"- **Error Message**: {str(e)}\n"
+                    f"- **Location**: Agent execution stage (task_id={task_id})\n"
+                    f"- **Traceback**:\n```\n{traceback.format_exc()[-1000:]}\n```"
                 ),
                 type="issue",
                 created_at=datetime.utcnow()

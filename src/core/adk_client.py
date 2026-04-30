@@ -181,13 +181,13 @@ async def run_adk_prompt(app: str, uid: str, sid: str, prompt: Optional[str] = N
                             if event.get("author") != "user" and "content" in event:
                                 txts = [p.get("text", "") for p in event["content"].get("parts", []) if "text" in p]
                                 if txts: return "".join(txts).strip()
-                        preferred_lang = os.getenv("COSTAFF_PREFERRED_LANGUAGE", "Traditional Chinese (繁體中文)")
-                        payload["newMessage"] = {"role": "user", "parts": [{"text": f"任務已完成，請用{preferred_lang}向用戶說明結果摘要。"}]}
+                        preferred_lang = os.getenv("COSTAFF_PREFERRED_LANGUAGE", "English")
+                        payload["newMessage"] = {"role": "user", "parts": [{"text": f"The task is complete. Please summarize the result for the user in {preferred_lang}."}]}
                         continue
                 except Exception as e:
                     logger.warning(f"ADK request attempt failed cid={cid} sid={sid}: {e}")
                     await asyncio.sleep(2)
             logger.warning(f"ADK request exhausted retries cid={cid} sid={sid}")
-            return "⚠️ 無法取得 Agent 回應。"
+            return "⚠️ Failed to get a response from the agent."
     finally:
         await _release_session_lock(sid)

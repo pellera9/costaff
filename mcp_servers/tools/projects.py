@@ -19,7 +19,7 @@ def _require_approved(user_id: str, db) -> "str | None":
     """
     mapping = db.query(models.IdentityMap).filter(models.IdentityMap.hashed_id == user_id).first()
     if mapping is not None and not mapping.is_approved:
-        return "存取被拒絕：你的帳號尚未獲得授權，請聯絡管理員。"
+        return "Access denied: your account has not been approved. Please contact an administrator."
     return None
 
 
@@ -258,26 +258,27 @@ async def create_project_task(
 
     ## spec format (5W1H per use case)
 
-    Write the spec in Traditional Chinese using this structure:
+    Write the spec in English using this structure (the executing agent
+    will translate its final user-facing output to the user's preferred language):
 
     # {task title}
 
-    ## 背景
+    ## Background
     {one sentence: which epic/story this belongs to and why this task exists}
 
-    ## 使用案例
+    ## Use Cases
 
-    ### 案例一、{case name}
-    - **When**：{trigger / condition}
-    - **What**：{the behaviour or output}
-    - **Where**：{location, component, URL, file — if applicable}
-    - **Why**：{purpose — if not obvious}
-    - **How**：{implementation approach — if applicable}
+    ### Case 1: {case name}
+    - **When**: {trigger / condition}
+    - **What**: {the behaviour or output}
+    - **Where**: {location, component, URL, file — if applicable}
+    - **Why**: {purpose — if not obvious}
+    - **How**: {implementation approach — if applicable}
 
-    ### 案例二、{case name}
-    ...（repeat for each distinct use case or sub-feature）
+    ### Case 2: {case name}
+    ...(repeat for each distinct use case or sub-feature)
 
-    ## 驗收條件
+    ## Acceptance Criteria
     - [ ] {concrete, testable criterion}
     - [ ] ...
 
@@ -312,7 +313,7 @@ async def create_project_task(
             if story_id:
                 story = db.query(models.Story).filter(models.Story.id == story_id).first()
 
-            epic_title  = epic.title if epic else "（未知專案）"
+            epic_title  = epic.title if epic else "(Unknown Project)"
             epic_desc   = epic.description if epic and epic.description else ""
             story_title = story.title if story else ""
             story_desc  = story.description if story and story.description else ""
@@ -320,23 +321,23 @@ async def create_project_task(
             context_lines = []
             if epic_desc:  context_lines.append(epic_desc)
             if story_desc: context_lines.append(story_desc)
-            context = "；".join(context_lines) if context_lines else f"實現 {epic_title} 的目標"
+            context = "; ".join(context_lines) if context_lines else f"Achieve the goal of {epic_title}"
 
             spec = (
                 f"# {title}\n\n"
-                f"## 背景\n"
-                f"所屬專案：{epic_title}"
-                + (f"　Story：{story_title}" if story_title else "")
+                f"## Background\n"
+                f"Parent Project: {epic_title}"
+                + (f"  |  Story: {story_title}" if story_title else "")
                 + f"\n{context}\n\n"
-                f"## 使用案例\n\n"
-                f"### 案例一、{title}\n"
-                f"- **When**：任務執行時\n"
-                f"- **What**：完成「{title}」的開發與實作\n"
-                f"- **Where**：{epic_title}" + (f" > {story_title}" if story_title else "") + "\n"
-                f"- **How**：分析需求 → 規劃方案 → 實作程式碼 → 驗證結果 → 回報摘要\n\n"
-                f"## 驗收條件\n"
-                f"- [ ] 功能正常運作\n"
-                f"- [ ] 完成摘要已回報\n"
+                f"## Use Cases\n\n"
+                f"### Case 1: {title}\n"
+                f"- **When**: when the task runs\n"
+                f"- **What**: complete the development and implementation of \"{title}\"\n"
+                f"- **Where**: {epic_title}" + (f" > {story_title}" if story_title else "") + "\n"
+                f"- **How**: analyze requirements → plan approach → implement → verify → report summary\n\n"
+                f"## Acceptance Criteria\n"
+                f"- [ ] Feature works correctly\n"
+                f"- [ ] Completion summary delivered\n"
             )
 
         task_type = "scheduled" if cron else "immediate"

@@ -41,7 +41,7 @@ def set_coding_agent(req: dict, auth: bool = Depends(AuthManager.verify_token)):
         conf.setdefault("external_agents", {}).setdefault("costaff-agent-coding", {
             "type": "github",
             "a2a_url": coding_a2a_url,
-            "description": "寫程式並執行來解決需要計算、資料處理或程式邏輯的問題，回傳執行結果與產生的檔案路徑。",
+            "description": "Writes and runs code to solve problems involving computation, data processing, or program logic. Returns execution results and generated file paths.",
             "container_names": ["costaff-agent-coding", "costaff-mcp-coding"],
         })["enabled"] = enabled
         conf["external_agents"]["costaff-agent-coding"]["a2a_url"] = coding_a2a_url

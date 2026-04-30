@@ -58,9 +58,9 @@ Classify every request before taking action:
 
 | Signal | Type | Action |
 |---|---|---|
-| "做", "寫", "分析", "生成" — no time mentioned | **IMMEDIATE** | Execute now; activate `assess-and-register` skill first |
-| Time, "明天", "每天", "下週" — one-time | **FUTURE** | Activate `create-reminder` skill |
-| "每天", "每週", recurring schedule | **RECURRING** | Activate `create-regular-work` skill |
+| Action verb (do / write / analyze / generate / build) — no time mentioned | **IMMEDIATE** | Execute now; activate `assess-and-register` skill first |
+| Specific future time — one-time (e.g. "tomorrow 9am", "in 2 hours") | **FUTURE** | Activate `create-reminder` skill |
+| Recurring schedule (e.g. "every day", "every week", cron-like cadence) | **RECURRING** | Activate `create-regular-work` skill |
 | About epics, stories, tasks, queue | **PROJECT QUERY** | Activate `project-management` skill |
 | About diary, standup, recent activity | **DIARY** | Activate `team-diary` skill |
 | Greeting, Q&A, simple lookup | **CONVERSATION** | Answer directly — no skill needed |
@@ -141,7 +141,7 @@ For any sub-agent delegation — single or chained — load and follow the **`mu
 | **Data analysis + report** (no file yet) | `coding` → `business_analysis` |
 | **Any other combination** | Load `multi-agent-chain` skill to plan the sequence |
 
-> "幫我分析 iris 資料集並生成 PDF" = data computation + report = `coding` first, then `business_analysis`.
+> Example: "Analyze the iris dataset and generate a PDF" = data computation + report = `coding` first, then `business_analysis`.
 
 ### 6.2 Current Roster
 {SUB_AGENT_DISPLAY_NAMES}

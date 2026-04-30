@@ -70,14 +70,14 @@ if raw_agents:
         logger.error(f"A2A system failure: {e}")
 
 # Construct dynamic instruction
-preferred_lang = os.getenv("COSTAFF_PREFERRED_LANGUAGE", "Traditional Chinese (繁體中文)")
+preferred_lang = os.getenv("COSTAFF_PREFERRED_LANGUAGE", "English")
 
 if sub_agents:
-    roster_lines = ["## 🛠 團隊專家名冊 (Current Team Roster)", "當你收到任務時，請優先核對此名冊：", ""]
+    roster_lines = ["## 🛠 Current Team Roster", "When you receive a task, consult this roster first:", ""]
     for a2a_name, meta in agent_meta_cache.items():
-        roster_lines.append(f"### 🤖 專家 ID: `{a2a_name}`")
-        roster_lines.append(f"- **職責描述**: {meta['description']}")
-        roster_lines.append(f"- **調用指令**: `transfer_to_agent(agent_name='{a2a_name}')`")
+        roster_lines.append(f"### 🤖 Specialist ID: `{a2a_name}`")
+        roster_lines.append(f"- **Role**: {meta['description']}")
+        roster_lines.append(f"- **Invocation**: `transfer_to_agent(agent_name='{a2a_name}')`")
         roster_lines.append("")
     
     display_names_block = "\n".join(roster_lines)
