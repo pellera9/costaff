@@ -1,7 +1,7 @@
 """Runtime factory: select the orchestration backend.
 
 Usage:
-    from managers.runtime import get_runtime
+    from services.runtime import get_runtime
     runtime = get_runtime()
     runtime.up(["postgres"])
 

@@ -5,8 +5,8 @@ import time
 import typer
 from rich.console import Console
 
-from managers.config import ConfigManager
-from managers.runtime import get_runtime
+from services.config import ConfigManager
+from services.runtime import get_runtime
 
 console = Console()
 

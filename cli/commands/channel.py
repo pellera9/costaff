@@ -12,8 +12,8 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 
-from managers.config import ConfigManager
-from managers.runtime import get_runtime
+from services.config import ConfigManager
+from services.runtime import get_runtime
 from utils.helpers import PATHS, _project_root, _runtime_root, _base_dir
 from utils.helpers import _deploy_local_channel, _write_channel_fragment
 

@@ -12,10 +12,10 @@ from dotenv import load_dotenv
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from managers.auth import AuthManager
-from managers.config import ConfigManager
-from managers.docker import DockerManager
-from managers.database import DatabaseManager
+from services.auth import AuthManager
+from services.config import ConfigManager
+from services.docker import DockerManager
+from services.database import DatabaseManager
 from server.schemas import ServiceActionRequest
 from utils.helpers import PATHS, _project_root, _runtime_root
 

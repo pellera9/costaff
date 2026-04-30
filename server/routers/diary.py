@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 
-from managers.auth import AuthManager
-from managers.database import DatabaseManager
+from services.auth import AuthManager
+from services.database import DatabaseManager
 from utils.helpers import _serialize_row
 
 router = APIRouter()

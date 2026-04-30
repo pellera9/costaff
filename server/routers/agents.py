@@ -5,10 +5,10 @@ import threading
 import httpx
 from fastapi import APIRouter, HTTPException, Depends
 
-from managers.auth import AuthManager
-from managers.audit import audit
-from managers.config import ConfigManager
-from managers.docker import DockerManager
+from services.auth import AuthManager
+from services.audit import audit
+from services.config import ConfigManager
+from services.docker import DockerManager
 from server.schemas import ExternalAgentAddRequest, ExternalAgentUpdateRequest
 from utils.helpers import _validate_a2a_url
 
@@ -132,7 +132,7 @@ def dashboard_ai_team(auth: bool = Depends(AuthManager.verify_token)):
     """Returns active regular works with their last execution output + recent diary entries."""
     import logging
     from sqlalchemy import text
-    from managers.database import DatabaseManager
+    from services.database import DatabaseManager
     from utils.helpers import _serialize_row
 
     logger = logging.getLogger(__name__)

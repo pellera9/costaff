@@ -10,9 +10,9 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from managers.auth import AuthManager
-from managers.config import ConfigManager
-from managers.database import DatabaseManager
+from services.auth import AuthManager
+from services.config import ConfigManager
+from services.database import DatabaseManager
 from server.schemas import ApiConfigCreateRequest, ApiConfigUpdateRequest, SkillConfigCreateRequest, SkillConfigUpdateRequest
 from utils.crypto import encrypt_headers, decrypt_headers
 from utils.network import is_safe_url

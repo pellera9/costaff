@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
-from managers.auth import AuthManager
-from managers.audit import audit
+from services.auth import AuthManager
+from services.audit import audit
 from server.schemas import LoginRequest, SetupRequest
 from utils.helpers import VERSION
 

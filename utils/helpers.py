@@ -296,7 +296,7 @@ def _write_channel_fragment(name: str, source_path: str, public_port: int, plugi
 def _deploy_local_channel(name: str, source_path: str, conf: dict, predefined_envs: dict = None, build_only: bool = False) -> dict:
     """Build (and optionally start) a local-path communication channel following CoStaff Convention."""
     from dotenv import load_dotenv
-    from managers.docker import DockerManager
+    from services.docker import DockerManager
 
     source_path = os.path.abspath(source_path)
     manifest_path = os.path.join(source_path, "costaff.channel.json")
@@ -345,7 +345,7 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
     """Build and start a local-path agent following CoStaff Agent Convention."""
     import yaml as _yaml
     from dotenv import load_dotenv
-    from managers.docker import DockerManager
+    from services.docker import DockerManager
 
     source_path = os.path.abspath(source_path)
     manifest_path = os.path.join(source_path, "costaff.agent.json")

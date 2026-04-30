@@ -6,9 +6,9 @@ import threading
 from fastapi import APIRouter, HTTPException, Depends, Request
 from dotenv import load_dotenv, set_key
 
-from managers.auth import AuthManager
-from managers.config import ConfigManager
-from managers.docker import DockerManager
+from services.auth import AuthManager
+from services.config import ConfigManager
+from services.docker import DockerManager
 from server.schemas import GatewayUpdateRequest, AddMCPRequest, AgentMCPConfigRequest
 from utils.helpers import PATHS, _project_root, _runtime_root
 

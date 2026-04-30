@@ -7,8 +7,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from managers.config import ConfigManager
-from managers.docker import DockerManager
+from services.config import ConfigManager
+from services.docker import DockerManager
 from utils.helpers import PATHS, _project_root, _runtime_root
 
 

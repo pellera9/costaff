@@ -12,9 +12,9 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 
-from managers.config import ConfigManager
-from managers.docker import DockerManager  # still used for run_action restart trigger
-from managers.runtime import get_runtime
+from services.config import ConfigManager
+from services.docker import DockerManager  # still used for run_action restart trigger
+from services.runtime import get_runtime
 from utils.helpers import PATHS, _project_root, _runtime_root, _base_dir
 from utils.helpers import _deploy_local_agent
 

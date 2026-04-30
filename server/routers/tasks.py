@@ -5,8 +5,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import text
 
-from managers.auth import AuthManager
-from managers.database import DatabaseManager
+from services.auth import AuthManager
+from services.database import DatabaseManager
 from server.schemas import (
     RegularWorkCreateRequest,
     RegularWorkUpdateRequest,
@@ -16,7 +16,7 @@ from server.schemas import (
     ProjectTaskCreateRequest,
     ProjectTaskUpdateRequest,
 )
-from managers.audit import audit
+from services.audit import audit
 from utils.helpers import _serialize_row, _validate_cron
 
 router = APIRouter()

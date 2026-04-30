@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.table import Table
 from sqlalchemy import text
 
-from managers.database import DatabaseManager
+from services.database import DatabaseManager
 from utils.helpers import VERSION
 
 console = Console()
