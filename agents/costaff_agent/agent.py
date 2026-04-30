@@ -12,47 +12,14 @@ logger = logging.getLogger(__name__)
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from google.adk.agents import LlmAgent
-from google.adk.tools.mcp_tool import McpToolset
-from google.adk.tools.mcp_tool.mcp_session_manager import SseServerParams, StreamableHTTPServerParams
 from google.adk.tools import skill_toolset
+from mcp_toolsets import load_all_mcp_toolsets
 from models.litellm_model.litellm_model_config import litellm_model
 from instructions import AGENT_INSTRUCTION
 from skills import load_all_skills
 
-# --- Configuration ---
-raw_config = os.getenv("COSTAFF_AGENT_MCP_URLS") or os.getenv("MCP_SERVER_URLS", "")
-if not raw_config:
-    raise EnvironmentError("COSTAFF_AGENT_MCP_URLS (or MCP_SERVER_URLS) is not set.")
-
-try:
-    mcp_config = json.loads(raw_config)
-except json.JSONDecodeError:
-    mcp_config = {f"mcp_{i}": url.strip() for i, url in enumerate(raw_config.split(",")) if url.strip()}
-
-def get_connection_params(entry):
-    if isinstance(entry, str):
-        url, headers, transport = entry, None, None
-    else:
-        url       = entry.get("url", "")
-        headers   = entry.get("headers") or None
-        transport = entry.get("transport")
-
-    if not url: raise ValueError("MCP entry has no URL")
-    if transport is None:
-        transport = "sse" if url.rstrip("/").endswith("/sse") else "streamable"
-
-    if transport == "sse":
-        return SseServerParams(url=url, headers=headers)
-    return StreamableHTTPServerParams(url=url, headers=headers)
-
-tools = []
-for name, entry in mcp_config.items():
-    if isinstance(entry, dict) and not entry.get("enabled", True): continue
-    try:
-        tools.append(McpToolset(connection_params=get_connection_params(entry)))
-        logger.info(f"Registered MCP: {name}")
-    except Exception as e:
-        logger.error(f"FAILED to load MCP '{name}': {e}")
+# Load MCP toolsets
+tools = list(load_all_mcp_toolsets())
 
 # Load ADK Skills
 _skills = load_all_skills()
