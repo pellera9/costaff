@@ -3,93 +3,21 @@ import sys
 import json
 import time
 import questionary
-from pathlib import Path
-from datetime import datetime, timezone
-from typing import Optional
 from dotenv import set_key
 
-# _project_root  — source code directory (git clone at ~/.costaff/costaff)
-# _base_dir      — runtime parent directory (~/.costaff); override via COSTAFF_HOME
-# _runtime_root  — CLI core + config + compose (~/.costaff/costaff)
-# _workspace_root — bind-mounted data directory (~/.costaff/workspace)
-_project_root = str(Path(__file__).resolve().parent.parent)
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
-
-_base_dir: str = os.environ.get("COSTAFF_HOME") or str(Path.home() / ".costaff")
-_runtime_root: str = os.path.join(_base_dir, "costaff")
-_workspace_root: str = os.path.join(_base_dir, "workspace")
-
-# --- Constants ---
-VERSION = "0.2.4"
-PATHS = {
-    "env":      os.path.join(_runtime_root, ".env"),
-    "config":   os.path.join(_runtime_root, "config.json"),
-    "auth":     os.path.join(_runtime_root, "auth.json"),
-    "frontend": os.path.join(_project_root, "frontend"),
-}
-
-
-def _dt_to_z(v) -> Optional[str]:
-    if v is None:
-        return None
-    if isinstance(v, datetime):
-        if v.tzinfo is None:
-            return v.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
-        return v.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-    return str(v)
-
-
-def _serialize_row(d: dict) -> dict:
-    return {k: _dt_to_z(v) if isinstance(v, datetime) else v for k, v in d.items()}
-
-
-def _validate_cron(cron: str) -> None:
-    """Raises ValueError if the cron expression is not a valid 5-field format."""
-    import re
-    pattern = re.compile(
-        r'^(\*|[0-9*/,\-]+)\s+'   # minute
-        r'(\*|[0-9*/,\-]+)\s+'   # hour
-        r'(\*|[0-9?*/,\-L]+)\s+' # day-of-month
-        r'(\*|[0-9*/,\-]+)\s+'   # month
-        r'(\*|[0-9?*/,\-L]+)$'   # day-of-week
-    )
-    if not pattern.match(cron.strip()):
-        raise ValueError(
-            f"Invalid cron expression: '{cron}'. "
-            "Expected 5 fields: minute hour day-of-month month day-of-week"
-        )
-
-
-def _validate_a2a_url(url: str) -> None:
-    """Raises ValueError if the URL is not a safe external http/https endpoint."""
-    from urllib.parse import urlparse
-    try:
-        parsed = urlparse(url)
-    except Exception:
-        raise ValueError("Invalid URL format")
-    if parsed.scheme not in ("http", "https"):
-        raise ValueError("URL must use http or https scheme")
-    hostname = (parsed.hostname or "").lower()
-    blocked = {"localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "::1", ""}
-    if hostname in blocked:
-        raise ValueError(f"URL hostname '{hostname}' is not allowed")
-
-
-def _next_available_port(conf: dict) -> int:
-    used = {a.get("public_port") for a in conf.get("external_agents", {}).values() if a.get("public_port")}
-    for p in range(18100, 18200):
-        if p not in used:
-            return p
-    raise RuntimeError("No available ports in range 18100-18199")
-
-
-def _next_available_channel_port(conf: dict) -> int:
-    used = {c.get("public_port") for c in conf.get("dynamic_channels", {}).values() if c.get("public_port")}
-    for p in range(18090, 18100):
-        if p not in used:
-            return p
-    raise RuntimeError("No available ports in range 18090-18099")
+# Re-exports — existing callers do `from utils.helpers import VERSION, PATHS, ...`
+# and shouldn't have to change. Each domain now lives in its own module:
+#   utils.paths          paths/constants
+#   utils.serialization  datetime / row serialization
+#   utils.validators     cron + a2a URL safety
+#   utils.ports          dynamic port allocation
+from .paths import (
+    VERSION, PATHS,
+    _project_root, _base_dir, _runtime_root, _workspace_root,
+)
+from .serialization import _dt_to_z, _serialize_row
+from .validators import _validate_cron, _validate_a2a_url
+from .ports import _next_available_port, _next_available_channel_port
 
 
 DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview"
