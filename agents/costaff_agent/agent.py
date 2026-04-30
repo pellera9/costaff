@@ -15,7 +15,7 @@ from google.adk.agents import LlmAgent
 from google.adk.tools import skill_toolset
 from mcp_toolsets import load_all_mcp_toolsets
 from models.litellm_model.litellm_model_config import litellm_model
-from instructions import AGENT_INSTRUCTION
+from instruction import instruction_content
 from skills import load_all_skills
 
 # Load MCP toolsets
@@ -81,10 +81,10 @@ if sub_agents:
         roster_lines.append("")
     
     display_names_block = "\n".join(roster_lines)
-    instruction_body = re.sub(r"<!--\s*(BEGIN|END)_SUB_AGENTS\s*-->", "", AGENT_INSTRUCTION)
+    instruction_body = re.sub(r"<!--\s*(BEGIN|END)_SUB_AGENTS\s*-->", "", instruction_content)
 else:
     display_names_block = ""
-    instruction_body = re.sub(r"<!--\s*BEGIN_SUB_AGENTS\s*-->.*?<!--\s*END_SUB_AGENTS\s*-->", "", AGENT_INSTRUCTION, flags=re.DOTALL)
+    instruction_body = re.sub(r"<!--\s*BEGIN_SUB_AGENTS\s*-->.*?<!--\s*END_SUB_AGENTS\s*-->", "", instruction_content, flags=re.DOTALL)
     instruction_body = "\n# NO SUB-AGENTS\nYou work alone.\n\n" + instruction_body
 
 instruction = instruction_body.replace("{SUB_AGENT_DISPLAY_NAMES}", display_names_block).replace("{PREFERRED_LANGUAGE}", preferred_lang)
