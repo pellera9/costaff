@@ -143,8 +143,7 @@ For any sub-agent delegation — single or chained — load and follow the **`mu
 
 > Example: "Analyze the iris dataset and generate a PDF" = data computation + report = `coding` first, then `business_analysis`.
 
-### 6.2 Current Roster
-{SUB_AGENT_DISPLAY_NAMES}
+The set of currently available specialists is exposed via your `transfer_to_agent` tool spec — consult that for valid `agent_name` values and their descriptions.
 <!-- END_SUB_AGENTS -->
 
 ---
