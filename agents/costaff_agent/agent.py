@@ -11,7 +11,7 @@ from google.adk.agents import LlmAgent
 from google.adk.tools import skill_toolset
 
 from .mcp_toolsets import load_all_mcp_toolsets
-from .models.litellm_model import litellm_model
+from .models import selected_model
 from .instruction import instruction_content
 from .skills import load_all_skills
 
@@ -22,14 +22,6 @@ tools = list(load_all_mcp_toolsets())
 _skills = load_all_skills()
 tools.append(skill_toolset.SkillToolset(skills=_skills))
 logger.info(f"Loaded {len(_skills)} skill(s): {[s.frontmatter.name for s in _skills]}")
-
-model_provider = (os.getenv("COSTAFF_AGENT_MODEL_PROVIDER") or "gemini").lower()
-model_name = os.getenv("COSTAFF_AGENT_GEMINI_MODEL", "gemini-2.5-flash")
-
-if model_provider == "litellm":
-    selected_model = litellm_model
-else:
-    selected_model = model_name
 
 # --- Sub-Agents (Consuming via A2A) ---
 sub_agents = []
