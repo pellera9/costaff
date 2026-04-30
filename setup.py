@@ -7,7 +7,7 @@ setup(
     author="Simon Liu",
     py_modules=["costaff"],
     install_requires=[
-        "typer[all]",
+        "typer",
         "rich",
         "questionary",
         "python-dotenv",

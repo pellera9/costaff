@@ -1,10 +1,10 @@
 import typer
 
 from utils.helpers import VERSION
-from cli.commands.services import start, stop, status, logs, restart
+from cli.commands.lifecycle import start, stop, status, logs, restart
 from cli.commands.onboard import onboard
 from cli.commands.dashboard import dashboard, chat, invoke
-from cli.commands.license_cmd import license
+from cli.commands.licensing import license
 from cli.commands.agent import agent_app
 from cli.commands.channel import channel_app
 from cli.commands.database import db_app
