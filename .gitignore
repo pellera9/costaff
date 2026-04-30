@@ -46,6 +46,9 @@ costaff_cli.egg-info/
 # IDE / local tooling
 .claude/
 
+# Local refactor planning notes (kept on disk but not committed)
+REFACTOR_PLAN*.md
+
 # Backup files
 *.bak
 *.backup
