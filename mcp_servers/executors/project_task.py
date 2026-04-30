@@ -8,7 +8,8 @@ from core.database import SessionLocal
 from core.adk_client import run_adk_prompt
 from core.license import LicenseManager
 from mcp_servers.setup import logger
-from mcp_servers.utils import _send_notification, _get_user_channel_info, _build_task_spec
+from core.notifiers.dispatcher import dispatch_notification
+from mcp_servers.task_helpers import get_user_channel_info, build_task_spec
 
 
 async def execute_project_task(task_id: str):
@@ -32,7 +33,7 @@ async def execute_project_task(task_id: str):
         channel = task.channel
         recipient = task.recipient
         if not channel:
-            channel, recipient = _get_user_channel_info(task.user_id, db)
+            channel, recipient = get_user_channel_info(task.user_id, db)
 
         task.status = "doing"
         task.updated_at = datetime.utcnow()
@@ -57,7 +58,7 @@ async def execute_project_task(task_id: str):
         db.commit()
 
         # Build context-enriched spec and use task-scoped session to prevent context bleed
-        spec = _build_task_spec(task, db)
+        spec = build_task_spec(task, db)
         task_session_id = f"task_{task_id}"
         app_name = os.getenv("ADK_APP_NAME", "costaff_agent")
 
@@ -81,7 +82,7 @@ async def execute_project_task(task_id: str):
             db.commit()
 
             if channel and recipient:
-                await _send_notification(channel, recipient, result_text, task_session_id)
+                await dispatch_notification(channel, recipient, result_text, task_session_id)
 
             # Advance queue and wake up dependents
             if task.assigned_agent:

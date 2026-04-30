@@ -1,0 +1,128 @@
+"""Helpers for project task execution.
+
+These helpers are tightly coupled to the MCP scheduler executors
+(`mcp_servers/executors/*.py`) and work with project ORM models
+(Epic, Story, ProjectTask, IdentityMap). They live alongside the
+executors rather than in the cross-cutting `core/` layer.
+"""
+import os
+
+from core import models
+
+
+def get_user_channel_info(user_id: str, db) -> tuple:
+    """Look up the user's primary notification channel from IdentityMap.
+
+    Returns (channel, hashed_id) or (None, None) if no mapping exists.
+    The channel is inferred from the session_id prefix:
+        tg_*   → telegram
+        dc_*   → discord
+        line_* → line
+        web_*  → webchat
+    The recipient is always the hashed_id so dispatch_notification can
+    resolve it back to a real platform id.
+    """
+    mapping = (
+        db.query(models.IdentityMap)
+        .filter(models.IdentityMap.hashed_id == user_id)
+        .order_by(models.IdentityMap.created_at.desc())
+        .first()
+    )
+    if not mapping:
+        return None, None
+    sid = mapping.session_id or ""
+    if sid.startswith("tg_"):
+        return "telegram", user_id
+    if sid.startswith("dc_"):
+        return "discord", user_id
+    if sid.startswith("line_"):
+        return "line", user_id
+    if sid.startswith("web_"):
+        return "webchat", user_id
+    return None, None
+
+
+def build_task_spec(task, db) -> str:
+    """Build a context-enriched execution spec for costaff_agent.
+
+    Prepends Epic and Story titles, delegation instructions when the task
+    targets an external agent, and a PROGRESS_CONTEXT block so the
+    executing agent can stream live updates back to the user's channel.
+    """
+    lines = []
+
+    if task.epic_id:
+        epic = db.query(models.Epic).filter(models.Epic.id == task.epic_id).first()
+        if epic:
+            lines.append(f"[Project: {epic.title}]")
+            if epic.description:
+                lines.append(f"Project goal: {epic.description}")
+
+    if task.story_id:
+        story = db.query(models.Story).filter(models.Story.id == task.story_id).first()
+        if story:
+            lines.append(f"[Story: {story.title}]")
+            if story.description:
+                lines.append(f"Story context: {story.description}")
+
+    lines.append(f"[Task: {task.title}]")
+    if task.spec:
+        lines.append(task.spec)
+
+    preferred_lang = os.getenv("COSTAFF_PREFERRED_LANGUAGE", "English")
+
+    if task.assigned_agent and task.assigned_agent != "costaff_agent":
+        lines.append(
+            f"\n[DELEGATION INSTRUCTIONS — READ CAREFULLY]\n"
+            f"This task is assigned to: {task.assigned_agent}\n"
+            f"You MUST:\n"
+            f"1. Call add_task_comment(task_id=\"{task.id}\", comment_type=\"note\") with an implementation plan BEFORE delegating.\n"
+            f"   Format the plan as:\n"
+            f"   ## Implementation Plan\n"
+            f"   - **Goal**: <what this task needs to achieve>\n"
+            f"   - **Steps**:\n"
+            f"     1. <step>\n"
+            f"   - **Expected Output**: <files, tables, reports, etc.>\n"
+            f"2. Call {task.assigned_agent} via A2A tool, passing the FULL task spec above (including PROGRESS_CONTEXT).\n"
+            f"3. WAIT for {task.assigned_agent} to return its COMPLETE output (e.g. file path, report content, etc.).\n"
+            f"4. If {task.assigned_agent} returns an error, call add_task_comment(task_id=\"{task.id}\", comment_type=\"issue\") with:\n"
+            f"   ## ❌ Error Occurred\n"
+            f"   - **Error Type**: <type>\n"
+            f"   - **Error Message**: <full message>\n"
+            f"   - **Location**: <which step>\n"
+            f"   - **Resolution**: <how it was fixed or what to explain>\n"
+            f"5. Your FINAL response (which becomes the completion comment) MUST follow this format:\n"
+            f"   ## ✅ Task Complete\n"
+            f"   ### Use Cases\n"
+            f"   - <how this output will be used>\n"
+            f"   ### Acceptance Criteria\n"
+            f"   - ✅ <criterion 1>: <how it was met>\n"
+            f"   - ✅ <criterion 2>: <how it was met>\n"
+            f"   ### Output\n"
+            f"   - <concrete deliverables: file paths, tables, report locations, etc.>\n"
+            f"   Do NOT return 'I have delegated this task' or any delegation acknowledgment as your final response.\n"
+            f"   Do NOT use send_message_now to say you delegated — only send it if {task.assigned_agent} produces an actual result to share.\n"
+            f"The task is NOT done until you receive and relay {task.assigned_agent}'s actual deliverable."
+        )
+
+        lines.append(
+            f"\n(System: Autonomous project task ID={task.id}. Execute it. Respond in {preferred_lang}.)"
+        )
+
+    # Resolve channel/recipient for PROGRESS_CONTEXT so the executing agent
+    # can stream live updates back to the user.
+    channel = task.channel
+    recipient = task.recipient
+    if not channel:
+        channel, recipient = get_user_channel_info(task.user_id, db)
+
+    if channel and recipient:
+        task_session_id = f"task_{task.id}"
+        lines.append(
+            f"\n[PROGRESS_CONTEXT]\n"
+            f"user_id={task.user_id}\n"
+            f"channel={channel}\n"
+            f"session_id={task_session_id}"
+        )
+
+    return "\n".join(lines)

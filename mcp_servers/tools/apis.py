@@ -6,7 +6,8 @@ import httpx
 from core import models
 from core.database import SessionLocal
 from mcp_servers.setup import mcp
-from mcp_servers.utils import _decrypt_headers, _is_safe_url
+from utils.crypto import decrypt_headers
+from utils.network import is_safe_url
 
 
 def _get_accessible_api_configs(db, user_id: str, agent_id: str = "__all__"):
@@ -61,7 +62,7 @@ async def get_api_detail(user_id: str, api_name: str, agent_id: str = "__all__")
         header_keys = []
         if config.headers_encrypted:
             try:
-                header_keys = list(_decrypt_headers(config.headers_encrypted).keys())
+                header_keys = list(decrypt_headers(config.headers_encrypted).keys())
             except Exception:
                 pass
         return json.dumps({
@@ -88,9 +89,9 @@ async def request_api(user_id: str, api_name: str, agent_id: str = "__all__", pa
         ), None)
         if not config:
             return f"Error: API '{api_name}' not found or access denied."
-        if not _is_safe_url(config.url):
+        if not is_safe_url(config.url):
             return "Error: API URL resolved to a restricted address."
-        headers = _decrypt_headers(config.headers_encrypted) if config.headers_encrypted else {}
+        headers = decrypt_headers(config.headers_encrypted) if config.headers_encrypted else {}
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.request(
                 method=config.method, url=config.url, headers=headers,

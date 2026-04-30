@@ -8,7 +8,7 @@ from core.database import SessionLocal
 from core.adk_client import run_adk_prompt
 from core.license import LicenseManager
 from mcp_servers.setup import logger
-from mcp_servers.utils import _send_notification
+from core.notifiers.dispatcher import dispatch_notification
 
 
 async def execute_regular_work(regular_work_id: str):
@@ -41,7 +41,7 @@ async def execute_regular_work(regular_work_id: str):
 
 async def _run_for_user(regular_work_id: str, work, user_id: str):
     """Execute a single RegularWork for one specific user."""
-    from mcp_servers.utils import _get_user_channel_info
+    from mcp_servers.task_helpers import get_user_channel_info
     db = SessionLocal()
     try:
         # Re-fetch work inside this session to avoid detached-instance issues
@@ -53,7 +53,7 @@ async def _run_for_user(regular_work_id: str, work, user_id: str):
         channel = work.channel
         recipient = work.recipient
         if not channel:
-            channel, recipient = _get_user_channel_info(user_id, db)
+            channel, recipient = get_user_channel_info(user_id, db)
 
         app_name = os.getenv("ADK_APP_NAME", "costaff_agent")
         session_id = f"rwork_{regular_work_id}_{user_id[:8]}"
@@ -79,7 +79,7 @@ async def _run_for_user(regular_work_id: str, work, user_id: str):
             db.commit()
 
             if channel and recipient and not work.silent:
-                await _send_notification(channel, recipient, result_text, session_id)
+                await dispatch_notification(channel, recipient, result_text, session_id)
 
         except Exception as e:
             logger.error(f"RegularWork execution failed {regular_work_id} for user {user_id}: {e}")
