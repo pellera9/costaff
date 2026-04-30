@@ -18,13 +18,13 @@ else:
     instruction_content = "You are a professional AI assistant."
 
 
-def build_instruction(has_sub_agents: bool) -> str:
+def build_instruction(has_agent_tools: bool) -> str:
     """Resolve runtime placeholders in instruction_content.
 
-    - has_sub_agents=True : strip the BEGIN/END_SUB_AGENTS marker
+    - has_agent_tools=True : strip the BEGIN/END_SUB_AGENTS marker
                             comments but keep their content (orchestration
                             SOPs and routing rules).
-    - has_sub_agents=False: drop the entire BEGIN_SUB_AGENTS...END_SUB_AGENTS
+    - has_agent_tools=False: drop the entire BEGIN_SUB_AGENTS...END_SUB_AGENTS
                             block (so the LLM doesn't see delegation rules
                             it cannot follow) and prepend a "you work alone"
                             hint.
@@ -32,7 +32,7 @@ def build_instruction(has_sub_agents: bool) -> str:
     Substitutes the `{PREFERRED_LANGUAGE}` placeholder with whatever
     `COSTAFF_PREFERRED_LANGUAGE` env var is set to (defaults to English).
     """
-    if has_sub_agents:
+    if has_agent_tools:
         body = re.sub(r"<!--\s*(BEGIN|END)_SUB_AGENTS\s*-->", "", instruction_content)
     else:
         body = re.sub(
