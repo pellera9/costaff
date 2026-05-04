@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/costaff-ai/costaff/docs/schemas/tools/add_task_comment.schema.json",
+  "title": "add_task_comment",
+  "description": "Append an immutable comment to a ProjectTask. Comments form the permanent task history shown in the dashboard.",
+  "type": "object",
+  "properties": {
+    "input": {
+      "type": "object",
+      "required": ["task_id", "user_id", "author", "content"],
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "description": "The task's id."
+        },
+        "user_id": {
+          "type": "string",
+          "description": "The user the task belongs to. Manager rejects calls from unapproved users."
+        },
+        "author": {
+          "type": "string",
+          "description": "'user' or the agent's name (e.g. 'coding_agent').",
+          "examples": ["user", "coding_agent", "business_analysis_agent"]
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Comment body. MAY contain Markdown."
+        },
+        "comment_type": {
+          "type": "string",
+          "enum": ["result", "decision", "issue", "note"],
+          "default": "note",
+          "description": "Comment classification."
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "required": ["result"],
+      "properties": {
+        "result": {
+          "type": "string",
+          "description": "'Comment added to task <task_id>.' on success; 'Task <id> not found.' / 'Error: <reason>' / approval-denial string otherwise."
+        }
+      }
+    }
+  }
+}

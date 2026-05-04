@@ -95,6 +95,18 @@ costaff/
 - **MCP whitelist**：plugin agent 連 manager core MCP 時透過 `config.json` 的 `agent_mcp_filters` 限制可見 tool（見 Section 2.3）。
 - **Sub-agent 控制權自動回**：透過 A2A `RemoteA2aAgent` wrapper 自動把 sub-agent 的 return value 帶回 manager turn，hub-and-spoke flow 是「manager → A → manager → B → manager → user」。
 
+### 2.3a Agent Protocol v1.0
+
+**The authoritative contract for any external agent (first-party or third-party) is `docs/AGENT_PROTOCOL_v1.0.md`.** Anything that touches manifest schema, A2A endpoint behaviour, the four core MCP tools, the workspace conventions, or `agent_mcp_filters` semantics MUST stay consistent with that spec.
+
+- Spec: `costaff/docs/AGENT_PROTOCOL_v1.0.md`
+- Manifest JSON Schema: `costaff/docs/schemas/costaff.agent.json.schema.json`
+- Tool JSON Schemas: `costaff/docs/schemas/tools/*.schema.json`
+- Validator: `services/agent_protocol.py` (`validate_manifest`)
+- CLI hook: `costaff agent add --strict` runs full schema validation; lenient mode warns on missing `protocol_version`.
+
+When changing the four core tools' signatures or adding a new core tool, **bump `protocol_version` in `services/agent_protocol.py`**'s `LATEST_PROTOCOL_MINOR` and document the change in the spec's §13 changelog. Breaking changes need a MAJOR bump.
+
 ### 2.3 MCP Whitelist (`agent_mcp_filters`)
 
 `config.json` schema（gitignored，Mac Mini 上手動維護）：

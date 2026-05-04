@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/costaff-ai/costaff/docs/schemas/tools/send_message_now.schema.json",
+  "title": "send_message_now",
+  "description": "Send a message back to the user via the specified channel. Body MAY include absolute /app/data/... file paths; the channel will deliver each as an attachment.",
+  "type": "object",
+  "properties": {
+    "input": {
+      "type": "object",
+      "required": ["channel", "recipient", "body"],
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "type": "string",
+          "description": "telegram / discord / line / webchat, or 'default' to infer from session_id prefix.",
+          "examples": ["telegram", "discord", "line", "webchat", "default"]
+        },
+        "recipient": {
+          "type": "string",
+          "description": "Hashed identity id OR platform-side raw id (manager resolves the mapping)."
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Message text. MAY contain absolute /app/data/... file paths to attach."
+        },
+        "subject": {
+          "type": "string",
+          "description": "Reserved for channels that support a subject (e.g. email). Chat channels ignore."
+        },
+        "app_name": {
+          "type": "string",
+          "default": "costaff_agent",
+          "description": "ADK app name. Agents normally omit."
+        },
+        "user_id": {
+          "type": "string",
+          "description": "ADK user id. Provided by manager when calling."
+        },
+        "session_id": {
+          "type": "string",
+          "description": "ADK session id. Used as fallback for channel inference; scopes the notification."
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "required": ["result"],
+      "properties": {
+        "result": {
+          "type": "string",
+          "description": "Human-readable status. 'OK' on success, 'Error: <reason>' otherwise."
+        }
+      }
+    }
+  }
+}

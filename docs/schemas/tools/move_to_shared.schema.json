@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/costaff-ai/costaff/docs/schemas/tools/move_to_shared.schema.json",
+  "title": "move_to_shared",
+  "description": "Copy a file or directory from the agent's private workspace to /app/data/shared/, mirroring its relative path.",
+  "type": "object",
+  "properties": {
+    "input": {
+      "type": "object",
+      "required": ["src_path"],
+      "additionalProperties": false,
+      "properties": {
+        "src_path": {
+          "type": "string",
+          "pattern": "^/app/data/.+",
+          "description": "Absolute path under /app/data/. Manager rejects paths outside /app/data/.",
+          "examples": ["/app/data/costaff-agent-coding/report.pdf"]
+        },
+        "overwrite": {
+          "type": "boolean",
+          "default": false,
+          "description": "If false, refuse if destination exists. If true, replace."
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "required": ["result"],
+      "properties": {
+        "result": {
+          "type": "string",
+          "description": "'[OK] Copied <src> → <dst>' on success; '[ERROR] ...' / '[WARN] ...' otherwise."
+        }
+      }
+    }
+  }
+}

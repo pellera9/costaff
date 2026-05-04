@@ -68,11 +68,24 @@ def _deploy_local_channel(name: str, source_path: str, conf: dict, predefined_en
     }
 
 
-def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs: dict = None) -> dict:
-    """Build and start a local-path agent following CoStaff Agent Convention."""
+def _deploy_local_agent(
+    name: str,
+    source_path: str,
+    conf: dict,
+    predefined_envs: dict = None,
+    strict: bool = False,
+) -> dict:
+    """Build and start a local-path agent following CoStaff Agent Convention.
+
+    `strict=True` runs full JSON Schema validation against the bundled
+    Agent Protocol schema; otherwise only protocol-version compatibility
+    is enforced (legacy manifests without protocol_version warn instead
+    of fail). See services.agent_protocol for details.
+    """
     import yaml as _yaml
     from dotenv import load_dotenv
     from services.docker import DockerManager
+    from services.agent_protocol import ProtocolError, validate_manifest
 
     source_path = os.path.abspath(source_path)
     manifest_path = os.path.join(source_path, "costaff.agent.json")
@@ -85,6 +98,14 @@ def _deploy_local_agent(name: str, source_path: str, conf: dict, predefined_envs
 
     with open(manifest_path) as f:
         manifest = json.load(f)
+
+    # Validate against the CoStaff Agent Protocol before doing any work.
+    try:
+        warnings = validate_manifest(manifest, strict=strict)
+    except ProtocolError as e:
+        raise ValueError(f"costaff.agent.json fails Agent Protocol: {e}") from e
+    for w in warnings:
+        print(f"[warn] {w}")
 
     a2a_service = manifest.get("a2a_service", name)
     port = manifest.get("port", 8081)

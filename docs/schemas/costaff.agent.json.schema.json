@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/costaff-ai/costaff/docs/schemas/costaff.agent.json.schema.json",
+  "title": "costaff.agent.json",
+  "description": "Manifest declared by every CoStaff agent project at its repo root. See docs/AGENT_PROTOCOL_v1.0.md for normative semantics.",
+  "type": "object",
+  "required": [
+    "protocol_version",
+    "name",
+    "version",
+    "description",
+    "a2a_service",
+    "port",
+    "health_path"
+  ],
+  "properties": {
+    "protocol_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "description": "CoStaff Agent Protocol version this agent targets, MAJOR.MINOR.",
+      "examples": ["1.0"]
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^costaff-agent-[a-z][a-z0-9-]*$",
+      "description": "Lowercase kebab-case identifier; must start with 'costaff-agent-'."
+    },
+    "version": {
+      "type": "string",
+      "description": "The agent's own semver (independent of protocol_version)."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One- or few-sentence summary surfaced in the dashboard."
+    },
+    "a2a_service": {
+      "type": "string",
+      "description": "Hostname suffix at which the A2A endpoint is reachable inside the costaff_default network.",
+      "examples": ["agent-coding", "agent-business-analysis"]
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "Port the A2A endpoint listens on inside the container. SHOULD be 8081."
+    },
+    "health_path": {
+      "type": "string",
+      "const": "/.well-known/agent-card.json",
+      "description": "Per A2A spec; MUST be /.well-known/agent-card.json."
+    },
+    "env_required": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Env vars that MUST be present at runtime."
+    },
+    "env_optional": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Env vars the agent SHOULD function without."
+    },
+    "env_shared": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Env vars the CLI may auto-fill from the user's main .env."
+    },
+    "env_auto": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Env vars the CLI populates automatically (e.g. <NAME>_AGENT_MCP_URLS)."
+    },
+    "model_env_var": {
+      "type": "string",
+      "description": "Name of the env var the agent reads to pick its model.",
+      "examples": ["CODING_AGENT_MODEL"]
+    },
+    "mcp_configurable": {
+      "type": "boolean",
+      "default": false,
+      "description": "If true, the dashboard exposes the per-agent MCP whitelist editor."
+    },
+    "mcp_env_var": {
+      "type": "string",
+      "description": "Name of the env var receiving the per-agent MCP URL bundle. Required when mcp_configurable is true.",
+      "examples": ["CODING_AGENT_MCP_URLS"]
+    },
+    "costaff_sdk_version": {
+      "type": "string",
+      "description": "Semver range describing the minimum CoStaff CLI / core version this agent needs.",
+      "examples": [">=0.2.0"]
+    }
+  },
+  "patternProperties": {
+    "^x_": {
+      "description": "Reserved namespace for forward-compatible extension fields."
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "required": ["mcp_configurable"],
+        "properties": { "mcp_configurable": { "const": true } }
+      },
+      "then": { "required": ["mcp_env_var"] }
+    }
+  ]
+}

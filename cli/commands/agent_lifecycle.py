@@ -36,6 +36,7 @@ def agent_add(
     github: Optional[str] = typer.Option(None, "--github", help="GitHub repository URL to clone and deploy"),
     env: Optional[list[str]] = typer.Option(None, "--env", "-e", help="Set environment variables (e.g. KEY=VALUE)"),
     description: str = typer.Option("", "--description", "-d", help="Short description"),
+    strict: bool = typer.Option(False, "--strict", help="Reject the manifest if it does not pass the full Agent Protocol JSON Schema"),
 ):
     """Add an external agent (URL, Local, or GitHub mode)."""
     if not url and not local and not github:
@@ -88,7 +89,9 @@ def agent_add(
 
     if local:
         try:
-            entry = _deploy_local_agent(name, local, conf, predefined_envs=predefined_envs)
+            entry = _deploy_local_agent(
+                name, local, conf, predefined_envs=predefined_envs, strict=strict
+            )
         except Exception as e:
             console.print(f"[red]Deploy failed: {e}[/red]")
             raise typer.Exit(1)
