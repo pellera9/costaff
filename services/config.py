@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import warnings
 from typing import Dict, Any
 from dotenv import load_dotenv, set_key
 
@@ -28,10 +29,24 @@ class ConfigManager:
                     migrated |= ConfigManager._migrate_channel_container_names(conf)
                     if migrated:
                         ConfigManager.save_config(conf)
+                    ConfigManager._warn_if_invalid(conf)
                     return conf
             except Exception:
                 pass
         return {"channels": [], "mcp": ["costaff"], "external_mcp": {}, "gateways_config": {}, "require_approval": True, "coding_agent_enabled": False, "external_agents": {}}
+
+    @staticmethod
+    def _warn_if_invalid(conf: Dict[str, Any]) -> None:
+        """Soft validation against CoStaffConfig — warn only, never crash.
+
+        Keeping this non-fatal preserves graceful degradation; `costaff config
+        validate` is the strict entry point that exits non-zero on errors.
+        """
+        try:
+            from services.config_schema import CoStaffConfig
+            CoStaffConfig.model_validate(conf)
+        except Exception as e:
+            warnings.warn(f"config.json failed schema validation: {e}", stacklevel=3)
 
     @staticmethod
     def _migrate_channel_container_names(conf: Dict) -> bool:
