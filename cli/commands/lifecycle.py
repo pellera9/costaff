@@ -56,7 +56,10 @@ def start(build: bool = typer.Option(True, "--build/--no-build")):
     # Tier 3: Core Agent (the manager) + Core MCP
     console.print("🚀 [bold]Step 3: Starting CoStaff Manager...[/bold]")
     core_services = ["costaff-agent-costaff", "costaff-mcp-costaff"]
-    runtime.up(core_services, build=build, remove_orphans=True)
+    # remove_orphans must stay False — Tier 2 external-agent containers live in
+    # separate fragments and would look like orphans to the main compose,
+    # which would silently kill the agents we just started.
+    runtime.up(core_services, build=build, remove_orphans=False)
     _wait_for_containers(core_services)
 
     # Tier 4: Dynamic Channels

@@ -140,7 +140,10 @@ def channel_remove(name: str = typer.Argument(...)):
 
     if fragment_path and os.path.exists(fragment_path):
         console.print(f"Stopping containers for channel [bold]{name}[/bold]...")
-        runtime.down(fragment=fragment_path, remove_orphans=True)
+        # remove_orphans=False: this fragment only declares the channel being
+        # removed; passing True would treat every other fragment's container
+        # as an orphan and kill them.
+        runtime.down(fragment=fragment_path, remove_orphans=False)
     elif container_names:
         for c in container_names:
             runtime.force_remove_container(c)
@@ -200,7 +203,10 @@ def channel_rebuild(
             container_names,
             fragment=fragment_path,
             force_recreate=True,
-            remove_orphans=True,
+            # remove_orphans=False: see channel remove for the same reason —
+            # this fragment only knows about the rebuilt channel, so True
+            # would kill every other fragment-managed container.
+            remove_orphans=False,
         )
         console.print(f"[green]Channel '{name}' rebuilt and restarted.[/green]")
     except subprocess.CalledProcessError:
