@@ -1,5 +1,4 @@
 import os
-import subprocess
 import time
 
 import typer
@@ -7,6 +6,7 @@ from rich.console import Console
 
 from services.config import ConfigManager
 from services.runtime import get_runtime
+from services.runtime.process import kill_port
 
 console = Console()
 
@@ -114,13 +114,7 @@ def stop():
         console.print(f"[yellow]Failed to stop core compose: {e}[/yellow]")
 
     # Kill any dashboard process holding port 8501
-    try:
-        result = subprocess.run(["lsof", "-ti", ":8501"], capture_output=True, text=True)
-        for pid in result.stdout.strip().split():
-            if pid:
-                subprocess.run(["kill", pid], capture_output=True)
-    except Exception:
-        pass
+    kill_port(8501)
 
 
 def restart():

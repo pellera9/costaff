@@ -1,7 +1,6 @@
 import os
 import re
 import shutil
-import subprocess
 import threading
 from typing import Optional, List
 
@@ -14,6 +13,7 @@ from rich.table import Table
 
 from services.config import ConfigManager
 from services.runtime import get_runtime
+from services.runtime.git import Git, GitError
 from utils.helpers import PATHS, _project_root, _runtime_root, _base_dir
 from utils.helpers import _deploy_local_channel, _write_channel_fragment
 
@@ -76,9 +76,9 @@ def channel_add(
         os.makedirs(os.path.dirname(target_src), exist_ok=True)
         console.print(f"Cloning channel [bold cyan]{github}[/bold cyan]...")
         try:
-            subprocess.run(["git", "clone", "--depth", "1", github, target_src], check=True)
+            Git().clone(github, target_src)
             local = target_src
-        except Exception as e:
+        except GitError as e:
             console.print(f"[red]Git clone failed: {e}[/red]")
             raise typer.Exit(1)
 
@@ -172,9 +172,13 @@ def channel_rebuild(
     source_path = chan_conf.get("source_path", "(unknown)")
     load_dotenv(PATHS["env"], override=True)
 
-    if pull and os.path.isdir(os.path.join(source_path, ".git")):
+    git = Git()
+    if pull and git.is_repo(source_path):
         console.print(f"Pulling latest code for [bold]{name}[/bold]...")
-        subprocess.run(["git", "pull", "--ff-only"], cwd=source_path)
+        try:
+            git.pull_ff_only(source_path)
+        except GitError as e:
+            console.print(f"[yellow]Pull failed ({e}); rebuilding with current source.[/yellow]")
 
     # Regenerate compose-fragment.yaml from source so any docker-compose.yaml
     # changes (env vars, volumes, etc.) are picked up on rebuild.
@@ -209,6 +213,6 @@ def channel_rebuild(
             remove_orphans=False,
         )
         console.print(f"[green]Channel '{name}' rebuilt and restarted.[/green]")
-    except subprocess.CalledProcessError:
-        console.print(f"[red]Failed to start channel '{name}' after build.[/red]")
+    except RuntimeError as e:
+        console.print(f"[red]Failed to start channel '{name}' after build: {e}[/red]")
         raise typer.Exit(1)

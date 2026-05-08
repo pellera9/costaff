@@ -9,7 +9,6 @@ Decorators register against the `agent_app` Typer instance defined in
 fire at startup.
 """
 import os
-import subprocess
 
 import httpx
 import typer
@@ -19,6 +18,7 @@ from rich.table import Table
 
 from services.config import ConfigManager
 from services.runtime import get_runtime
+from services.runtime.git import Git, GitError
 from utils.helpers import PATHS
 
 from .agent import agent_app
@@ -78,8 +78,8 @@ def agent_restart(name: str = typer.Argument(..., help="Agent name to restart"))
     try:
         runtime.up(container_names, fragment=fragment_path, force_recreate=True)
         console.print(f"[green]Agent '{name}' restarted.[/green]")
-    except subprocess.CalledProcessError:
-        console.print(f"[red]Failed to restart agent '{name}'.[/red]")
+    except RuntimeError as e:
+        console.print(f"[red]Failed to restart agent '{name}': {e}[/red]")
         raise typer.Exit(1)
 
 
@@ -105,9 +105,13 @@ def agent_rebuild(
     load_dotenv(PATHS["env"], override=True)
     runtime = get_runtime()
 
-    if pull and os.path.isdir(os.path.join(source_path, ".git")):
+    git = Git()
+    if pull and git.is_repo(source_path):
         console.print(f"Pulling latest code for [bold]{name}[/bold] from [cyan]{source_path}[/cyan]...")
-        subprocess.run(["git", "pull", "--ff-only"], cwd=source_path)
+        try:
+            git.pull_ff_only(source_path)
+        except GitError as e:
+            console.print(f"[yellow]Pull failed ({e}); rebuilding with current source.[/yellow]")
 
     console.print(f"Building [bold]{name}[/bold] from [cyan]{source_path}[/cyan]...")
     try:
@@ -120,6 +124,6 @@ def agent_rebuild(
     try:
         runtime.up(container_names, fragment=fragment_path, force_recreate=True)
         console.print(f"[green]Agent '{name}' rebuilt and restarted.[/green]")
-    except subprocess.CalledProcessError:
-        console.print(f"[red]Failed to start agent '{name}' after build.[/red]")
+    except RuntimeError as e:
+        console.print(f"[red]Failed to start agent '{name}' after build: {e}[/red]")
         raise typer.Exit(1)

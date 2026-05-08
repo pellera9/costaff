@@ -10,7 +10,6 @@ the decorators fire and the commands appear under `costaff agent ...`.
 import os
 import re
 import shutil
-import subprocess
 import sys
 import threading
 from typing import Optional
@@ -21,6 +20,7 @@ from rich.console import Console
 
 from services.config import ConfigManager
 from services.docker import DockerManager
+from services.runtime.git import Git, GitError
 from utils.helpers import _project_root, _base_dir, _deploy_local_agent
 
 from .agent import agent_app
@@ -85,9 +85,9 @@ def agent_add(
         os.makedirs(os.path.dirname(target_src), exist_ok=True)
         console.print(f"Cloning [bold cyan]{github}[/bold cyan] to [bold]{target_src}[/bold]...")
         try:
-            subprocess.run(["git", "clone", "--depth", "1", github, target_src], check=True)
+            Git().clone(github, target_src)
             local = target_src
-        except Exception as e:
+        except GitError as e:
             console.print(f"[red]Git clone failed: {e}[/red]")
             raise typer.Exit(1)
 
