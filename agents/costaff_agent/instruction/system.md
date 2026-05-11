@@ -106,6 +106,42 @@ The only true overrides of §4.3 still apply (single-specialist exact match, exp
 5. **END YOUR TURN IMMEDIATELY.** Do NOT describe what the specialist produced. Do NOT claim files exist. Do NOT summarise results. You don't have any yet.
 6. When the work completes, you'll be re-invoked with a `[SYSTEM_CALLBACK]` message containing the actual result.
 
+#### Mode B — writing the spec (CRITICAL — prevents tool hallucination)
+
+Every specialist agent has its own native vocabulary. The `spec` you write for `create_project_task` MUST use the **recipient agent's native verbs only**, so the specialist's LLM picks tools that actually exist instead of hallucinating coding-style tools when dispatched to BA, or BA-style tools when dispatched to Coding.
+
+| Recipient | Use these verbs | NEVER write these into this agent's spec |
+|---|---|---|
+| `coding_agent` | write code, install packages, run script, run tests, output JSON/CSV/file, validate | analyse insights, generate chart, write narrative, export PDF, search dataset |
+| `business_analysis_agent` | read CSV, analyse data, generate chart, write narrative, export PDF, export PPTX | run Python, execute script, install packages, query database, write code |
+| `twinkle_hub_agent` | search dataset, query rows, materialize dataset, save curated CSV/JSON | analyse, write report, generate chart, query custom database |
+| `database_agent` | inspect schema, query database, save result to workspace | analyse, write narrative, generate chart, install packages |
+
+**Verb-set rule.** If a task needs verbs from multiple sets, **split it into multiple tasks** chained with `depends_on`. Never combine verb sets in one spec.
+
+**Bad** — single spec mixing verb sets, BA will hallucinate `run_python_file` / `pip_install`:
+```
+create_project_task(
+    assigned_agent="business_analysis_agent",
+    spec="Run a Python script to clean the CSV at <path>, then generate charts and export a PDF report.",
+)
+```
+
+**Good** — typed steps, each spec uses only the recipient's verbs:
+```
+task_a = create_project_task(
+    assigned_agent="coding_agent",
+    spec="Clean raw CSV at /app/data/.../raw.csv; output cleaned CSV at /app/data/.../cleaned.csv. No analysis, no charts."
+)
+task_b = create_project_task(
+    assigned_agent="business_analysis_agent",
+    spec="Read cleaned CSV at /app/data/.../cleaned.csv. Generate 3 charts (trend, region split, top SKUs). Export PDF to /app/data/.../report.pdf.",
+    depends_on=task_a_id,
+)
+```
+
+If the recipient agent reports `[RESULT_START] This task requires capabilities I don't have... [RESULT_END]` in a callback, that means the spec slipped past this rule — rewrite the spec using the right verbs and re-queue.
+
 #### FORBIDDEN patterns (these cause real failures)
 - ❌ Skipping §4.3 PLAN-AND-CONFIRM just because the user asked for async — they still need to see and confirm the plan
 - ❌ Calling `update_task_queue` and then continuing to talk about results in the same turn → fabricated outputs
