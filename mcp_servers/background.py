@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from apscheduler.triggers.cron import CronTrigger
 
@@ -10,6 +10,12 @@ from mcp_servers.setup import logger, scheduler, scheduled_job_ids, tz
 from mcp_servers.executors.reminder import execute_reminder
 from mcp_servers.executors.regular_work import execute_regular_work
 from mcp_servers.executors.project_task import execute_project_task
+
+# Window after which a 'doing' task with no progress is assumed orphaned.
+# An asyncio worker that's actually alive will update `updated_at` (via status
+# changes, comments, or callbacks) well within this window, so anything older
+# is almost certainly a leftover from a container restart.
+ORPHAN_THRESHOLD_MINUTES = 30
 
 
 async def sync_database_tasks():
@@ -178,6 +184,66 @@ _DEFAULT_REGULAR_WORKS = [
         "recipient": None,
     },
 ]
+
+
+def recover_orphaned_tasks() -> int:
+    """Mark ProjectTasks stuck in 'doing' as 'failed' on MCP startup.
+
+    When the MCP container restarts mid-task, the asyncio worker running
+    `execute_project_task` dies but the DB record stays in 'doing'. Without
+    cleanup, the Manager sees the stale record and reports the task as
+    in-progress for the rest of the conversation, blocking the user from
+    re-queueing the same work.
+
+    This runs once at startup, before the scheduler starts and before any
+    polling. Tasks last updated more than ORPHAN_THRESHOLD_MINUTES ago are
+    flipped to 'failed' with a TaskComment that explains the reason.
+
+    Returns the number of tasks recovered. Logged once for ops visibility.
+    """
+    db = SessionLocal()
+    recovered = 0
+    try:
+        cutoff = datetime.utcnow() - timedelta(minutes=ORPHAN_THRESHOLD_MINUTES)
+        stuck = db.query(models.ProjectTask).filter(
+            models.ProjectTask.status == "doing",
+            models.ProjectTask.updated_at < cutoff,
+        ).all()
+
+        for task in stuck:
+            task.status = "failed"
+            task.updated_at = datetime.utcnow()
+            db.add(models.TaskComment(
+                id=str(uuid.uuid4()),
+                task_id=task.id,
+                user_id=task.user_id,
+                author=task.assigned_agent or "costaff_agent",
+                content=(
+                    f"## Task orphaned\n"
+                    f"This task was stuck in 'doing' status for over "
+                    f"{ORPHAN_THRESHOLD_MINUTES} minutes without progress. "
+                    f"The MCP container likely restarted while the task was "
+                    f"running, killing the asyncio worker. The task has been "
+                    f"marked failed; re-queue it if you still need the result."
+                ),
+                type="issue",
+                created_at=datetime.utcnow(),
+            ))
+            recovered += 1
+            logger.warning(
+                f"recover_orphaned_tasks: task {task.id} ({task.title!r}) "
+                f"marked failed — was 'doing' since {task.updated_at}"
+            )
+
+        if recovered:
+            db.commit()
+            logger.info(f"recover_orphaned_tasks: recovered {recovered} orphaned tasks")
+    except Exception:
+        db.rollback()
+        logger.exception("recover_orphaned_tasks: failed to scan/clean")
+    finally:
+        db.close()
+    return recovered
 
 
 def _ensure_default_regular_works(user_id: str = None):

@@ -15,7 +15,10 @@ from core.license import LicenseManager
 from mcp_servers.tools import user, messaging, reminders, regular_works, epics, stories, project_tasks, task_comments, diary, events, apis, skills, workspace
 
 # Import background task functions
-from mcp_servers.background import sync_database_tasks, poll_queued_tasks, _ensure_default_regular_works
+from mcp_servers.background import (
+    sync_database_tasks, poll_queued_tasks, _ensure_default_regular_works,
+    recover_orphaned_tasks,
+)
 from mcp_servers.executors.reminder import execute_reminder
 
 
@@ -29,6 +32,11 @@ async def startup():
     init_db()
     if not scheduler.running:
         scheduler.start()
+
+    # Recover orphaned ProjectTasks — anything stuck in 'doing' from before
+    # this MCP container started up. Must run before the queue polling kicks
+    # in so we don't accidentally pick up a stale 'doing' record as 'busy'.
+    recover_orphaned_tasks()
 
     # Ensure default global Regular Works exist (shared across all users)
     _ensure_default_regular_works()
