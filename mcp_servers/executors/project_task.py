@@ -82,7 +82,51 @@ async def execute_project_task(task_id: str):
             db.commit()
 
             if channel and recipient:
-                await dispatch_notification(channel, recipient, result_text, task_session_id)
+                # If the task carries an origin session_id (the user's main
+                # conversation), inject a SYSTEM_CALLBACK turn into that session
+                # so the Manager re-engages and presents the result naturally
+                # in the user's conversation thread. Falls back to raw dispatch
+                # if the synthetic callback fails (e.g. session expired, ADK
+                # unreachable).
+                origin_session_id = task.session_id
+                callback_delivered = False
+                if origin_session_id and origin_session_id != task_session_id:
+                    try:
+                        synthetic = (
+                            f"[SYSTEM_CALLBACK|task_id={task_id}"
+                            f"|agent={task.assigned_agent or 'costaff_agent'}"
+                            f"|status=done]\n"
+                            f"Original task title: {task.title}\n"
+                            f"Result from sub-agent:\n{result_text[:4000]}\n"
+                            f"\nInstructions: this is an asynchronous task that the user "
+                            f"asked about earlier. Summarise the result in the user's "
+                            f"language using your usual style, then ask the next "
+                            f"logical step. Do NOT call create_project_task again "
+                            f"unless the user explicitly asks for follow-up work."
+                        )
+                        manager_reply = await run_adk_prompt(
+                            app_name, task.user_id, origin_session_id, synthetic
+                        )
+                        if manager_reply and not manager_reply.startswith("⚠️"):
+                            await dispatch_notification(
+                                channel, recipient, manager_reply, origin_session_id
+                            )
+                            callback_delivered = True
+                            logger.info(
+                                f"[execute_project_task] synthetic callback "
+                                f"delivered for task {task_id} → session "
+                                f"{origin_session_id}"
+                            )
+                    except Exception:
+                        logger.exception(
+                            f"[execute_project_task] synthetic callback failed "
+                            f"for task {task_id}, falling back to raw dispatch"
+                        )
+
+                if not callback_delivered:
+                    await dispatch_notification(
+                        channel, recipient, result_text, task_session_id
+                    )
 
             # Advance queue and wake up dependents
             if task.assigned_agent:
@@ -110,6 +154,46 @@ async def execute_project_task(task_id: str):
             )
             db.add(comment)
             db.commit()
+
+            # Notify the user about the failure — via synthetic callback if we
+            # have an origin session, otherwise raw dispatch.
+            if channel and recipient:
+                origin_session_id = task.session_id
+                failure_delivered = False
+                if origin_session_id and origin_session_id != task_session_id:
+                    try:
+                        synthetic = (
+                            f"[SYSTEM_CALLBACK|task_id={task_id}"
+                            f"|agent={task.assigned_agent or 'costaff_agent'}"
+                            f"|status=failed]\n"
+                            f"Original task title: {task.title}\n"
+                            f"Error type: {type(e).__name__}\n"
+                            f"Error message: {str(e)[:500]}\n"
+                            f"\nInstructions: this async task failed. Tell the user "
+                            f"in their language what failed and suggest a recovery "
+                            f"action (retry, change approach, or skip)."
+                        )
+                        manager_reply = await run_adk_prompt(
+                            app_name, task.user_id, origin_session_id, synthetic
+                        )
+                        if manager_reply and not manager_reply.startswith("⚠️"):
+                            await dispatch_notification(
+                                channel, recipient, manager_reply, origin_session_id
+                            )
+                            failure_delivered = True
+                    except Exception:
+                        logger.exception(
+                            f"[execute_project_task] failure callback errored "
+                            f"for task {task_id}"
+                        )
+                if not failure_delivered:
+                    fallback = (
+                        f"❌ Task '{task.title}' (id={task_id}) failed: "
+                        f"{type(e).__name__}: {str(e)[:300]}"
+                    )
+                    await dispatch_notification(
+                        channel, recipient, fallback, task_session_id
+                    )
 
             # Still advance the queue even on failure so remaining tasks are not blocked
             if task.assigned_agent:

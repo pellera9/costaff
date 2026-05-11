@@ -1,0 +1,224 @@
+"""Tests for the async ProjectTask synthetic-callback flow.
+
+The contract under test:
+
+  After execute_project_task() finishes successfully:
+    - If task.session_id is set AND differs from the task-scoped session
+      (i.e. it's the user's origin Manager session), the executor MUST inject
+      a [SYSTEM_CALLBACK] turn into that session via run_adk_prompt and
+      dispatch the Manager's reply to the user.
+    - If task.session_id is not set, the executor MUST fall back to raw
+      dispatch of the result text (legacy behaviour preserved).
+    - If the synthetic call raises or returns a warning marker, the executor
+      MUST fall back to raw dispatch — never swallow the result silently.
+
+  After a task fails:
+    - Same routing rules apply, but the synthetic message carries
+      status=failed and a fallback text is sent if callback fails.
+"""
+import os
+import uuid
+import asyncio
+from datetime import datetime
+from unittest.mock import patch, AsyncMock
+
+import pytest
+
+from core import models
+from mcp_servers.executors import project_task as executor_mod
+
+
+def _make_task(db_session, *, session_id=None, status="queued"):
+    epic = models.Epic(
+        id=str(uuid.uuid4()),
+        user_id="user_abc",
+        title="Test Epic",
+        status="active",
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db_session.add(epic)
+    task = models.ProjectTask(
+        id=str(uuid.uuid4()),
+        epic_id=epic.id,
+        user_id="user_abc",
+        session_id=session_id,
+        title="Q1 Sales Analysis",
+        spec="Do the analysis.",
+        type="immediate",
+        assigned_agent="business_analysis",
+        status=status,
+        channel="telegram",
+        recipient="12345",
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db_session.add(task)
+    db_session.commit()
+    return task
+
+
+@pytest.mark.asyncio
+async def test_synthetic_callback_used_when_origin_session_present(db_session, monkeypatch):
+    task = _make_task(db_session, session_id="tg_user_session_123")
+
+    # Patch SessionLocal so executor uses our test DB
+    monkeypatch.setattr(
+        executor_mod, "SessionLocal", lambda: db_session
+    )
+
+    # Fake run_adk_prompt: first call (task session) returns raw result;
+    # second call (origin session) returns Manager's natural reply.
+    run_calls = []
+
+    async def fake_run(app, uid, sid, prompt):
+        run_calls.append((app, uid, sid, prompt))
+        if sid.startswith("task_"):
+            return "Raw BA output: revenue +15% YoY"
+        return "Manager natural reply about BA's findings"
+
+    dispatch_calls = []
+
+    async def fake_dispatch(channel, recipient, body, sid):
+        dispatch_calls.append((channel, recipient, body, sid))
+
+    monkeypatch.setattr(executor_mod, "run_adk_prompt", fake_run)
+    monkeypatch.setattr(executor_mod, "dispatch_notification", fake_dispatch)
+
+    await executor_mod.execute_project_task(task.id)
+    # Drain background queue-advance tasks the executor spawns
+    for t in list(asyncio.all_tasks()):
+        if t is not asyncio.current_task():
+            t.cancel()
+
+    # Two run_adk_prompt calls: task session + origin (callback)
+    assert len(run_calls) == 2
+    assert run_calls[0][2].startswith("task_")
+    assert run_calls[1][2] == "tg_user_session_123"
+    # The second call must carry the SYSTEM_CALLBACK header
+    assert "[SYSTEM_CALLBACK" in run_calls[1][3]
+    assert "status=done" in run_calls[1][3]
+
+    # Exactly one dispatch — and it carries Manager's reply, not raw output
+    assert len(dispatch_calls) == 1
+    _, _, body, sid = dispatch_calls[0]
+    assert body == "Manager natural reply about BA's findings"
+    assert sid == "tg_user_session_123"
+
+
+@pytest.mark.asyncio
+async def test_falls_back_to_raw_dispatch_when_no_origin_session(db_session, monkeypatch):
+    task = _make_task(db_session, session_id=None)
+
+    monkeypatch.setattr(executor_mod, "SessionLocal", lambda: db_session)
+
+    async def fake_run(app, uid, sid, prompt):
+        return "Raw BA output"
+
+    dispatch_calls = []
+
+    async def fake_dispatch(channel, recipient, body, sid):
+        dispatch_calls.append((channel, recipient, body, sid))
+
+    monkeypatch.setattr(executor_mod, "run_adk_prompt", fake_run)
+    monkeypatch.setattr(executor_mod, "dispatch_notification", fake_dispatch)
+
+    await executor_mod.execute_project_task(task.id)
+    for t in list(asyncio.all_tasks()):
+        if t is not asyncio.current_task():
+            t.cancel()
+
+    # No callback possible → single raw dispatch with the result text
+    assert len(dispatch_calls) == 1
+    _, _, body, _ = dispatch_calls[0]
+    assert body == "Raw BA output"
+
+
+@pytest.mark.asyncio
+async def test_falls_back_when_callback_fails(db_session, monkeypatch):
+    task = _make_task(db_session, session_id="tg_user_session_456")
+    monkeypatch.setattr(executor_mod, "SessionLocal", lambda: db_session)
+
+    async def fake_run(app, uid, sid, prompt):
+        if sid.startswith("task_"):
+            return "Raw result"
+        raise RuntimeError("ADK unreachable for origin session")
+
+    dispatch_calls = []
+
+    async def fake_dispatch(channel, recipient, body, sid):
+        dispatch_calls.append((channel, recipient, body, sid))
+
+    monkeypatch.setattr(executor_mod, "run_adk_prompt", fake_run)
+    monkeypatch.setattr(executor_mod, "dispatch_notification", fake_dispatch)
+
+    await executor_mod.execute_project_task(task.id)
+    for t in list(asyncio.all_tasks()):
+        if t is not asyncio.current_task():
+            t.cancel()
+
+    # Callback failed → executor MUST still deliver the raw result, not drop it
+    assert len(dispatch_calls) == 1
+    _, _, body, _ = dispatch_calls[0]
+    assert body == "Raw result"
+
+
+@pytest.mark.asyncio
+async def test_falls_back_when_callback_returns_warning(db_session, monkeypatch):
+    """run_adk_prompt returns '⚠️ Failed to get a response...' on exhaustion."""
+    task = _make_task(db_session, session_id="tg_user_session_789")
+    monkeypatch.setattr(executor_mod, "SessionLocal", lambda: db_session)
+
+    async def fake_run(app, uid, sid, prompt):
+        if sid.startswith("task_"):
+            return "Raw result text"
+        return "⚠️ Failed to get a response from the agent."
+
+    dispatch_calls = []
+
+    async def fake_dispatch(channel, recipient, body, sid):
+        dispatch_calls.append((channel, recipient, body, sid))
+
+    monkeypatch.setattr(executor_mod, "run_adk_prompt", fake_run)
+    monkeypatch.setattr(executor_mod, "dispatch_notification", fake_dispatch)
+
+    await executor_mod.execute_project_task(task.id)
+    for t in list(asyncio.all_tasks()):
+        if t is not asyncio.current_task():
+            t.cancel()
+
+    # Warning marker treated as failure → fallback to raw
+    assert len(dispatch_calls) == 1
+    _, _, body, _ = dispatch_calls[0]
+    assert body == "Raw result text"
+
+
+@pytest.mark.asyncio
+async def test_failure_path_uses_failure_callback(db_session, monkeypatch):
+    task = _make_task(db_session, session_id="tg_user_session_fail")
+    monkeypatch.setattr(executor_mod, "SessionLocal", lambda: db_session)
+
+    async def fake_run(app, uid, sid, prompt):
+        if sid.startswith("task_"):
+            raise ValueError("BA blew up")
+        # The failure-callback branch sees status=failed
+        assert "status=failed" in prompt
+        return "Manager's apology about the failed task"
+
+    dispatch_calls = []
+
+    async def fake_dispatch(channel, recipient, body, sid):
+        dispatch_calls.append((channel, recipient, body, sid))
+
+    monkeypatch.setattr(executor_mod, "run_adk_prompt", fake_run)
+    monkeypatch.setattr(executor_mod, "dispatch_notification", fake_dispatch)
+
+    await executor_mod.execute_project_task(task.id)
+    for t in list(asyncio.all_tasks()):
+        if t is not asyncio.current_task():
+            t.cancel()
+
+    assert len(dispatch_calls) == 1
+    _, _, body, sid = dispatch_calls[0]
+    assert body == "Manager's apology about the failed task"
+    assert sid == "tg_user_session_fail"
