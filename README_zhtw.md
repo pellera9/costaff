@@ -187,7 +187,7 @@ costaff agent add my-agent --url http://my-agent.internal
 | Discord Bot | [discord.py](https://discordpy.readthedocs.io/) |
 | Line Bot | [line-bot-sdk](https://github.com/line/line-bot-sdk-python) |
 | Web 後端 | [FastAPI](https://fastapi.tiangolo.com/) + [uvicorn](https://www.uvicorn.org/) |
-| 資料庫 | [SQLAlchemy](https://www.sqlalchemy.org/) — PostgreSQL 或 SQLite |
+| 資料庫 | [SQLAlchemy](https://www.sqlalchemy.org/) — PostgreSQL（必要） |
 | 排程器 | [APScheduler](https://apscheduler.readthedocs.io/) |
 | 部署 | Docker + Docker Compose |
 | CLI | [Typer](https://typer.tiangolo.com/) + [Rich](https://rich.readthedocs.io/) |
@@ -228,7 +228,7 @@ costaff dashboard
 
 設定精靈（`costaff onboard`）會引導你完成：
 - AI 模型提供者選擇（Gemini 或 LiteLLM）
-- 資料庫類型（SQLite 或 PostgreSQL）
+- PostgreSQL 連線設定
 - Bot Token 設定（Telegram、Discord、Line——皆為選填）
 - 儀表板管理員帳號設定
 - 身份雜湊鹽值設定

@@ -127,8 +127,8 @@ prefer to install manually:
   only need public reachability if you want LINE webhooks or remote
   dashboard access.
 - **A separate database server.** Postgres runs as part of the
-  CoStaff compose stack. SQLite is also supported for the simplest
-  installs.
+  CoStaff compose stack — no external DB required. SQLite is not
+  supported by the MCP server.
 - **Kubernetes.** Docker Compose is the supported orchestrator. K8s
   manifests may come later but are not required.
 

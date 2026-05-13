@@ -409,7 +409,7 @@ type the same thing in plain text and get the same result.
 | AI models | Google Gemini, any LiteLLM-compatible provider |
 | Channel SDK | [costaff-channel-chatbot](https://github.com/costaff-ai/costaff-channel-chatbot) |
 | Web backend | [FastAPI](https://fastapi.tiangolo.com/) + [uvicorn](https://www.uvicorn.org/) |
-| Database | [SQLAlchemy](https://www.sqlalchemy.org/) — PostgreSQL or SQLite |
+| Database | [SQLAlchemy](https://www.sqlalchemy.org/) — PostgreSQL (required) |
 | Scheduler | [APScheduler](https://apscheduler.readthedocs.io/) |
 | Deployment | Docker + Docker Compose |
 | CLI | [Typer](https://typer.tiangolo.com/) + [Rich](https://rich.readthedocs.io/) |

@@ -31,7 +31,12 @@ try:
         real_id = Column(String)
         created_at = Column(DateTime, default=datetime.utcnow)
 
-    db_uri = os.getenv("ADK_SESSION_SERVICE_URI", "sqlite:///./costaff_agent.db")
+    db_uri = os.getenv("ADK_SESSION_SERVICE_URI")
+    if not db_uri:
+        raise RuntimeError(
+            "ADK_SESSION_SERVICE_URI is not set. CoStaff requires PostgreSQL: "
+            "set ADK_SESSION_SERVICE_URI=postgresql+asyncpg://user:pass@host:5432/db in .env"
+        )
     engine = create_engine(db_uri.replace("postgresql+asyncpg://", "postgresql://"))
     # Ensure tables are created
     Base.metadata.create_all(bind=engine)
