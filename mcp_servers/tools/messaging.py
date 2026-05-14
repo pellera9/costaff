@@ -1,4 +1,3 @@
-import re
 import os
 import uuid
 from datetime import datetime
@@ -6,24 +5,14 @@ from typing import Optional
 
 from core import models
 from core.database import SessionLocal
-from core.notifiers.telegram import send_telegram_notification, send_telegram_document
+from core.notifiers.telegram import (
+    extract_file_paths as _extract_file_paths,
+    send_telegram_document,
+    send_telegram_notification,
+)
 from core.notifiers.line_notifier import send_line_notification
 from core.notifiers.discord import send_discord_notification
 from mcp_servers.setup import mcp, tz
-
-_FILE_EXTS = r"pdf|docx|md|txt|html|htm|png|jpg|jpeg|gif|csv|json|xlsx|xls|zip"
-_ABS_PATH_RE = re.compile(r"(/app/data/[\w./-]+\.(?:" + _FILE_EXTS + r"))", re.IGNORECASE)
-
-
-def _extract_file_paths(text: str) -> list[str]:
-    """Extract /app/data/... file paths from a message body."""
-    seen = set()
-    result = []
-    for p in _ABS_PATH_RE.findall(text):
-        if p not in seen and os.path.isfile(p):
-            seen.add(p)
-            result.append(p)
-    return result
 
 
 @mcp.tool()
