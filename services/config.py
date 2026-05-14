@@ -153,6 +153,16 @@ class ConfigManager:
         costaff_names = agent_mcps.get("costaff_agent")
         if costaff_names is None:
             costaff_names = ["costaff"]
+        elif costaff_names != ["costaff"]:
+            print(
+                f"[MCP] WARNING: agent_mcps.costaff_agent={costaff_names} "
+                f"overrides the invariant `manager → own MCP only`. "
+                f"The manager reaches sub-agents via A2A AgentTool, NOT via MCP, "
+                f"so listing extra MCPs here only invites the ADK anyio task "
+                f"group race ('cancel scope in different task'). "
+                f"Set `\"costaff_agent\": [\"costaff\"]` (or remove the key) to "
+                f"restore the invariant."
+            )
         costaff_urls = {k: v for k, v in urls.items() if k in costaff_names}
         set_key(PATHS["env"], "COSTAFF_AGENT_MCP_URLS", json.dumps(costaff_urls))
 
@@ -176,9 +186,24 @@ class ConfigManager:
             env_var = ext_agent.get("mcp_env_var") or (agent_key.upper() + "_MCP_URLS")
 
             selected = agent_mcps.get(agent_key)
+            expected = ["costaff", ext_name]
             if selected is None:
                 # Default: Specialist can see itself + Root Tools (costaff)
-                selected = ["costaff", ext_name]
+                selected = expected
+            elif set(selected) != set(expected):
+                # Sub-agents need BOTH their own MCP (real work tools) AND the
+                # manager core MCP (the 4 cross-agent tools:
+                # send_message_now / add_task_comment / move_to_shared /
+                # list_data_files). Dropping the manager core MCP breaks the
+                # agent's instruction contract (it fail-fasts when
+                # `send_message_now` is missing); adding more MCPs raises the
+                # anyio race odds without benefit.
+                print(
+                    f"[MCP] WARNING: agent_mcps.{agent_key}={selected} "
+                    f"overrides the invariant `sub-agent → [costaff, own]`. "
+                    f"Expected: {expected}. "
+                    f"Set or remove the key in config.json to restore."
+                )
 
             extra_urls = {}
             filters_for_agent = agent_mcp_filters.get(agent_key, {})

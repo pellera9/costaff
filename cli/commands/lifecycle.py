@@ -125,6 +125,51 @@ def restart():
     console.print("[bold green]SUCCESS: CoStaff restarted in correct sequence![/bold green]")
 
 
+def core_rebuild(
+    no_cache: bool = typer.Option(False, "--no-cache", help="Build images without Docker layer cache"),
+):
+    """Rebuild manager + core MCP images and cascade-restart plugin agents.
+
+    The sub-agents' ADK MCP sessions hold a TCP connection to costaff-mcp-costaff.
+    When that container is replaced (rebuild + recreate) the held session becomes
+    stale: ADK keeps the same session handle, partial tool lists leak through, and
+    the LLM hallucinates "skill missing" or fabricates task completions. Restarting
+    each plugin agent forces ADK to reopen the MCP session against the new container.
+
+    Use after pulling new code that touches manager / mcp-costaff / dispatcher.
+    """
+    conf = ConfigManager.get_config()
+    runtime = get_runtime()
+
+    core_services = ["costaff-agent-costaff", "costaff-mcp-costaff"]
+
+    console.print("[bold]Step 1:[/bold] Building manager core images...")
+    runtime.build(core_services, no_cache=no_cache)
+
+    console.print("[bold]Step 2:[/bold] Recreating manager core containers...")
+    runtime.up(core_services, force_recreate=True, remove_orphans=False)
+    _wait_for_containers(core_services)
+
+    plugin_agents = [
+        (name, entry)
+        for name, entry in conf.get("external_agents", {}).items()
+        if entry.get("enabled") and entry.get("fragment_path") and entry.get("container_names")
+    ]
+    console.print(
+        f"[bold]Step 3:[/bold] Cascading restart to {len(plugin_agents)} plugin agent(s) "
+        f"(their MCP session to mcp-costaff is now stale)..."
+    )
+    for name, entry in plugin_agents:
+        console.print(f"  - restarting [cyan]{name}[/cyan]")
+        runtime.up(
+            entry["container_names"],
+            fragment=entry["fragment_path"],
+            force_recreate=True,
+        )
+
+    console.print("[bold green]SUCCESS: core rebuilt + plugin agents reconnected.[/bold green]")
+
+
 def status():
     """Check services status."""
     get_runtime().ps()

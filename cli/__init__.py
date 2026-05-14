@@ -1,7 +1,7 @@
 import typer
 
 from utils.paths import VERSION
-from cli.commands.lifecycle import start, stop, status, logs, restart
+from cli.commands.lifecycle import start, stop, status, logs, restart, core_rebuild
 from cli.commands.onboard import onboard
 from cli.commands.bootstrap import bootstrap
 from cli.commands.dashboard import dashboard, chat, invoke
@@ -21,6 +21,7 @@ app.command()(bootstrap)
 app.command()(start)
 app.command()(stop)
 app.command()(restart)
+app.command(name="core-rebuild")(core_rebuild)
 app.command()(status)
 app.command()(logs)
 app.command()(dashboard)
