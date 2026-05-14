@@ -12,7 +12,11 @@ from core import models
 from core.database import SessionLocal
 from core.notifiers.discord import send_discord_notification
 from core.notifiers.line_notifier import send_line_notification
-from core.notifiers.telegram import send_telegram_notification
+from core.notifiers.telegram import (
+    extract_file_paths,
+    send_telegram_document,
+    send_telegram_notification,
+)
 
 
 async def dispatch_notification(
@@ -41,6 +45,13 @@ async def dispatch_notification(
         chan = (channel or "").lower()
         if "tg" in chan or "telegram" in chan:
             send_telegram_notification(target_id, message)
+            # Attach any /app/data/... files referenced in the message.
+            # `send_message_now` already does this; without mirroring it here
+            # the async callback path (BA / coding completion via project_task
+            # executor) delivers prose only and the user never receives the
+            # PDF / CSV the agent produced.
+            for fp in extract_file_paths(message):
+                send_telegram_document(target_id, fp)
         elif "dc" in chan or "discord" in chan:
             send_discord_notification(target_id, message, session_id=session_id)
         elif "line" in chan:

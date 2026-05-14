@@ -1,12 +1,34 @@
 import httpx
 import logging
 import os
+import re
 from dotenv import load_dotenv
 from core import models
 from core.database import SessionLocal
 
 load_dotenv()
 logger = logging.getLogger(__name__)
+
+
+_FILE_EXTS = r"pdf|docx|md|txt|html|htm|png|jpg|jpeg|gif|csv|json|xlsx|xls|zip"
+_ABS_PATH_RE = re.compile(r"(/app/data/[\w./-]+\.(?:" + _FILE_EXTS + r"))", re.IGNORECASE)
+
+
+def extract_file_paths(text: str) -> list[str]:
+    """Extract /app/data/... absolute file paths from a message body.
+
+    De-duplicates and filters to existing files only. Used by both
+    `send_message_now` (manager core MCP tool) and `dispatch_notification`
+    (async callback executor) so both delivery paths attach referenced
+    artefacts to the user's Telegram chat.
+    """
+    seen = set()
+    result = []
+    for p in _ABS_PATH_RE.findall(text):
+        if p not in seen and os.path.isfile(p):
+            seen.add(p)
+            result.append(p)
+    return result
 
 def send_telegram_notification(recipient_id: str, message: str, session_id: str = None):
     """Sends a notification message to a Telegram chat (Synchronous).
