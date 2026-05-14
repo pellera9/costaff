@@ -140,10 +140,19 @@ class ConfigManager:
         # 2. Map MCPs to Agents
         agent_mcps = conf.get("agent_mcps", {})
 
-        # costaff_agent: defaults to all if not specified
+        # costaff_agent (the manager) defaults to its own core MCP only.
+        #
+        # Why not all MCPs: ADK initialises every McpToolset in parallel at
+        # agent boot. With N streamable-http MCPs the anyio task group hits
+        # `Attempted to exit cancel scope in a different task` races, the LLM
+        # then sees an incomplete tool list and fabricates "delegated to X"
+        # replies referencing files that never get written. The manager talks
+        # to sub-agents via A2A AgentTool — it does NOT need their MCPs to
+        # delegate; sub-agents load their own MCPs themselves. Override in
+        # config.json's `agent_mcps.costaff_agent` to broaden if you need it.
         costaff_names = agent_mcps.get("costaff_agent")
-        if costaff_names is None: # Use all if field is missing
-            costaff_names = list(urls.keys())
+        if costaff_names is None:
+            costaff_names = ["costaff"]
         costaff_urls = {k: v for k, v in urls.items() if k in costaff_names}
         set_key(PATHS["env"], "COSTAFF_AGENT_MCP_URLS", json.dumps(costaff_urls))
 
