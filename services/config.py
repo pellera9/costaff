@@ -135,7 +135,7 @@ class ConfigManager:
                     urls[name] = {k: v for k, v in val.items() if k not in ("enabled", "description")}
 
         os.makedirs(os.path.dirname(PATHS["env"]), exist_ok=True)
-        set_key(PATHS["env"], "MCP_SERVER_URLS", json.dumps(urls))
+        set_key(PATHS["env"], "MCP_SERVER_URLS", json.dumps(urls), quote_mode="never")
 
         # 2. Map MCPs to Agents
         agent_mcps = conf.get("agent_mcps", {})
@@ -164,7 +164,12 @@ class ConfigManager:
                 f"restore the invariant."
             )
         costaff_urls = {k: v for k, v in urls.items() if k in costaff_names}
-        set_key(PATHS["env"], "COSTAFF_AGENT_MCP_URLS", json.dumps(costaff_urls))
+        # quote_mode="never" matters: python-dotenv's default wraps JSON values
+        # in single quotes, but docker compose's env_file parser strips
+        # single-quoted values to empty (its `${VAR}` interpolation does parse
+        # them, hence manager works while sub-agents loaded via env_file get
+        # empty). Write JSON raw so both parsers agree.
+        set_key(PATHS["env"], "COSTAFF_AGENT_MCP_URLS", json.dumps(costaff_urls), quote_mode="never")
 
         # Per-agent MCP tool whitelists. Schema in config.json:
         #   "agent_mcp_filters": {
@@ -219,7 +224,7 @@ class ConfigManager:
                 else:
                     extra_urls[k] = v
 
-            set_key(PATHS["env"], env_var, json.dumps(extra_urls))
+            set_key(PATHS["env"], env_var, json.dumps(extra_urls), quote_mode="never")
             filter_summary = {k: len(filters_for_agent[k]) for k in filters_for_agent if k in extra_urls}
             if filter_summary:
                 print(f"[MCP] Wrote {env_var}: {list(extra_urls.keys())} (filters: {filter_summary})")
