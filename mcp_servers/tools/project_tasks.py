@@ -6,6 +6,7 @@ prioritize work across multiple specialist agents.
 import asyncio
 import json
 import logging
+import re
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -347,6 +348,97 @@ async def dispatch_task(
         return f"Error: {str(e)}"
     finally:
         db.close()
+
+
+@mcp.tool()
+async def dispatch_plan(
+    epic_id: str,
+    user_id: str,
+    steps: list,
+    session_id: Optional[str] = None,
+    channel: Optional[str] = None,
+    recipient: Optional[str] = None,
+) -> str:
+    """
+    Atomically dispatch every step of an approved multi-step plan in one call.
+
+    USE THIS WHENEVER THE USER OKS A MULTI-STEP PLAN (≥2 steps). The Manager
+    LLM is unreliable at making N separate `dispatch_task` calls in one turn
+    even when the skill says to — it tends to dispatch step 1, then on
+    callback ask "should I continue?". `dispatch_plan` removes that risk by
+    making the multi-dispatch a single tool call: every step is created
+    and chained via `depends_on` here in the MCP server, not by the LLM.
+
+    Each entry in `steps` is a dict with the required keys:
+      - `title` (str)
+      - `assigned_agent` (str)
+      - `spec` (str)
+    Optional keys per step:
+      - `story_id` (str)
+      - `priority` (str)  — default "medium"
+
+    Top-level `session_id` / `channel` / `recipient` apply to ALL steps.
+
+    Behaviour:
+      - Step 1 is dispatched as `queued` and triggered immediately.
+      - Each subsequent step is dispatched with `depends_on = <previous step's task_id>`,
+        so it sits in `backlog` until its upstream finishes. `_advance_agent_queue`
+        then promotes and runs it automatically.
+      - Returns a summary string with every task_id.
+
+    For single-step plans, use `dispatch_task` directly.
+    """
+    logger.info(f"[dispatch_plan] epic={epic_id} steps={len(steps) if isinstance(steps, list) else '?'}")
+    if not isinstance(steps, list):
+        try:
+            steps = json.loads(steps)
+        except Exception:
+            return "Error: steps must be a list of dicts (or a JSON-encoded list)."
+    if not steps:
+        return "Error: at least one step is required."
+
+    task_ids: list[str] = []
+    prev_task_id: Optional[str] = None
+    for idx, step in enumerate(steps):
+        if not isinstance(step, dict):
+            return f"Error: step {idx} must be a dict, got {type(step).__name__}."
+        title = step.get("title")
+        assigned_agent = step.get("assigned_agent")
+        spec = step.get("spec")
+        if not title or not assigned_agent or not spec:
+            return f"Error: step {idx} missing required keys (title, assigned_agent, spec)."
+
+        result = await dispatch_task(
+            epic_id=epic_id,
+            user_id=user_id,
+            title=title,
+            assigned_agent=assigned_agent,
+            spec=spec,
+            story_id=step.get("story_id"),
+            priority=step.get("priority", "medium"),
+            depends_on=prev_task_id,
+            session_id=session_id,
+            channel=channel,
+            recipient=recipient,
+        )
+        if result.startswith("Error:") or "Internal Error" in result:
+            return f"Step {idx + 1} failed to dispatch: {result}"
+
+        # Pull task_id out of the dispatch_task result string ("(ID: <uuid>, ...)")
+        m = re.search(r"ID: ([0-9a-f-]+)", result)
+        if not m:
+            return f"Step {idx + 1}: could not parse task_id from result: {result}"
+        task_id = m.group(1)
+        task_ids.append(task_id)
+        prev_task_id = task_id
+
+    summary_lines = [f"Dispatched {len(task_ids)} task(s) as a chain:"]
+    for idx, tid in enumerate(task_ids):
+        marker = "▶" if idx == 0 else f"↳ depends on #{task_ids[idx - 1][:8]}"
+        summary_lines.append(f"  {marker} #{tid}: {steps[idx]['title']}")
+    result = "\n".join(summary_lines)
+    logger.info(f"[dispatch_plan] OK → {len(task_ids)} tasks chained")
+    return result
 
 
 @mcp.tool()

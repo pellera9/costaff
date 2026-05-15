@@ -392,6 +392,119 @@ async def test_dispatch_task_no_auto_chain_when_prior_is_done(db_session, patche
 
 
 @pytest.mark.asyncio
+async def test_dispatch_plan_chains_two_steps(db_session, patched_pt):
+    """The headline contract: one call to dispatch_plan with N steps creates
+    N tasks, each linked to the previous via depends_on, with the first
+    queued (executor triggered) and the rest in backlog (waiting on their
+    upstream)."""
+    user_id = _make_user(db_session)
+    epic = _make_epic(db_session, user_id=user_id)
+
+    result = await pt_mod.dispatch_plan(
+        epic_id=epic.id, user_id=user_id,
+        session_id="tg_sess_chain",
+        steps=[
+            {"title": "Step 1", "assigned_agent": "coding_agent",
+             "spec": "load csv"},
+            {"title": "Step 2", "assigned_agent": "business_analysis_agent",
+             "spec": "make pdf"},
+        ],
+    )
+    await asyncio.sleep(0)
+
+    assert "Dispatched 2 task(s)" in result
+    rows = (
+        db_session.query(models.ProjectTask)
+        .order_by(models.ProjectTask.created_at.asc())
+        .all()
+    )
+    assert len(rows) == 2
+    step1, step2 = rows
+    assert step1.status == "queued"
+    assert step1.depends_on is None
+    assert step2.status == "backlog"
+    assert step2.depends_on == step1.id
+    # Only the first step's executor is triggered immediately
+    assert len(patched_pt) == 1
+    assert patched_pt[0] == step1.id
+
+
+@pytest.mark.asyncio
+async def test_dispatch_plan_rejects_empty_steps(db_session, patched_pt):
+    user_id = _make_user(db_session)
+    epic = _make_epic(db_session, user_id=user_id)
+    result = await pt_mod.dispatch_plan(
+        epic_id=epic.id, user_id=user_id, steps=[],
+    )
+    assert "Error" in result
+    assert db_session.query(models.ProjectTask).count() == 0
+
+
+@pytest.mark.asyncio
+async def test_dispatch_plan_rejects_step_missing_required_keys(db_session, patched_pt):
+    user_id = _make_user(db_session)
+    epic = _make_epic(db_session, user_id=user_id)
+    result = await pt_mod.dispatch_plan(
+        epic_id=epic.id, user_id=user_id,
+        steps=[
+            {"title": "ok step", "assigned_agent": "coding_agent", "spec": "x"},
+            {"title": "missing agent"},  # invalid
+        ],
+    )
+    assert "Error" in result
+    # The first step DID get created though (the loop stops at the failed one);
+    # that's acceptable — Manager will see the error and can react.
+    rows = db_session.query(models.ProjectTask).all()
+    assert len(rows) == 1
+    assert rows[0].title == "ok step"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_plan_accepts_json_string_for_steps(db_session, patched_pt):
+    """LLMs sometimes pass the list as a JSON string. Tool should accept it."""
+    import json as _json
+    user_id = _make_user(db_session)
+    epic = _make_epic(db_session, user_id=user_id)
+    result = await pt_mod.dispatch_plan(
+        epic_id=epic.id, user_id=user_id,
+        steps=_json.dumps([
+            {"title": "S1", "assigned_agent": "coding_agent", "spec": "x"},
+            {"title": "S2", "assigned_agent": "business_analysis_agent", "spec": "y"},
+        ]),
+    )
+    await asyncio.sleep(0)
+    assert "Dispatched 2 task(s)" in result
+
+
+@pytest.mark.asyncio
+async def test_dispatch_plan_three_step_chain(db_session, patched_pt):
+    """A 3-step Twinkle → Coding → BA chain should produce 3 tasks linked in
+    a strict chain (each depends on the previous)."""
+    user_id = _make_user(db_session)
+    epic = _make_epic(db_session, user_id=user_id)
+    await pt_mod.dispatch_plan(
+        epic_id=epic.id, user_id=user_id,
+        session_id="tg_sess_three",
+        steps=[
+            {"title": "Twinkle fetch", "assigned_agent": "twinkle_hub_agent", "spec": "fetch"},
+            {"title": "Coding analyze", "assigned_agent": "coding_agent", "spec": "analyze"},
+            {"title": "BA report",      "assigned_agent": "business_analysis_agent", "spec": "report"},
+        ],
+    )
+    await asyncio.sleep(0)
+    rows = (
+        db_session.query(models.ProjectTask)
+        .order_by(models.ProjectTask.created_at.asc())
+        .all()
+    )
+    assert [r.status for r in rows] == ["queued", "backlog", "backlog"]
+    assert rows[0].depends_on is None
+    assert rows[1].depends_on == rows[0].id
+    assert rows[2].depends_on == rows[1].id
+    assert len(patched_pt) == 1  # only first task triggered immediately
+
+
+@pytest.mark.asyncio
 async def test_dispatch_task_rejects_unapproved_user(db_session, patched_pt):
     """An unapproved IdentityMap row → require_approved returns an error string;
     no task is created."""
