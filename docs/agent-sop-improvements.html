@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CoStaff Agent 流程改善對比</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --fg: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --bg: #ffffff;
+    --bg-soft: #f9fafb;
+    --accent: #2563eb;
+    --warn-bg: #fef3c7;
+    --warn-fg: #92400e;
+    --ok-bg: #dcfce7;
+    --ok-fg: #166534;
+    --bad-bg: #fee2e2;
+    --bad-fg: #991b1b;
+    --before: #fef2f2;
+    --before-border: #fca5a5;
+    --after: #f0fdf4;
+    --after-border: #86efac;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei",
+                 "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.65;
+  }
+  header {
+    background: linear-gradient(135deg, #7c2d12 0%, #ea580c 100%);
+    color: white;
+    padding: 32px 40px;
+  }
+  header h1 { margin: 0 0 6px 0; font-size: 28px; }
+  header p { margin: 0; opacity: 0.9; font-size: 14px; }
+  main { padding: 32px 40px; max-width: 1280px; margin: 0 auto; }
+  section { margin-bottom: 48px; }
+  h2 {
+    font-size: 20px;
+    border-left: 4px solid var(--accent);
+    padding-left: 12px;
+    margin: 32px 0 16px 0;
+  }
+  h3 { font-size: 16px; margin: 24px 0 8px 0; color: var(--muted); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 14px;
+  }
+  th, td {
+    border-bottom: 1px solid var(--border);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--bg-soft); font-weight: 600; color: var(--muted); }
+  code {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.92em;
+  }
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .pill-warn { background: var(--warn-bg); color: var(--warn-fg); }
+  .pill-ok   { background: var(--ok-bg);   color: var(--ok-fg); }
+  .pill-bad  { background: var(--bad-bg);  color: var(--bad-fg); }
+  .pill-soft { background: var(--bg-soft); color: var(--muted); border:1px solid var(--border); }
+
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 12px;
+  }
+  .compare-col {
+    border-radius: 10px;
+    padding: 16px 18px;
+    border: 1px solid;
+  }
+  .compare-before {
+    background: var(--before);
+    border-color: var(--before-border);
+  }
+  .compare-after {
+    background: var(--after);
+    border-color: var(--after-border);
+  }
+  .compare-col h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .compare-before h4 { color: #991b1b; }
+  .compare-after  h4 { color: #166534; }
+  .compare-col pre {
+    margin: 0;
+    background: rgba(255,255,255,0.6);
+    border: 1px solid rgba(0,0,0,0.05);
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .issue-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin-bottom: 20px;
+    background: var(--bg);
+  }
+  .issue-card .issue-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+  .issue-card .issue-head .num {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .issue-card .issue-head .title {
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .issue-card .meta {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .diagram-wrap {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    margin-top: 12px;
+    overflow-x: auto;
+  }
+  .legend {
+    display:flex; gap:16px; flex-wrap:wrap; margin: 8px 0 16px 0;
+    font-size: 13px; color: var(--muted);
+  }
+  .legend .sw {
+    display:inline-block; width:14px; height:14px; border-radius:3px;
+    vertical-align:middle; margin-right:6px;
+  }
+  .swatch-before { background: var(--before); border:1px solid var(--before-border); }
+  .swatch-after  { background: var(--after);  border:1px solid var(--after-border); }
+
+  .phased {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .phase-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    background: var(--bg-soft);
+  }
+  .phase-card h4 { margin: 0 0 6px 0; font-size: 15px; color: var(--accent); }
+  .phase-card .effort { font-size: 12px; color: var(--muted); }
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 16px 40px;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>CoStaff Agent 流程改善對比</h1>
+  <p>現況 vs 建議改法 — 把靠 LLM 自律的「軟約定」換成 executor / MCP 層的「硬約束」</p>
+</header>
+
+<main>
+
+<section>
+  <h2>① 核心觀察</h2>
+  <p>目前流程的所有「契約」都靠 LLM 自律（Principle 0、平行禁令、Spec 路徑、結果格式…）。一旦換 model、context 變長、cache 過期、被壓縮——任一條規則都可能失守。今天 PM2.5 task 卡在 backlog 就是 Principle 0 失守的實例。</p>
+  <p><b>改善目標：</b>把契約從 <code>prompt rule</code> 下移到 <code>executor / MCP rule</code>，幻覺空間 = 0。</p>
+</section>
+
+<section>
+  <h2>② 6 大問題總覽</h2>
+  <div class="legend">
+    <span><span class="sw swatch-before"></span> 現況（靠自律）</span>
+    <span><span class="sw swatch-after"></span> 建議（硬約束）</span>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40px">#</th>
+        <th style="width:200px">問題</th>
+        <th>現況</th>
+        <th>建議改法</th>
+        <th style="width:80px">嚴重度</th>
+        <th style="width:80px">工作量</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>create + queue 兩步</td>
+        <td>Manager 必須同 turn call 兩個 tool（Principle 0 prompt 規則）</td>
+        <td>合併成 <code>dispatch_task()</code> 單一原子 tool</td>
+        <td><span class="pill pill-bad">高</span></td>
+        <td><span class="pill pill-ok">低 ~4h</span></td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>平行禁令</td>
+        <td>Prompt 規則禁止同 turn 多 sub-agent</td>
+        <td>Executor 強制「同 manager session 同時只 1 task running」</td>
+        <td><span class="pill pill-bad">高</span></td>
+        <td><span class="pill pill-warn">中 ~1d</span></td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>Callback 重新發明 chain</td>
+        <td>Manager 每次 callback 都重讀 DB 重判 chain 下一步</td>
+        <td>第一輪寫入 <code>chain_plan</code>，executor 自動推進下一階段</td>
+        <td><span class="pill pill-warn">中</span></td>
+        <td><span class="pill pill-bad">高 ~2d</span></td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>Result 自由文字</td>
+        <td>Dispatcher 用 regex grep 路徑抓附件</td>
+        <td>JSON envelope <code>{status, files:[…], error_code}</code></td>
+        <td><span class="pill pill-warn">中</span></td>
+        <td><span class="pill pill-warn">中 ~1d</span></td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>Executor 不驗 outputs</td>
+        <td>Sub-agent 說「done」就信，BA 接力才爆</td>
+        <td>Executor stat() <code>expected_outputs</code> 全部存在才標 done</td>
+        <td><span class="pill pill-warn">中</span></td>
+        <td><span class="pill pill-ok">低 ~4h</span></td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td>失敗無結構化 code</td>
+        <td>自然語言「我做不到」，Manager LLM 判 retry/換 agent</td>
+        <td>error_code enum（<code>TOOL_NOT_AVAILABLE</code> / <code>TIMEOUT</code> / …）</td>
+        <td><span class="pill pill-warn">中</span></td>
+        <td><span class="pill pill-warn">中 ~1d</span></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============== Issue 1 ============== -->
+<section>
+  <div class="issue-card">
+    <div class="issue-head">
+      <span class="num">1</span>
+      <span class="title">create + queue 合併為原子 <code>dispatch_task()</code></span>
+    </div>
+    <div class="meta">嚴重度 高 · 工作量 ~4h · 解掉今天 PM2.5 stuck 的雷</div>
+
+    <div class="compare-grid">
+      <div class="compare-col compare-before">
+        <h4>❌ 現況</h4>
+<pre>① M → create_project_task(agent, spec)
+    → returns task_id  (state = backlog)
+
+② M → update_task_queue(agent, [task_id])
+    → state = queued, executor pickup
+
+★ Principle 0：兩步必須同 turn
+  靠 prompt 規則自律
+  漏了 → task 卡 backlog 永遠不動</pre>
+      </div>
+      <div class="compare-col compare-after">
+        <h4>✅ 建議</h4>
+<pre>① M → dispatch_task(agent, spec)
+    → MCP 內部原子操作:
+       INSERT row (state=queued)
+       trigger executor
+    → returns task_id
+
+★ 不可能漏 queue（沒有第二步）
+  舊兩 tool 標 deprecated，移除前先 alias</pre>
+      </div>
+    </div>
+
+    <div class="diagram-wrap">
+      <pre class="mermaid">
+sequenceDiagram
+    participant M as Manager
+    participant MCP as MCP Server
+    participant DB as DB
+    participant E as Executor
+
+    rect rgb(254,242,242)
+    Note over M,E: 現況：兩步、靠 prompt 自律
+    M->>MCP: create_project_task
+    MCP->>DB: INSERT state=backlog
+    DB-->>M: task_id
+    Note over M: ⚠ 若 LLM 漏掉<br/>→ 卡 backlog
+    M->>MCP: update_task_queue
+    MCP->>DB: UPDATE state=queued
+    DB->>E: trigger
+    end
+
+    rect rgb(240,253,244)
+    Note over M,E: 建議：單一原子 tool
+    M->>MCP: dispatch_task(agent, spec)
+    MCP->>DB: INSERT state=queued
+    DB->>E: trigger
+    MCP-->>M: task_id
+    end
+      </pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============== Issue 2 ============== -->
+<section>
+  <div class="issue-card">
+    <div class="issue-head">
+      <span class="num">2</span>
+      <span class="title">平行禁令由 Executor 強制</span>
+    </div>
+    <div class="meta">嚴重度 高 · 工作量 ~1d · 解掉 wine task BA / Coding 平行踩雷</div>
+
+    <div class="compare-grid">
+      <div class="compare-col compare-before">
+        <h4>❌ 現況</h4>
+<pre>Principle 3 (prompt rule):
+  "ABSOLUTELY FORBIDDEN parallel"
+
+實際：
+  M 同 turn dispatch_task(coding)
+                dispatch_task(ba)
+  → 兩個 sub-agent 同時跑
+  → callback 順序不可控
+  → spec 路徑漂移</pre>
+      </div>
+      <div class="compare-col compare-after">
+        <h4>✅ 建議</h4>
+<pre>Executor enforce:
+  per manager_session,
+  只允許 1 個 task 在 running
+
+第二個 dispatch_task 進來：
+  - 若同 session 已有 running task
+  - reject with error:
+    PARALLEL_DISPATCH_FORBIDDEN
+  - 或自動排隊（chain mode）</pre>
+      </div>
+    </div>
+
+    <div class="diagram-wrap">
+      <pre class="mermaid">
+flowchart LR
+    subgraph Now [現況：靠 prompt]
+      M1[Manager] -->|create+queue coding| E1[Executor]
+      M1 -.|同 turn 又| E1
+      M1 -->|create+queue ba| E1
+      E1 --> R1[兩個並跑 ❌]
+    end
+
+    subgraph Fix [建議：executor 強制]
+      M2[Manager] -->|dispatch coding| E2[Executor]
+      E2 --> R2[coding running]
+      M2 -.|dispatch ba<br/>同 session| E2
+      E2 -->|reject 或 enqueue| W[等 coding 完才放行 ✅]
+    end
+      </pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============== Issue 3 ============== -->
+<section>
+  <div class="issue-card">
+    <div class="issue-head">
+      <span class="num">3</span>
+      <span class="title">第一輪寫 <code>chain_plan</code>，Executor 自動推進</span>
+    </div>
+    <div class="meta">嚴重度 中 · 工作量 ~2d · 影響 chain task 穩定度</div>
+
+    <div class="compare-grid">
+      <div class="compare-col compare-before">
+        <h4>❌ 現況</h4>
+<pre>wine task：
+  Turn 1: M → dispatch(coding)
+  → coding 完 → callback Manager
+  Turn 2: M 重讀 DB
+           重新判斷「要不要接 BA」
+           dispatch(ba)
+  → ba 完 → callback Manager
+  Turn 3: M 又重讀 DB
+           判斷完成 → notify
+
+問題：
+  - 每步多耗一個 LLM turn
+  - cache TTL 過 / context 壓縮
+    → 可能漏接 BA</pre>
+      </div>
+      <div class="compare-col compare-after">
+        <h4>✅ 建議</h4>
+<pre>wine task：
+  Turn 1: M → dispatch_chain([
+              {agent:coding, spec:...},
+              {agent:ba,     spec:...}
+            ])
+  → executor 自動跑 coding
+    → 完了直接接 ba（不回 Manager）
+    → 完了 notify user
+
+  Manager 只在：
+   - 失敗 / 用戶新需求
+   - chain 不存在
+   時介入</pre>
+      </div>
+    </div>
+
+    <div class="diagram-wrap">
+      <pre class="mermaid">
+flowchart TD
+    subgraph Now [現況：每步回 Manager]
+      U1[User] --> M1[Manager turn 1]
+      M1 --> C1[coding] --> M2[Manager turn 2]
+      M2 --> B1[ba] --> M3[Manager turn 3]
+      M3 --> N1[notify]
+    end
+
+    subgraph Fix [建議：plan-once + auto-advance]
+      U2[User] --> M4[Manager turn 1<br/>寫 chain_plan]
+      M4 --> EX[Executor 自動串接]
+      EX --> C2[coding] --> EX
+      EX --> B2[ba] --> EX
+      EX --> N2[notify]
+    end
+      </pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============== Issue 4 ============== -->
+<section>
+  <div class="issue-card">
+    <div class="issue-head">
+      <span class="num">4</span>
+      <span class="title">結構化 Result Envelope（不靠 regex）</span>
+    </div>
+    <div class="meta">嚴重度 中 · 工作量 ~1d · 影響附件可靠度 + error 分流</div>
+
+    <div class="compare-grid">
+      <div class="compare-col compare-before">
+        <h4>❌ 現況</h4>
+<pre>[RESULT_START]
+- What was done: 跑了 wine 分析
+- Files: /app/data/shared/.../wine.csv
+- Tests: passed
+- Notes: ...
+[RESULT_END]
+
+dispatcher：
+  regex grep "/app/data/..." 抓檔
+  → 中文 / 空格 / 相對路徑 → 漏抓
+  → 抓到非檔案 (e.g. 在說明文中提到的路徑)</pre>
+      </div>
+      <div class="compare-col compare-after">
+        <h4>✅ 建議</h4>
+<pre>{
+  "status": "ok",
+  "summary": "跑了 wine 分析",
+  "files": [
+    "/app/data/shared/.../wine.csv",
+    "/app/data/shared/.../wine.png"
+  ],
+  "tests": {"passed": 12, "failed": 0},
+  "error_code": null,
+  "notes": "..."
+}
+
+dispatcher：直接讀 files[]
+  → 零漏抓、零誤抓</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== Issue 5 ============== -->
+<section>
+  <div class="issue-card">
+    <div class="issue-head">
+      <span class="num">5</span>
+      <span class="title">Executor 驗 <code>expected_outputs</code> 才標 done</span>
+    </div>
+    <div class="meta">嚴重度 中 · 工作量 ~4h · 失敗提前 30 秒暴露</div>
+
+    <div class="compare-grid">
+      <div class="compare-col compare-before">
+        <h4>❌ 現況</h4>
+<pre>Coding: "[RESULT_END] done, file at X"
+Executor: state=done, callback Manager
+Manager: dispatch(ba, input=X)
+BA: read_file(X) → FileNotFoundError
+BA: 我做不到
+
+問題：
+  - 錯誤被延後到 BA 才暴露
+  - 用戶等了 30+ 秒才看到失敗</pre>
+      </div>
+      <div class="compare-col compare-after">
+        <h4>✅ 建議</h4>
+<pre>Coding: result.files = [X]
+Executor:
+  for f in expected_outputs:
+    if not os.path.exists(f):
+      state = failed
+      error_code = OUTPUT_MISSING
+      reason = f"declared {f} but not on disk"
+  else:
+    state = done
+
+callback 帶錯誤回 Manager
+  → Manager 立刻 retry / 換 agent / 告訴 user</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== Issue 6 ============== -->
+<section>
+  <div class="issue-card">
+    <div class="issue-head">
+      <span class="num">6</span>
+      <span class="title">Error Code Enum（不是自然語言）</span>
+    </div>
+    <div class="meta">嚴重度 中 · 工作量 ~1d · Manager retry 決策可機械化</div>
+
+    <div class="compare-grid">
+      <div class="compare-col compare-before">
+        <h4>❌ 現況</h4>
+<pre>Sub-agent 失敗回：
+"I cannot complete this task. The spec
+ asks for X which requires Y. That is
+ the responsibility of Z, not mine."
+
+Manager LLM：
+  讀自然語言判斷
+  → retry? 換 agent? 告訴 user?
+  → 判錯率 &gt; 0</pre>
+      </div>
+      <div class="compare-col compare-after">
+        <h4>✅ 建議</h4>
+<pre>error_code enum:
+  TOOL_NOT_AVAILABLE  → Manager 換 agent
+  WRONG_AGENT         → Manager 換 agent
+  INPUT_MISSING       → 回問 user
+  TIMEOUT             → Manager retry (1 次)
+  PERMISSION_DENIED   → 告訴 user
+  UNKNOWN             → 告訴 user + 附 raw
+
+Manager：用 dict lookup 決策
+  → 零判錯</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== Roadmap ============== -->
+<section>
+  <h2>③ 建議落地順序</h2>
+  <div class="phased">
+    <div class="phase-card">
+      <h4>Phase 1（半天）</h4>
+      <div class="effort">解掉今天 PM2.5 stuck 的雷</div>
+      <p><b>#1 dispatch_task</b> 原子工具 — MCP 新增 + Manager skill 改用 + 舊兩個 tool 標 deprecated</p>
+    </div>
+    <div class="phase-card">
+      <h4>Phase 2（1.5 天）</h4>
+      <div class="effort">把後續錯誤都「變得可機械處理」</div>
+      <p><b>#4 結構化 Result</b> + <b>#5 Executor verify outputs</b> + <b>#6 error_code enum</b> 一起改（同個資料結構）</p>
+    </div>
+    <div class="phase-card">
+      <h4>Phase 3（1 天）</h4>
+      <div class="effort">把 prompt 規則改成 executor 規則</div>
+      <p><b>#2 平行禁令</b> — Executor 加 per-session running task lock</p>
+    </div>
+    <div class="phase-card">
+      <h4>Phase 4（2 天，可選）</h4>
+      <div class="effort">大重構，Phase 1-3 看完再評估</div>
+      <p><b>#3 chain_plan + auto-advance</b> — DB schema 改、executor 自動串接</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>④ 預期效果</h2>
+  <table>
+    <thead>
+      <tr><th>指標</th><th>現況</th><th>Phase 1-3 後</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>task 卡 backlog 機率</td><td>非零（今天踩過）</td><td><b>0</b></td></tr>
+      <tr><td>附件漏抓機率</td><td>非零（路徑變體會漏）</td><td><b>0</b></td></tr>
+      <tr><td>平行 invoke 風險</td><td>靠 LLM 自律</td><td><b>executor 阻擋</b></td></tr>
+      <tr><td>chain 第二步漏接</td><td>非零</td><td>降低（Phase 4 才歸零）</td></tr>
+      <tr><td>失敗誤判 retry</td><td>非零</td><td><b>0</b>（enum lookup）</td></tr>
+      <tr><td>Manager LLM cost / task</td><td>chain 每階段 1 turn</td><td>同上（Phase 4 才降）</td></tr>
+    </tbody>
+  </table>
+</section>
+
+</main>
+
+<footer>
+  CoStaff Agent 流程改善 &middot; 對照 SOP：<code>costaff/docs/agent-sop.html</code>
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'default',
+    flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+    sequence:  { useMaxWidth: true, mirrorActors: false }
+  });
+</script>
+</body>
+</html>
