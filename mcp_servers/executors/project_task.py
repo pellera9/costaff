@@ -187,6 +187,41 @@ async def execute_project_task(task_id: str):
                 origin_session_id = task.session_id
                 callback_delivered = False
                 if origin_session_id and origin_session_id != task_session_id:
+                    # Detect whether the Manager has already dispatched a
+                    # downstream task that depends on this one. If yes, the
+                    # callback prompt must tell Manager to summarise + report
+                    # progress (NOT ask the user "should I continue?"), because
+                    # the chain is already in motion. Querying here keeps the
+                    # synthetic prompt accurate at callback time.
+                    dependents = (
+                        db.query(models.ProjectTask)
+                        .filter(
+                            models.ProjectTask.depends_on == task_id,
+                            models.ProjectTask.status.in_(["backlog", "queued", "doing"]),
+                        )
+                        .order_by(models.ProjectTask.created_at.asc())
+                        .all()
+                    )
+                    if dependents:
+                        next_steps_note = (
+                            "\n\nDownstream task(s) already queued for this chain:\n"
+                            + "\n".join(
+                                f"  - #{d.id[:8]} → {d.assigned_agent}: {d.title}"
+                                for d in dependents
+                            )
+                            + "\n\nThe chain is already in motion. Summarise THIS task's "
+                            "result and tell the user the next step is now running. "
+                            "Do NOT ask 'should I continue?' or 'do you want me to "
+                            "dispatch the next agent?' — that step is already dispatched. "
+                            "Do NOT call dispatch_task or create_project_task again."
+                        )
+                    else:
+                        next_steps_note = (
+                            "\n\nNo downstream task is queued. Summarise the result and "
+                            "ask the user what they would like next, if anything. "
+                            "Do NOT call dispatch_task or create_project_task unless the "
+                            "user explicitly asks for follow-up work."
+                        )
                     try:
                         synthetic = (
                             f"[SYSTEM_CALLBACK|task_id={task_id}"
@@ -194,11 +229,10 @@ async def execute_project_task(task_id: str):
                             f"|status=done]\n"
                             f"Original task title: {task.title}\n"
                             f"Result from sub-agent:\n{result_text[:4000]}\n"
-                            f"\nInstructions: this is an asynchronous task that the user "
+                            f"\nInstructions: this is an asynchronous task the user "
                             f"asked about earlier. Summarise the result in the user's "
-                            f"language using your usual style, then ask the next "
-                            f"logical step. Do NOT call create_project_task again "
-                            f"unless the user explicitly asks for follow-up work."
+                            f"language using your usual style."
+                            f"{next_steps_note}"
                         )
                         manager_reply = await run_adk_prompt(
                             app_name, task.user_id, origin_session_id, synthetic

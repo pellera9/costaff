@@ -107,6 +107,101 @@ async def test_synthetic_callback_used_when_origin_session_present(db_session, m
 
 
 @pytest.mark.asyncio
+async def test_synthetic_callback_mentions_queued_downstream_and_forbids_asking(db_session, monkeypatch):
+    """Regression for 2026-05-15: when Manager has already dispatched a
+    downstream task (via Principle 0A — dispatch entire chain on OK), the
+    callback synthetic prompt must tell Manager NOT to ask the user
+    'should I continue?' because the chain is already in motion. Otherwise
+    Manager turns a 2-minute auto-chain into a multi-prompt slog."""
+    import uuid as _uuid
+    task = _make_task(db_session, session_id="tg_origin_session_xyz")
+
+    # Pre-create a downstream task that depends on `task`, as if the Manager
+    # had already dispatched the whole chain on the user's OK.
+    downstream = models.ProjectTask(
+        id=str(_uuid.uuid4()),
+        epic_id=task.epic_id,
+        user_id=task.user_id,
+        session_id=task.session_id,
+        title="Generate PDF report",
+        spec="Read upstream and produce PDF.",
+        type="immediate",
+        assigned_agent="business_analysis_agent",
+        status="backlog",
+        depends_on=task.id,
+        channel="telegram",
+        recipient="12345",
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db_session.add(downstream)
+    db_session.commit()
+
+    monkeypatch.setattr(executor_mod, "SessionLocal", lambda: db_session)
+
+    run_calls = []
+
+    async def fake_run(app, uid, sid, prompt):
+        run_calls.append((app, uid, sid, prompt))
+        if sid.startswith("task_"):
+            return "Raw upstream output"
+        return "Manager natural reply"
+
+    async def fake_dispatch(channel, recipient, body, sid):
+        pass
+
+    monkeypatch.setattr(executor_mod, "run_adk_prompt", fake_run)
+    monkeypatch.setattr(executor_mod, "dispatch_notification", fake_dispatch)
+
+    await executor_mod.execute_project_task(task.id)
+    for t in list(asyncio.all_tasks()):
+        if t is not asyncio.current_task():
+            t.cancel()
+
+    # The callback prompt (second call, on origin session) MUST mention the
+    # downstream task and forbid asking the user.
+    assert len(run_calls) == 2
+    callback_prompt = run_calls[1][3]
+    assert "Downstream task(s) already queued" in callback_prompt
+    assert downstream.id[:8] in callback_prompt
+    assert "business_analysis_agent" in callback_prompt
+    assert "Do NOT ask" in callback_prompt
+    assert "already dispatched" in callback_prompt
+
+
+@pytest.mark.asyncio
+async def test_synthetic_callback_allows_asking_when_no_downstream(db_session, monkeypatch):
+    """Inverse of the above: when there's no queued downstream, the callback
+    prompt should permit asking the user what's next."""
+    task = _make_task(db_session, session_id="tg_origin_session_no_chain")
+
+    monkeypatch.setattr(executor_mod, "SessionLocal", lambda: db_session)
+
+    run_calls = []
+
+    async def fake_run(app, uid, sid, prompt):
+        run_calls.append((app, uid, sid, prompt))
+        if sid.startswith("task_"):
+            return "Raw upstream output"
+        return "Manager natural reply"
+
+    async def fake_dispatch(channel, recipient, body, sid):
+        pass
+
+    monkeypatch.setattr(executor_mod, "run_adk_prompt", fake_run)
+    monkeypatch.setattr(executor_mod, "dispatch_notification", fake_dispatch)
+
+    await executor_mod.execute_project_task(task.id)
+    for t in list(asyncio.all_tasks()):
+        if t is not asyncio.current_task():
+            t.cancel()
+
+    callback_prompt = run_calls[1][3]
+    assert "No downstream task is queued" in callback_prompt
+    assert "ask the user what they would like next" in callback_prompt
+
+
+@pytest.mark.asyncio
 async def test_falls_back_to_raw_dispatch_when_no_origin_session(db_session, monkeypatch):
     task = _make_task(db_session, session_id=None)
 
