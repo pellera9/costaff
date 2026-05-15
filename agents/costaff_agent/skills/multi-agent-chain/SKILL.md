@@ -232,64 +232,11 @@ The specialist's only job: **do the work, save the file, report back**. Chaining
 
 ---
 
-## Principle 3 — Execute One Specialist at a Time, In Order
+## Principle 3 — Sequential, Not Parallel (brief)
 
-**THIS IS THE MOST COMMONLY VIOLATED RULE — READ CAREFULLY.**
+`dispatch_task` (Principle 0 / 0A) handles ordering automatically via `depends_on` + auto-link, so dispatching multiple steps in one turn is the **correct** behaviour. Just provide `depends_on` (or rely on auto-link), and the executor enforces sequentiality.
 
-Call only one agent tool per step. **Wait for the tool to return** before calling the next. The return value is the specialist's completion signal — do not begin the next step until you have it.
-
-### Scope of this principle
-
-This principle applies to **direct AgentTool invocation** — i.e. calling `coding(request=...)` or `business_analysis(request=...)` as if they were synchronous function calls. **It does NOT apply to `dispatch_task`**: `dispatch_task` is the async dispatch path, and the executor handles ordering via `depends_on` + auto-link (see Principle 0A). When you dispatch multiple steps in one turn via `dispatch_task` with a `depends_on` chain, the downstream task waits in `backlog` until the upstream finishes — there is no race.
-
-### ⛔ ABSOLUTELY FORBIDDEN (direct AgentTool invocation only)
-
-- Invoking two or more specialist agent tools in the same turn / response
-- Invoking the downstream specialist (e.g. `business_analysis`) before the upstream specialist (e.g. `coding`) has returned, *even if* you believe the downstream specialist can start partial work
-- Calling `business_analysis(request=...)` and `coding(request=...)` back-to-back without an intervening completion signal
-- "Just kicking them off in parallel to save time" — this **breaks the chain**: the downstream specialist runs against missing files and fails silently
-
-### ✅ Correct sequence (Coding → BA chain)
-
-```
-turn N    : call coding(request=...)
-          → wait for coding's return value (absolute path to output file)
-          → coding returns: "...wrote /app/data/shared/costaff-agent-coding/<project>/results.json"
-turn N+1  : (optional) brief send_message_now: "▶️ BA 正在生成報告，請稍候"
-turn N+1  : call business_analysis(request=...) — request includes the EXACT path coding returned
-          → wait for BA's return value
-turn N+2  : final consolidated reply to user with all artifacts
-```
-
-### ❌ Wrong sequence (today's reproduced bug — 2026-05-14)
-
-```
-turn N    : call business_analysis(request=...)   ← FIRES BA FIRST
-turn N    : call coding(request=...)              ← FIRES CODING 30s LATER
-                                                    in the same turn
-          → BA can't find coding's output → reports "file not found"
-          → coding finishes later, but BA already failed
-```
-
-Even if these two calls were made in opposite order, **putting them in the same turn is the violation**. The chain requires the upstream tool's **return value** to thread into the downstream tool's `request`. You cannot have that value until the upstream call returns.
-
-### Completion signal — what counts
-
-A valid completion signal always includes at least one of:
-- An absolute output file path (e.g. `/app/data/shared/costaff-agent-<name>/<project>/result.csv`)
-- A concrete computed result or value
-- A structured analysis, summary, or conclusion
-- An explicit failure declaration explaining why the task cannot be completed
-
-Mid-task progress messages sent via `send_message_now` (e.g. "安裝中…", "🔍 開始調查") are **NOT** completion signals — the specialist may emit several before its tool call finally returns.
-
-### Recovery if you realise you already invoked two specialists in parallel
-
-1. **Do NOT** retry calling the downstream specialist again "just in case it works this time" — the upstream output is still missing
-2. **Wait** for the upstream specialist (e.g. coding) to actually return
-3. Read its return value, extract the artefact path
-4. Then call the downstream specialist again with the extracted path in `request`
-5. Apologise briefly to the user only if the first BA failure was already reported — don't re-report it
+The historical "parallel forbidden" rule applies to **direct AgentTool invocation** (e.g. `coding(request=...)` called synchronously). That mode is rarely used now — but if you ever fall back to it: don't call two specialist agent tools in the same turn. For full recovery procedures and the historical bug record, **activate `multi-agent-chain-recovery`**.
 
 ---
 
@@ -325,43 +272,11 @@ After all specialists have returned, send one consolidated response containing:
 
 ---
 
-## Principle 7 — Forbidden: Specialist's Internal Tools
+## Principle 7 — No Specialist's Internal Tools (brief)
 
-A specialist's internal MCP tools are **NOT** in your toolset. Calling them raises `ValueError: Tool '<name>' not found` and crashes the run. You may see those tool names listed inside a specialist's agent card — that is purely informational about what the specialist itself can do internally.
+A specialist's internal MCP tools (e.g. `run_python_code` for Coding, `export_pdf` for BA) are **NOT in your toolset**. Always delegate via `dispatch_task` or, if running synchronously, via the registered AgentTool wrapper.
 
-**Common forbidden tools by typical specialist role (illustrative — confirm against each specialist's actual description):**
-
-| Likely role | Internal tools you must NOT call |
-|---|---|
-| Coding / Python execution | `run_python_code`, `write_file`, `patch_file`, `lint_file`, `run_shell`, `pip_install`, `run_pytest` |
-| Reporting / visualisation | `export_pdf`, `export_pptx`, `create_html_report`, `create_report_from_markdown`, `generate_chart` |
-| Database access | `run_query`, `get_schema`, `list_tables`, `execute_sql` |
-
-**Your own legitimate tools are**: the registered specialist agent tools (one per agent), `send_message_now`, `get_user_profile`, `update_user_profile`, `get_current_time`, `check_identity`, reminder tools, regular-work tools, epic/story/task tools, diary tools, API/skill index tools, `move_to_shared`, `list_data_files`.
-
-If a function name you are about to call is not in the list above and is not a registered specialist tool — stop. You are about to call a specialist's internal tool.
-
-### Recovery: "Tool Not Found" Error
-
-If you receive `ValueError: Tool '<name>' not found`:
-
-1. **DO NOT retry** the same forbidden tool call
-2. **DO NOT fabricate** any result, file path, or completion message to the user
-3. Identify which specialist owns the tool (see table above)
-4. Call that specialist via its agent tool (`<agent_name>(request='...')`) and wait for its completion signal
-5. Only after receiving the real return value → report to the user
-
-If the specialist also fails after one retry → report partial results honestly and stop.
-
----
-
-## Principle 8 — Retry Limits
-
-- Each specialist may be retried **at most once** on failure
-- If the same specialist fails **twice consecutively** → stop immediately
-- Do NOT attempt workarounds (different paths, alternative directories)
-- Report failure honestly: what succeeded, what failed, what partial artifacts were produced
-- Each distinct specialist tool call counts as one attempt
+If you ever see `ValueError: Tool '<name>' not found`: **activate `multi-agent-chain-recovery`** — it has the full forbidden-tool reference table and the recovery checklist. Do not retry the forbidden call.
 
 ---
 
@@ -381,14 +296,11 @@ If the specialist also fails after one retry → report partial results honestly
 
 ---
 
-## Common Mistakes Summary
+## When Something Goes Wrong
 
-| Mistake | Consequence |
-|---|---|
-| Writing a vague `request` like "OK" or "do it" | Specialist replies conversationally without acting |
-| Mentioning other specialists or chaining inside `request` | Specialist may try to delegate and fail / get confused |
-| Calling a specialist's internal MCP tool directly | `ValueError` → run crashes |
-| Treating a `send_message_now` progress line as the completion signal | Next specialist receives incomplete or fabricated input |
-| Reconstructing or guessing an output path | Wrong path → downstream specialist fails |
-| Fabricating a result after a tool error | Critical hallucination — user receives false information |
-| Using hyphens in agent tool name / underscores in file path | Path or specialist not found |
+Recovery procedures, retry limits, the full forbidden-tool table, and the historical mistakes catalogue live in a separate skill: **`multi-agent-chain-recovery`**. Activate it when:
+
+- You receive `ValueError: Tool '<name>' not found`
+- A specialist fails and you are deciding whether to retry / change approach / abandon
+- You suspect you accidentally invoked two specialists in parallel
+- You need to recall which tools belong to which specialist's internal toolset

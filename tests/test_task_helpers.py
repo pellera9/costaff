@@ -153,17 +153,32 @@ def test_no_delegation_when_assigned_to_costaff_agent(db_session):
 def test_delegation_block_appears_for_external_agent(db_session):
     task = _make_task(db_session, assigned_agent="coding_agent")
     out = build_task_spec(task, db_session)
-    assert "DELEGATION INSTRUCTIONS" in out
+    assert "EXECUTION CONTEXT" in out
     assert "coding_agent" in out
     # Must instruct waiting for the sub-agent's actual output, not a delegation ack
     assert "WAIT for" in out
     assert "Do NOT return 'I have delegated this task'" in out
 
 
+def test_executor_session_forbids_recursive_dispatch(db_session):
+    """Regression for 2026-05-15 recursive dispatch bug: the delegation block
+    must explicitly forbid dispatch_task / create_project_task / create_epic
+    inside the executor session, otherwise the Manager LLM (running as the
+    specialist executor) keeps planning new tasks instead of delegating."""
+    task = _make_task(db_session, assigned_agent="coding_agent")
+    out = build_task_spec(task, db_session)
+    assert "ABSOLUTELY FORBIDDEN" in out
+    assert "dispatch_task" in out
+    assert "create_project_task" in out
+    assert "create_epic" in out
+    # And the positive instruction: call the AgentTool directly
+    assert "coding_agent(request=" in out
+
+
 def test_delegation_block_omits_for_no_assigned_agent(db_session):
     task = _make_task(db_session, assigned_agent=None)
     out = build_task_spec(task, db_session)
-    assert "DELEGATION INSTRUCTIONS" not in out
+    assert "EXECUTION CONTEXT" not in out
 
 
 # ---------------------------------------------------------------------------
