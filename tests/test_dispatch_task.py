@@ -316,6 +316,50 @@ async def test_dispatch_task_explicit_depends_on_creates_backlog(db_session, pat
 
 
 @pytest.mark.asyncio
+async def test_dispatch_task_explicit_depends_on_done_dep_starts_immediately(db_session, patched_pt):
+    """Regression for 2026-05-15 VM stuck-BA bug: when the caller passes an
+    explicit depends_on pointing at a task that has ALREADY finished, the new
+    task MUST go straight to queued and trigger the executor. Otherwise it
+    sits in backlog forever — _advance_agent_queue only wakes backlog tasks
+    when their dep transitions to done, but here that transition has already
+    happened."""
+    user_id = _make_user(db_session)
+    epic = _make_epic(db_session, user_id=user_id)
+
+    # First task — dispatch and mark done to simulate already-finished upstream
+    await pt_mod.dispatch_task(
+        epic_id=epic.id, user_id=user_id, title="Upstream",
+        assigned_agent="coding_agent", spec="x",
+    )
+    await asyncio.sleep(0)
+    upstream = db_session.query(models.ProjectTask).first()
+    upstream.status = "done"
+    db_session.commit()
+    initial_triggers = len(patched_pt)  # 1 — for upstream
+
+    # Now dispatch downstream with explicit depends_on pointing at done upstream
+    await pt_mod.dispatch_task(
+        epic_id=epic.id, user_id=user_id, title="Downstream",
+        assigned_agent="business_analysis_agent", spec="y",
+        depends_on=upstream.id,
+    )
+    await asyncio.sleep(0)
+
+    downstream = (
+        db_session.query(models.ProjectTask)
+        .filter_by(title="Downstream").first()
+    )
+    assert downstream.status == "queued", (
+        "Downstream of already-done dep must start as queued, not backlog "
+        "(nothing left to wake a backlog task in this case)"
+    )
+    assert downstream.depends_on == upstream.id
+    assert len(patched_pt) == initial_triggers + 1, (
+        "Executor must be triggered for downstream when dep is already done"
+    )
+
+
+@pytest.mark.asyncio
 async def test_dispatch_task_no_auto_chain_when_prior_is_done(db_session, patched_pt):
     """A done upstream task is not in-progress → next dispatch starts fresh
     (no auto-link), so unrelated user requests don't accumulate phantom deps."""

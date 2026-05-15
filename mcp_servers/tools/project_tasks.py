@@ -284,10 +284,21 @@ async def dispatch_task(
         task_type = "scheduled" if cron else "immediate"
         # backlog when waiting on a dependency — _advance_agent_queue will
         # promote it to queued and trigger the executor once the upstream
-        # task is done.
+        # task is done. BUT if the dependency is ALREADY done (e.g. Manager
+        # is dispatching a follow-up after seeing the upstream complete),
+        # there is no event left to wake us up — go straight to queued.
+        dep_already_done = False
+        if depends_on:
+            dep_row = (
+                db.query(models.ProjectTask.status)
+                .filter(models.ProjectTask.id == depends_on)
+                .first()
+            )
+            dep_already_done = bool(dep_row and dep_row[0] == "done")
+
         if cron:
             initial_status = "scheduled"
-        elif depends_on:
+        elif depends_on and not dep_already_done:
             initial_status = "backlog"
         else:
             initial_status = "queued"
