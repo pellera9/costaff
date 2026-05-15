@@ -10,6 +10,7 @@ from core.adk_client import run_adk_prompt
 from core.license import LicenseManager
 from mcp_servers.setup import logger
 from core.notifiers.dispatcher import dispatch_notification
+from core.notifiers.result_envelope import parse_result_envelope
 from mcp_servers.task_helpers import get_user_channel_info, build_task_spec
 
 
@@ -55,16 +56,18 @@ def _verify_declared_outputs(result_text: str, agent_name: str | None = None) ->
     """Return any output file paths in the sub-agent's RESULT that don't exist
     on disk — **scoped to this agent's own shared slot only**.
 
+    Two-stage extraction (mirrors the notifier's extract_file_paths):
+    1. If the agent emitted a structured envelope with an explicit `files:`
+       list, verify each file in that list (filtered to this agent's slot).
+    2. Otherwise, fall back to regex over the raw text. Both stages then
+       scope to `/app/data/shared/<this-agent-slot>/` so the verifier only
+       flags THIS agent's claimed deliverables, never upstream inputs.
+
     A sub-agent's RESULT block often references files from other agents (BA
     reads Coding's CSV; Coding reads Twinkle's JSON). Those upstream paths
     are not THIS agent's deliverables; they're inputs, and verifying them
     here would race against the upstream task's writes when the Manager
-    dispatches steps in parallel (which it shouldn't — Principle 3 — but
-    sometimes does).
-
-    Only files written under `/app/data/shared/<this-agent-slot>/...` count
-    as this agent's declared outputs. The Manager's own tasks (assigned_agent
-    = costaff_agent) and tasks with no assigned_agent skip verification.
+    dispatches steps in parallel.
 
     Returns:
       - [] when no in-slot paths are mentioned (task may have produced no files)
@@ -80,9 +83,24 @@ def _verify_declared_outputs(result_text: str, agent_name: str | None = None) ->
     needle = f"/app/data/shared/{slot}/"
     seen: set[str] = set()
     missing: list[str] = []
+
+    # Stage 1: structured envelope (preferred — exact list of claimed files)
+    envelope = parse_result_envelope(result_text)
+    if envelope.structured and envelope.files:
+        for p in envelope.files:
+            if needle not in p:
+                continue
+            if p in seen:
+                continue
+            seen.add(p)
+            if not os.path.isfile(p):
+                missing.append(p)
+        return missing
+
+    # Stage 2: legacy regex over free-text RESULT
     for p in _DECLARED_PATH_RE.findall(result_text):
         if needle not in p:
-            continue  # Not this agent's deliverable; ignore.
+            continue
         if p in seen:
             continue
         seen.add(p)

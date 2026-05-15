@@ -112,6 +112,60 @@ def test_recognised_extensions_only():
     ) == []
 
 
+def test_structured_envelope_files_are_verified_in_slot(monkeypatch):
+    """When a sub-agent emits a structured envelope, the verifier should
+    use the explicit `files:` list (filtered to its own slot) instead of
+    regex over prose."""
+    # Stub os.path.isfile so we control which paths "exist".
+    real = "/app/data/shared/costaff-agent-coding/wine/exists.csv"
+    fake = "/app/data/shared/costaff-agent-coding/wine/missing.pdf"
+    monkeypatch.setattr(
+        executor_mod.os.path, "isfile",
+        lambda p: p == real,
+    )
+    raw = f"""[RESULT_START]
+status: ok
+summary: produced one csv but pdf was meant to be there too
+files:
+  - {real}
+  - {fake}
+[RESULT_END]"""
+    missing = _verify_declared_outputs(raw, "coding")
+    assert missing == [fake]
+
+
+def test_structured_envelope_only_checks_in_slot_files(monkeypatch):
+    """If the structured envelope lists files from OTHER agents' slots (e.g.
+    BA's envelope mentions Coding's input CSV that may not yet exist), only
+    BA's own slot files are verified."""
+    monkeypatch.setattr(
+        executor_mod.os.path, "isfile",
+        lambda p: False,  # nothing exists
+    )
+    raw = """[RESULT_START]
+status: ok
+files:
+  - /app/data/shared/costaff-agent-coding/upstream/input.csv
+  - /app/data/shared/costaff-agent-business-analysis/wine-report/report.pdf
+[RESULT_END]"""
+    # Verify for BA — only the BA-slot path counts as a declared output
+    missing = _verify_declared_outputs(raw, "business_analysis")
+    assert missing == [
+        "/app/data/shared/costaff-agent-business-analysis/wine-report/report.pdf"
+    ]
+
+
+def test_structured_envelope_empty_files_is_valid():
+    """`status: ok` with empty `files:` (e.g. pure-query agent that produced
+    no artefact) must NOT trigger verification failure."""
+    raw = """[RESULT_START]
+status: ok
+summary: queried 49 rows, no file artefact produced
+files:
+[RESULT_END]"""
+    assert _verify_declared_outputs(raw, "twinkle_hub") == []
+
+
 # ---------------------------------------------------------------------------
 # Executor wiring — verification failure routes through the failure branch
 # ---------------------------------------------------------------------------

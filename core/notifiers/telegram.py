@@ -5,6 +5,7 @@ import re
 from dotenv import load_dotenv
 from core import models
 from core.database import SessionLocal
+from core.notifiers.result_envelope import parse_result_envelope
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -17,16 +18,49 @@ _ABS_PATH_RE = re.compile(r"(/app/data/[\w./-]+\.(?:" + _FILE_EXTS + r"))", re.I
 def extract_file_paths(text: str) -> list[str]:
     """Extract /app/data/... absolute file paths from a message body.
 
-    De-duplicates and filters to existing files only. Used by both
-    `send_message_now` (manager core MCP tool) and `dispatch_notification`
-    (async callback executor) so both delivery paths attach referenced
-    artefacts to the user's Telegram chat.
+    Two-stage lookup:
+    1. If the message contains a structured [RESULT_START]...[RESULT_END]
+       envelope with an explicit `files:` list, trust that list. This
+       eliminates regex false-positives (paths mentioned in prose that
+       aren't actual outputs) and false-negatives (paths with unusual
+       characters the regex misses).
+    2. Otherwise, fall back to regex matching `/app/data/<...>.<ext>`
+       across the whole text. This preserves the legacy behaviour for
+       sub-agents that haven't migrated to the structured envelope yet.
+
+    In both stages, results are de-duplicated and filtered to files that
+    actually exist on disk — so a hallucinated path never gets attached.
+
+    Used by both `send_message_now` (manager core MCP tool) and
+    `dispatch_notification` (async callback executor).
     """
-    seen = set()
-    result = []
-    for p in _ABS_PATH_RE.findall(text):
-        if p not in seen and os.path.isfile(p):
+    if not text:
+        return []
+
+    seen: set[str] = set()
+    result: list[str] = []
+
+    # Stage 1: structured envelope (preferred)
+    envelope = parse_result_envelope(text)
+    if envelope.structured and envelope.files:
+        for p in envelope.files:
+            if p in seen:
+                continue
             seen.add(p)
+            if os.path.isfile(p):
+                result.append(p)
+        # If the structured envelope listed files but none of them exist,
+        # do NOT fall back to regex — the agent claimed those specific
+        # files and they're missing, attaching unrelated regex hits would
+        # confuse the user. Return empty.
+        return result
+
+    # Stage 2: legacy regex fallback
+    for p in _ABS_PATH_RE.findall(text):
+        if p in seen:
+            continue
+        seen.add(p)
+        if os.path.isfile(p):
             result.append(p)
     return result
 
