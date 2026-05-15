@@ -1,4 +1,5 @@
 import os
+import re
 import asyncio
 import uuid
 from datetime import datetime
@@ -10,6 +11,52 @@ from core.license import LicenseManager
 from mcp_servers.setup import logger
 from core.notifiers.dispatcher import dispatch_notification
 from mcp_servers.task_helpers import get_user_channel_info, build_task_spec
+
+
+class OutputVerificationError(Exception):
+    """Raised when a sub-agent's RESULT claims output files that are not on disk."""
+
+
+# Paths the sub-agent claims it wrote, as they appear in its RESULT block.
+# Must match the same shape `core/notifiers/telegram.extract_file_paths` looks
+# for, so the verifier and the notifier agree on what counts as a "declared
+# output". The notifier filters to existing-only and silently drops missing
+# paths; this verifier deliberately does NOT filter — its job is to surface
+# the missing ones BEFORE the executor declares the task done.
+_OUTPUT_FILE_EXTS = r"pdf|docx|md|txt|html|htm|png|jpg|jpeg|gif|csv|json|xlsx|xls|zip"
+_DECLARED_PATH_RE = re.compile(
+    r"(/app/data/[\w./-]+\.(?:" + _OUTPUT_FILE_EXTS + r"))",
+    re.IGNORECASE,
+)
+
+
+def _verify_declared_outputs(result_text: str) -> list[str]:
+    """Return any /app/data/* file paths mentioned in the sub-agent's result
+    that do not exist on disk.
+
+    The Manager wires the next agent in a chain against the upstream agent's
+    output paths. If the upstream agent says "wrote /app/data/X.csv" but
+    didn't actually write it, the downstream agent fails 30+ seconds later
+    with "file not found" — by then the user has already been told the first
+    step succeeded. Running this check before marking the task `done` lets
+    the executor turn that into an immediate failure instead.
+
+    Returns an empty list when:
+      - no /app/data/ paths are mentioned (nothing to verify; task may have
+        produced no files)
+      - every mentioned path exists on disk
+    """
+    if not result_text:
+        return []
+    seen: set[str] = set()
+    missing: list[str] = []
+    for p in _DECLARED_PATH_RE.findall(result_text):
+        if p in seen:
+            continue
+        seen.add(p)
+        if not os.path.isfile(p):
+            missing.append(p)
+    return missing
 
 
 async def execute_project_task(task_id: str):
@@ -64,6 +111,23 @@ async def execute_project_task(task_id: str):
 
         try:
             result_text = await run_adk_prompt(app_name, task.user_id, task_session_id, spec)
+
+            # Verify the sub-agent's declared output files actually exist before
+            # marking the task done. This catches hallucinated paths and bad-path
+            # writes (e.g. sub-agent says it wrote /a/b.csv but actually wrote
+            # /a/outputs/b.csv) at the upstream agent's task boundary, rather
+            # than letting the downstream agent in a chain trip over the missing
+            # file 30+ seconds later.
+            missing_outputs = _verify_declared_outputs(result_text)
+            if missing_outputs:
+                logger.error(
+                    f"[execute_project_task] task {task_id} declared outputs "
+                    f"that do not exist on disk: {missing_outputs}"
+                )
+                raise OutputVerificationError(
+                    "Sub-agent declared output files that are not on disk: "
+                    + ", ".join(missing_outputs)
+                )
 
             task.status = "done"
             task.last_run = datetime.utcnow()
