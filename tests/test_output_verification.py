@@ -20,8 +20,28 @@ from core import models
 from mcp_servers.executors import project_task as executor_mod
 from mcp_servers.executors.project_task import (
     OutputVerificationError,
+    _agent_slot,
     _verify_declared_outputs,
 )
+
+
+# ---------------------------------------------------------------------------
+# _agent_slot — name normalisation
+# ---------------------------------------------------------------------------
+
+def test_agent_slot_strips_agent_suffix_and_hyphenates():
+    assert _agent_slot("coding") == "costaff-agent-coding"
+    assert _agent_slot("coding_agent") == "costaff-agent-coding"
+    assert _agent_slot("business_analysis") == "costaff-agent-business-analysis"
+    assert _agent_slot("business_analysis_agent") == "costaff-agent-business-analysis"
+    assert _agent_slot("twinkle_hub_agent") == "costaff-agent-twinkle-hub"
+    assert _agent_slot("costaff-agent-coding") == "costaff-agent-coding"
+
+
+def test_agent_slot_returns_none_for_manager_and_blank():
+    assert _agent_slot(None) is None
+    assert _agent_slot("") is None
+    assert _agent_slot("costaff_agent") is None  # manager itself has no slot
 
 
 # ---------------------------------------------------------------------------
@@ -30,53 +50,66 @@ from mcp_servers.executors.project_task import (
 
 def test_returns_empty_when_no_paths_mentioned():
     """A result with no /app/data/* paths is valid — task may have produced no files."""
-    assert _verify_declared_outputs("Everything went fine. No files produced.") == []
+    assert _verify_declared_outputs(
+        "Everything went fine. No files produced.", "coding"
+    ) == []
 
 
 def test_returns_empty_when_text_is_empty():
-    assert _verify_declared_outputs("") == []
-    assert _verify_declared_outputs(None) == []  # type: ignore[arg-type]
+    assert _verify_declared_outputs("", "coding") == []
+    assert _verify_declared_outputs(None, "coding") == []  # type: ignore[arg-type]
 
 
-def test_returns_empty_when_all_paths_exist(tmp_path, monkeypatch):
-    """Paths under /app/data/... that exist on disk must not be flagged."""
-    real = tmp_path / "real.csv"
-    real.write_text("a,b\n1,2\n")
-
-    # Patch the regex so the test paths under tmp_path are recognized
-    monkeypatch.setattr(executor_mod, "_DECLARED_PATH_RE", _re_for(tmp_path))
-
-    text = f"[RESULT_END] wrote {real}"
-    assert _verify_declared_outputs(text) == []
+def test_returns_empty_when_no_agent_name():
+    """No assigned_agent → nothing to scope against → skip verification."""
+    assert _verify_declared_outputs(
+        "saved /app/data/shared/costaff-agent-coding/x/file.csv", None
+    ) == []
+    assert _verify_declared_outputs(
+        "saved /app/data/shared/costaff-agent-coding/x/file.csv", "costaff_agent"
+    ) == []
 
 
-def test_returns_missing_paths(tmp_path, monkeypatch):
-    real = tmp_path / "real.csv"
-    real.write_text("ok")
-    fake = tmp_path / "hallucinated.pdf"  # never created
+def test_only_flags_paths_in_this_agents_own_slot():
+    """Critical false-positive guard: when BA's result mentions Coding's
+    upstream CSV (as an input reference), the verifier must NOT flag it.
 
-    monkeypatch.setattr(executor_mod, "_DECLARED_PATH_RE", _re_for(tmp_path))
+    Reproduced 2026-05-15 on VM: BA mentioned
+    /app/data/shared/costaff-agent-coding/sklearn-wine-dataset/wine_dataset.csv
+    in its 'I read from ...' summary; verifier flagged it as a missing
+    declared output, which marked BA failed even though BA's own PDF
+    was successfully written.
+    """
+    ba_result = (
+        "I read /app/data/shared/costaff-agent-coding/wine/wine.csv "
+        "and wrote /app/data/shared/costaff-agent-business-analysis/"
+        "wine-report/report.pdf"
+    )
+    # Verifying for BA: Coding's path is an input, not a declared output.
+    # Nothing in BA's own slot is missing in this text (the BA path is
+    # mentioned but not on disk in this unit test — but it IS in slot, so
+    # it WILL flag; that's correct, and tested separately below). Here we
+    # just assert the Coding path is NOT among the missing list.
+    missing = _verify_declared_outputs(ba_result, "business_analysis")
+    assert "/app/data/shared/costaff-agent-coding/wine/wine.csv" not in missing
 
-    text = f"saved {real} and {fake}"
-    missing = _verify_declared_outputs(text)
-    assert missing == [str(fake)]
 
-
-def test_deduplicates_repeated_mentions(tmp_path, monkeypatch):
-    """The same missing path mentioned twice should only appear once."""
-    fake = tmp_path / "ghost.csv"
-    monkeypatch.setattr(executor_mod, "_DECLARED_PATH_RE", _re_for(tmp_path))
-
-    text = f"see {fake} and again {fake} for details"
-    assert _verify_declared_outputs(text) == [str(fake)]
+def test_deduplicates_repeated_in_slot_mentions():
+    """Same missing in-slot path mentioned twice → only appears once."""
+    text = (
+        "see /app/data/shared/costaff-agent-coding/p/x.csv and again "
+        "/app/data/shared/costaff-agent-coding/p/x.csv"
+    )
+    missing = _verify_declared_outputs(text, "coding")
+    assert missing == ["/app/data/shared/costaff-agent-coding/p/x.csv"]
 
 
 def test_recognised_extensions_only():
-    """Only files with the recognised extension list count — random suffixes are
-    not treated as output declarations. (`.tar` is intentionally not in the
-    declared list because no sub-agent claims to produce one.)"""
+    """Only files with the recognised extension list count."""
     # `.tar.gz` is not in the extension list — should not be picked up
-    assert _verify_declared_outputs("see /app/data/foo.tar.gz") == []
+    assert _verify_declared_outputs(
+        "see /app/data/shared/costaff-agent-coding/foo.tar.gz", "coding"
+    ) == []
 
 
 # ---------------------------------------------------------------------------
@@ -117,17 +150,24 @@ def _make_task(db_session, *, session_id=None):
 
 
 @pytest.mark.asyncio
-async def test_executor_marks_failed_when_outputs_missing(db_session, monkeypatch, tmp_path):
-    """The headline contract: sub-agent says `wrote X` but X is missing →
-    task ends up `failed`, not `done`."""
+async def test_executor_marks_failed_when_verifier_returns_missing(db_session, monkeypatch):
+    """Headline contract: verifier flags missing in-slot outputs → executor
+    marks task failed (not done), records issue comment.
+
+    We stub the verifier itself to isolate executor-wiring behaviour from
+    the slot/regex logic (which is covered by the pure-helper tests above).
+    """
     task = _make_task(db_session)
     monkeypatch.setattr(executor_mod, "SessionLocal", lambda: _NonClosingSession(db_session))
 
-    # Sub-agent claims a path under /app/data/... that does not exist
-    fake_path = "/app/data/shared/coding-agent/never-written.csv"
+    fake_missing = "/app/data/shared/costaff-agent-coding/p/ghost.csv"
+    monkeypatch.setattr(
+        executor_mod, "_verify_declared_outputs",
+        lambda text, agent: [fake_missing],
+    )
 
     async def fake_run(app, uid, sid, prompt):
-        return f"[RESULT_START] done, wrote {fake_path} [RESULT_END]"
+        return f"[RESULT_START] done [RESULT_END]"
 
     async def fake_dispatch(channel, recipient, body, sid):
         return None
@@ -136,7 +176,6 @@ async def test_executor_marks_failed_when_outputs_missing(db_session, monkeypatc
     monkeypatch.setattr(executor_mod, "dispatch_notification", fake_dispatch)
 
     await executor_mod.execute_project_task(task.id)
-    # Drain any background tasks the executor spawned
     for t in list(asyncio.all_tasks()):
         if t is not asyncio.current_task():
             t.cancel()
@@ -144,34 +183,28 @@ async def test_executor_marks_failed_when_outputs_missing(db_session, monkeypatc
     db_session.refresh(task)
     assert task.status == "failed", "Missing declared outputs must fail the task"
 
-    # The failure comment should mention the missing path
     issues = (
         db_session.query(models.TaskComment)
         .filter_by(task_id=task.id, type="issue")
         .all()
     )
     assert len(issues) == 1
-    assert fake_path in issues[0].content
+    assert fake_missing in issues[0].content
     assert "OutputVerificationError" in issues[0].content
 
 
 @pytest.mark.asyncio
-async def test_executor_marks_done_when_outputs_exist(db_session, monkeypatch, tmp_path):
-    """Symmetric case: when the sub-agent's claimed paths exist on disk, the
-    task completes normally."""
+async def test_executor_marks_done_when_verifier_returns_empty(db_session, monkeypatch):
+    """Symmetric case: verifier returns [] → task completes normally."""
     task = _make_task(db_session)
     monkeypatch.setattr(executor_mod, "SessionLocal", lambda: _NonClosingSession(db_session))
-
-    # Create a real file the sub-agent will claim it produced
-    real = tmp_path / "real.csv"
-    real.write_text("a,b\n1,2\n")
-    real_str = str(real)
-
-    # Widen the regex so paths under tmp_path are treated as declared outputs
-    monkeypatch.setattr(executor_mod, "_DECLARED_PATH_RE", _re_for(tmp_path))
+    monkeypatch.setattr(
+        executor_mod, "_verify_declared_outputs",
+        lambda text, agent: [],
+    )
 
     async def fake_run(app, uid, sid, prompt):
-        return f"[RESULT_START] done, wrote {real_str} [RESULT_END]"
+        return "[RESULT_START] done, wrote /app/data/shared/costaff-agent-coding/p/x.csv [RESULT_END]"
 
     async def fake_dispatch(channel, recipient, body, sid):
         return None
@@ -186,6 +219,43 @@ async def test_executor_marks_done_when_outputs_exist(db_session, monkeypatch, t
 
     db_session.refresh(task)
     assert task.status == "done"
+
+
+@pytest.mark.asyncio
+async def test_executor_ignores_other_agents_paths(db_session, monkeypatch):
+    """Regression for the 2026-05-15 VM false-positive: BA's RESULT mentions
+    Coding's CSV (as an input reference). Verifier must NOT fail BA just
+    because that upstream path does not exist on disk."""
+    task = _make_task(db_session)
+    # Re-purpose this task as a BA task
+    task.assigned_agent = "business_analysis"
+    db_session.commit()
+
+    monkeypatch.setattr(executor_mod, "SessionLocal", lambda: _NonClosingSession(db_session))
+
+    async def fake_run(app, uid, sid, prompt):
+        return (
+            "[RESULT_START] I read /app/data/shared/costaff-agent-coding/"
+            "wine/wine.csv (does not actually exist) and wrote nothing to "
+            "my own slot. [RESULT_END]"
+        )
+
+    async def fake_dispatch(channel, recipient, body, sid):
+        return None
+
+    monkeypatch.setattr(executor_mod, "run_adk_prompt", fake_run)
+    monkeypatch.setattr(executor_mod, "dispatch_notification", fake_dispatch)
+
+    await executor_mod.execute_project_task(task.id)
+    for t in list(asyncio.all_tasks()):
+        if t is not asyncio.current_task():
+            t.cancel()
+
+    db_session.refresh(task)
+    assert task.status == "done", (
+        "BA must complete normally even when its RESULT mentions Coding's "
+        "input path; only BA's OWN slot is verified"
+    )
 
 
 @pytest.mark.asyncio

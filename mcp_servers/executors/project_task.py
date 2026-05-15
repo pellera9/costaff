@@ -30,27 +30,59 @@ _DECLARED_PATH_RE = re.compile(
 )
 
 
-def _verify_declared_outputs(result_text: str) -> list[str]:
-    """Return any /app/data/* file paths mentioned in the sub-agent's result
-    that do not exist on disk.
+def _agent_slot(agent_name: str | None) -> str | None:
+    """Convert an assigned_agent name to its shared-volume slot directory.
 
-    The Manager wires the next agent in a chain against the upstream agent's
-    output paths. If the upstream agent says "wrote /app/data/X.csv" but
-    didn't actually write it, the downstream agent fails 30+ seconds later
-    with "file not found" — by then the user has already been told the first
-    step succeeded. Running this check before marking the task `done` lets
-    the executor turn that into an immediate failure instead.
+    Examples:
+      coding                 → costaff-agent-coding
+      business_analysis      → costaff-agent-business-analysis
+      twinkle_hub_agent      → costaff-agent-twinkle-hub
+      costaff_agent          → None   (manager itself has no agent slot)
+    """
+    if not agent_name:
+        return None
+    n = agent_name.replace("-", "_")
+    if n.startswith("costaff_agent_"):
+        n = n[len("costaff_agent_"):]
+    if n.endswith("_agent"):
+        n = n[: -len("_agent")]
+    if not n or n == "costaff":
+        return None
+    return "costaff-agent-" + n.replace("_", "-")
 
-    Returns an empty list when:
-      - no /app/data/ paths are mentioned (nothing to verify; task may have
-        produced no files)
-      - every mentioned path exists on disk
+
+def _verify_declared_outputs(result_text: str, agent_name: str | None = None) -> list[str]:
+    """Return any output file paths in the sub-agent's RESULT that don't exist
+    on disk — **scoped to this agent's own shared slot only**.
+
+    A sub-agent's RESULT block often references files from other agents (BA
+    reads Coding's CSV; Coding reads Twinkle's JSON). Those upstream paths
+    are not THIS agent's deliverables; they're inputs, and verifying them
+    here would race against the upstream task's writes when the Manager
+    dispatches steps in parallel (which it shouldn't — Principle 3 — but
+    sometimes does).
+
+    Only files written under `/app/data/shared/<this-agent-slot>/...` count
+    as this agent's declared outputs. The Manager's own tasks (assigned_agent
+    = costaff_agent) and tasks with no assigned_agent skip verification.
+
+    Returns:
+      - [] when no in-slot paths are mentioned (task may have produced no files)
+      - [] when every in-slot path exists on disk
+      - list of missing in-slot paths otherwise
     """
     if not result_text:
         return []
+    slot = _agent_slot(agent_name)
+    if not slot:
+        # No slot to scope to → skip verification rather than over-flag.
+        return []
+    needle = f"/app/data/shared/{slot}/"
     seen: set[str] = set()
     missing: list[str] = []
     for p in _DECLARED_PATH_RE.findall(result_text):
+        if needle not in p:
+            continue  # Not this agent's deliverable; ignore.
         if p in seen:
             continue
         seen.add(p)
@@ -118,7 +150,7 @@ async def execute_project_task(task_id: str):
             # /a/outputs/b.csv) at the upstream agent's task boundary, rather
             # than letting the downstream agent in a chain trip over the missing
             # file 30+ seconds later.
-            missing_outputs = _verify_declared_outputs(result_text)
+            missing_outputs = _verify_declared_outputs(result_text, task.assigned_agent)
             if missing_outputs:
                 logger.error(
                     f"[execute_project_task] task {task_id} declared outputs "
