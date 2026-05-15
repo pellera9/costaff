@@ -35,6 +35,11 @@ async def create_project_task(
     """
     Creates a ProjectTask within an Epic (and optionally a Story).
 
+    ⚠ LEGACY — prefer `dispatch_task` for normal dispatch. This tool leaves the
+    task in `backlog` status and REQUIRES a follow-up `update_task_queue` call
+    in the same turn, otherwise the task is stranded and never executes.
+    Only use this if you genuinely need a two-phase create (rare).
+
     IMPORTANT — Before calling this tool, YOU (the agent) must write the spec yourself.
     The spec is the most critical field: it is the exact prompt the executing agent will receive.
     A vague spec produces vague results. Write it clearly before passing it in.
@@ -158,6 +163,142 @@ async def create_project_task(
 
 
 @mcp.tool()
+async def dispatch_task(
+    epic_id: str, user_id: str, title: str, assigned_agent: str,
+    spec: Optional[str] = None,
+    story_id: Optional[str] = None,
+    priority: Optional[str] = "medium",
+    depends_on: Optional[str] = None,
+    session_id: Optional[str] = None,
+    channel: Optional[str] = None,
+    recipient: Optional[str] = None,
+    cron: Optional[str] = None
+) -> str:
+    """
+    Atomically creates a ProjectTask and immediately enqueues it for execution.
+
+    THIS IS THE PREFERRED dispatch tool. Use this instead of the older two-step
+    `create_project_task` + `update_task_queue` flow. A single atomic call means
+    a task can never be stranded in `backlog` because the LLM forgot the second step.
+
+    Parameters mirror `create_project_task`, with one difference:
+      - `assigned_agent` is REQUIRED (you cannot dispatch to nobody).
+
+    Behaviour:
+      - Task is inserted with status='queued' and queue_order = (current max for
+        this agent's open tasks) + 1, so it appends to the end of the agent's queue.
+      - If type is 'immediate' (no `cron`), the executor is triggered right away.
+      - If `cron` is set, the task is created as 'scheduled' and not run immediately.
+
+    Spec format: see `create_project_task` — write the spec yourself before calling.
+
+    Returns: success message with task_id.
+    """
+    logger.info(f"[dispatch_task] epic={epic_id} agent={assigned_agent} title={title!r}")
+    if not assigned_agent:
+        return "Error: assigned_agent is required for dispatch_task."
+
+    db = SessionLocal()
+    try:
+        err = require_approved(user_id, db)
+        if err:
+            return err
+
+        # Fallback spec — same shape as create_project_task
+        if not spec:
+            epic = db.query(models.Epic).filter(models.Epic.id == epic_id).first()
+            story = None
+            if story_id:
+                story = db.query(models.Story).filter(models.Story.id == story_id).first()
+
+            epic_title  = epic.title if epic else "(Unknown Project)"
+            epic_desc   = epic.description if epic and epic.description else ""
+            story_title = story.title if story else ""
+            story_desc  = story.description if story and story.description else ""
+
+            context_lines = []
+            if epic_desc:  context_lines.append(epic_desc)
+            if story_desc: context_lines.append(story_desc)
+            context = "; ".join(context_lines) if context_lines else f"Achieve the goal of {epic_title}"
+
+            spec = (
+                f"# {title}\n\n"
+                f"## Background\n"
+                f"Parent Project: {epic_title}"
+                + (f"  |  Story: {story_title}" if story_title else "")
+                + f"\n{context}\n\n"
+                f"## Use Cases\n\n"
+                f"### Case 1: {title}\n"
+                f"- **When**: when the task runs\n"
+                f"- **What**: complete the development and implementation of \"{title}\"\n"
+                f"- **Where**: {epic_title}" + (f" > {story_title}" if story_title else "") + "\n"
+                f"- **How**: analyze requirements → plan approach → implement → verify → report summary\n\n"
+                f"## Acceptance Criteria\n"
+                f"- [ ] Feature works correctly\n"
+                f"- [ ] Completion summary delivered\n"
+            )
+
+        # Append to the end of this agent's open queue
+        existing_max = (
+            db.query(models.ProjectTask.queue_order)
+            .filter(
+                models.ProjectTask.assigned_agent == assigned_agent,
+                models.ProjectTask.status.in_(["backlog", "queued", "doing"]),
+            )
+            .order_by(models.ProjectTask.queue_order.desc().nullslast())
+            .limit(1)
+            .scalar()
+        )
+        next_order = (existing_max or 0) + 1
+
+        task_type = "scheduled" if cron else "immediate"
+        initial_status = "scheduled" if cron else "queued"
+
+        task = models.ProjectTask(
+            id=str(uuid.uuid4()),
+            epic_id=epic_id,
+            story_id=story_id,
+            user_id=user_id,
+            session_id=session_id,
+            title=title,
+            spec=spec,
+            type=task_type,
+            assigned_agent=assigned_agent,
+            priority=priority or "medium",
+            depends_on=depends_on,
+            cron=cron,
+            channel=channel,
+            recipient=recipient,
+            status=initial_status,
+            queue_order=next_order,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(task)
+        db.commit()
+        db.refresh(task)
+
+        # Immediate tasks: hand to executor right now (do not wait for poll loop).
+        # Scheduled (cron) tasks: APScheduler picks them up later.
+        if task_type == "immediate":
+            asyncio.create_task(execute_project_task(task.id))
+            logger.info(f"[dispatch_task] triggered execute_project_task for {task.id}")
+
+        result = (
+            f"Task '{title}' dispatched (ID: {task.id}, agent: {assigned_agent}, "
+            f"queue_order: {next_order}, status: {initial_status})."
+        )
+        logger.info(f"[dispatch_task] OK → {result}")
+        return result
+    except Exception as e:
+        db.rollback()
+        logger.exception("[dispatch_task] failed")
+        return f"Error: {str(e)}"
+    finally:
+        db.close()
+
+
+@mcp.tool()
 async def update_task_status(task_id: str, status: str) -> str:
     """
     Updates a ProjectTask's status.
@@ -191,6 +332,11 @@ async def update_task_queue(user_id: str, assigned_agent: str, task_ids_ordered:
     costaff_agent calls this to prioritize which tasks run first.
     - task_ids_ordered: JSON array of task ID strings in desired execution order (first = highest priority)
       Example: ["uuid-1", "uuid-2", "uuid-3"]
+
+    ⚠ LEGACY — for new dispatch use `dispatch_task` (atomic create+queue).
+    This tool is still valid for RE-ORDERING an existing queue, but for first-time
+    dispatch you should not be calling create_project_task → update_task_queue;
+    use `dispatch_task` instead.
     """
     logger.info(f"[update_task_queue] agent={assigned_agent!r} task_ids={task_ids_ordered!r}")
     db_check = SessionLocal()
