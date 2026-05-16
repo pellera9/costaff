@@ -73,8 +73,19 @@ if __name__ == "__main__":
         from starlette.middleware.base import BaseHTTPMiddleware
         from starlette.responses import Response as StarletteResponse
 
-        starlette_app = mcp.streamable_http_app()
-        logger.info("MCP transport: streamable-http (endpoint: /mcp)")
+        # Transport env-selectable. Default SSE: race-free under
+        # to_a2a()+ADK1.33 (streamable-http anyio CancelScope race #4454
+        # does NOT occur on SSE — verified 2026-05-16). The /api/tool
+        # shim is mounted on whichever app, so it keeps working either
+        # way. MCP_TRANSPORT=streamable-http to switch back once ADK
+        # fixes #4454.
+        _transport = os.getenv("MCP_TRANSPORT", "sse").strip().lower()
+        if _transport == "streamable-http":
+            starlette_app = mcp.streamable_http_app()
+            logger.info("MCP transport: streamable-http (endpoint: /mcp)")
+        else:
+            starlette_app = mcp.sse_app()
+            logger.info("MCP transport: sse (endpoint: /sse)")
 
         # Mount the plain-HTTP shim for the shared cross-agent tools so
         # plugins can call them with httpx instead of a 2nd MCP session

@@ -16,6 +16,7 @@ the google-adk MCP SDK package (mcp), which lives in site-packages.
 import json
 import logging
 import os
+import re
 from typing import List
 
 from google.adk.tools.mcp_tool import McpToolset
@@ -28,7 +29,17 @@ logger = logging.getLogger(__name__)
 
 
 def _get_connection_params(entry):
-    """Return ADK ServerParams based on the entry's url / headers / transport fields."""
+    """Return ADK ServerParams based on the entry's url / headers / transport.
+
+    Transport precedence:
+      1. explicit `transport` field on the entry, else
+      2. global MCP_TRANSPORT env (default "sse"), else
+      3. inferred from the URL's /sse|/mcp suffix.
+    SSE is race-free under to_a2a()+ADK1.33 (the streamable-http anyio
+    CancelScope race #4454 does NOT occur on SSE — verified 2026-05-16).
+    The URL suffix is normalised to match the chosen transport so
+    dashboard-generated `.../mcp` URLs work under SSE too.
+    """
     if isinstance(entry, str):
         url, headers, transport = entry, None, None
     else:
@@ -39,11 +50,15 @@ def _get_connection_params(entry):
     if not url:
         raise ValueError("MCP entry has no URL")
     if transport is None:
-        transport = "sse" if url.rstrip("/").endswith("/sse") else "streamable"
+        transport = os.getenv("MCP_TRANSPORT", "sse").strip().lower()
+    # normalise both alias spellings
+    if transport in ("streamable", "streamable-http", "streamable_http"):
+        transport = "streamable"
 
+    base = re.sub(r"/(mcp|sse)/?$", "", url.rstrip("/"))
     if transport == "sse":
-        return SseServerParams(url=url, headers=headers)
-    return StreamableHTTPServerParams(url=url, headers=headers)
+        return SseServerParams(url=base + "/sse", headers=headers)
+    return StreamableHTTPServerParams(url=base + "/mcp", headers=headers)
 
 
 def load_all_mcp_toolsets() -> List[McpToolset]:
