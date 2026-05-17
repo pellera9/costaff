@@ -29,6 +29,51 @@ from .agent import agent_app
 console = Console()
 
 
+def _confirm_enable_transfer(conf: dict, name: str, yes: bool) -> None:
+    """Print the global-impact warning for --enable-transfer and gate it.
+
+    Called BEFORE any deploy so declining leaves nothing half-created.
+    `-y/--yes` skips the prompt but still prints the warning (audit).
+    Non-interactive without `-y` aborts safely (never auto-enables).
+    """
+    existing = sorted(
+        n for n, a in conf.get("external_agents", {}).items()
+        if a.get("transfer")
+    )
+    console.print(
+        "\n[yellow]⚠️  --enable-transfer:[/yellow] this agent will be wired "
+        "via [bold]transfer (sub_agents)[/bold], not AgentTool.\n\n"
+        "  This is NOT local — any transfer agent makes ADK inject the\n"
+        "  `transfer_to_agent` tool + sub-agent list into the WHOLE Manager\n"
+        "  (global transfer mode, affecting every agent's routing):\n\n"
+        "   • transfer carries the conversation/session context (incl.\n"
+        "     history) to the sub-agent → it may echo a previous answer or\n"
+        "     stay conversational without executing (tested; needs /reset)\n"
+        "   • Manager-wide behavior changes; re-run\n"
+        "     tests/test_remote_agent_tools.py\n"
+        "   • Only enable when this agent needs a transfer-only capability\n"
+        "     (e.g. multimodal/image input must reach the sub-agent)\n"
+        "   • Reversible: `costaff agent transfer "
+        f"{name} --disable` later, no data loss\n\n"
+        f"  Agents already on transfer: "
+        f"{', '.join(existing) if existing else '(none)'}\n"
+    )
+    if yes:
+        console.print("[dim]--yes: skipping confirmation (transfer enabled).[/dim]")
+        return
+    if not sys.stdin.isatty():
+        console.print(
+            "[red]Refusing to enable transfer non-interactively without "
+            "`-y/--yes`. Aborting (nothing changed).[/red]"
+        )
+        raise typer.Exit(1)
+    if not questionary.confirm(
+        f"Enable transfer for '{name}'?", default=False
+    ).ask():
+        console.print("[yellow]Aborted — transfer not enabled, nothing changed.[/yellow]")
+        raise typer.Exit(1)
+
+
 @agent_app.command("add")
 def agent_add(
     name: str = typer.Argument(..., help="Agent name (e.g. market-analyst)"),
@@ -38,6 +83,8 @@ def agent_add(
     env: Optional[list[str]] = typer.Option(None, "--env", "-e", help="Set environment variables (e.g. KEY=VALUE)"),
     description: str = typer.Option("", "--description", "-d", help="Short description"),
     strict: bool = typer.Option(False, "--strict", help="Reject the manifest if it does not pass the full Agent Protocol JSON Schema"),
+    enable_transfer: bool = typer.Option(False, "--enable-transfer", help="Wire this agent via sub_agents/transfer instead of AgentTool (needed e.g. for multimodal/image input to the sub-agent). Flips the WHOLE Manager into transfer mode — requires confirmation."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the interactive --enable-transfer confirmation (the warning is still printed for audit)."),
 ):
     """Add an external agent (URL, Local, or GitHub mode)."""
     if not url and not local and not github:
@@ -67,6 +114,10 @@ def agent_add(
     except ValueError as e:
         console.print(f"[red]✖ {e}[/red]")
         raise typer.Exit(1)
+
+    # Gate --enable-transfer BEFORE any deploy so declining changes nothing.
+    if enable_transfer:
+        _confirm_enable_transfer(conf, name, yes)
 
     # Parse provided env vars
     predefined_envs = {}
@@ -167,6 +218,45 @@ def agent_enable(name: str = typer.Argument(...)):
     ConfigManager.update_external_agents_env()
     console.print(f"[green]Agent '{name}' enabled.[/green]")
     console.print("[yellow]Restart costaff-agent-costaff to apply changes.[/yellow]")
+
+
+@agent_app.command("transfer")
+def agent_transfer(
+    name: str = typer.Argument(..., help="Agent name to toggle transfer wiring for"),
+    enable: bool = typer.Option(False, "--enable", help="Wire via sub_agents/transfer (global Manager change — confirmed)"),
+    disable: bool = typer.Option(False, "--disable", help="Revert to AgentTool (default, stable contract)"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the --enable confirmation (warning still printed)"),
+):
+    """Toggle an existing agent between AgentTool (default) and transfer.
+
+    The reversible counterpart to `costaff agent add --enable-transfer`.
+    config.json's per-agent `transfer` flag is the source of truth;
+    `update_external_agents_env()` re-derives COSTAFF_TRANSFER_AGENTS.
+    """
+    if enable == disable:
+        console.print("[red]Specify exactly one of --enable or --disable.[/red]")
+        raise typer.Exit(1)
+    conf = ConfigManager.get_config()
+    if name not in conf.get("external_agents", {}):
+        console.print(f"[red]Error: Agent '{name}' not found.[/red]")
+        raise typer.Exit(1)
+    entry = conf["external_agents"][name]
+    if enable:
+        if entry.get("transfer"):
+            console.print(f"[yellow]'{name}' is already on transfer. Nothing changed.[/yellow]")
+            raise typer.Exit(0)
+        _confirm_enable_transfer(conf, name, yes)
+        entry["transfer"] = True
+    else:
+        if not entry.get("transfer"):
+            console.print(f"[yellow]'{name}' is already AgentTool (transfer off). Nothing changed.[/yellow]")
+            raise typer.Exit(0)
+        entry["transfer"] = False
+    ConfigManager.save_config(conf)
+    ConfigManager.update_external_agents_env()
+    state = "transfer (sub_agents)" if enable else "AgentTool (default)"
+    console.print(f"[green]'{name}' is now wired via {state}.[/green]")
+    console.print("[yellow]Restart costaff-agent-costaff to apply; re-run tests/test_remote_agent_tools.py.[/yellow]")
 
 
 @agent_app.command("disable")

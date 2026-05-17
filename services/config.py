@@ -240,11 +240,22 @@ class ConfigManager:
         """Serialize enabled external_agents into EXTERNAL_AGENTS_CONFIG env var."""
         conf = ConfigManager.get_config()
         agents_config = {}
+        transfer_names = []
         for name, agent in conf.get("external_agents", {}).items():
             if agent.get("enabled", True) and agent.get("a2a_url"):
                 agents_config[name] = {
                     "a2a_url": agent["a2a_url"],
                     "description": agent.get("description", ""),
                 }
+                # config.json's per-agent `transfer` flag is the source of
+                # truth; the Manager reads COSTAFF_TRANSFER_AGENTS (see
+                # agents/costaff_agent/sub_agents/_transfer_agent_names) to
+                # decide AgentTool (default) vs sub_agents/transfer wiring.
+                if agent.get("transfer"):
+                    transfer_names.append(name)
         set_key(PATHS["env"], "EXTERNAL_AGENTS_CONFIG", json.dumps(agents_config))
+        set_key(
+            PATHS["env"], "COSTAFF_TRANSFER_AGENTS",
+            ",".join(sorted(transfer_names)), quote_mode="never",
+        )
         load_dotenv(PATHS["env"], override=True)
