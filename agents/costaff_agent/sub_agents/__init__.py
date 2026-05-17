@@ -68,26 +68,83 @@ def load_all_remote_agent_tools() -> List:
         logger.error(f"EXTERNAL_AGENTS_CONFIG is not valid JSON: {e}")
         return []
 
-    agent_tools = []
+    agent_tools, _ = _load_remote_agents_split()
+    return agent_tools
+
+
+def _transfer_agent_names() -> set:
+    """Agents the operator wants reached via transfer (sub_agents=[…]).
+
+    EXPERIMENTAL / env-gated. `COSTAFF_TRANSFER_AGENTS` = comma-separated
+    agent names. Unset (default) → empty set → every remote agent stays
+    an AgentTool and `sub_agents` stays `[]` (the proven, stable
+    contract — see module docstring). Set e.g. `nutrition` to route ONLY
+    that agent via the transfer mechanism (to test whether transfer
+    forwards multimodal/image parts that AgentTool does not). Reversible
+    by unsetting the env var; no code change / redeploy to revert.
+    """
+    raw = os.getenv("COSTAFF_TRANSFER_AGENTS", "").strip()
+    return {n.strip().replace("-", "_") for n in raw.split(",") if n.strip()}
+
+
+def _load_remote_agents_split():
+    """Return (agent_tools, transfer_sub_agents).
+
+    Non-transfer agents → AgentTool (unchanged behavior). Agents named in
+    COSTAFF_TRANSFER_AGENTS → RemoteA2aAgent placed in `sub_agents=[…]`
+    (transfer mechanism) and EXCLUDED from the AgentTool list so they are
+    reachable only via transfer (clean A/B for the image experiment).
+    """
+    raw = os.getenv("EXTERNAL_AGENTS_CONFIG", "").strip()
+    if not raw:
+        return [], []
+    try:
+        from google.adk.agents.remote_a2a_agent import (
+            RemoteA2aAgent,
+            AGENT_CARD_WELL_KNOWN_PATH,
+        )
+        from google.adk.tools.agent_tool import AgentTool
+    except ImportError as e:
+        logger.error(f"ADK A2A / AgentTool imports unavailable: {e}")
+        return [], []
+    try:
+        agents_config = json.loads(raw)
+    except json.JSONDecodeError as e:
+        logger.error(f"EXTERNAL_AGENTS_CONFIG is not valid JSON: {e}")
+        return [], []
+
+    transfer_names = _transfer_agent_names()
+    agent_tools, transfer_subs = [], []
     for agent_name, agent_cfg in agents_config.items():
         a2a_url = agent_cfg.get("a2a_url", "").strip()
-        description = agent_cfg.get("description", f"Specialist: {agent_name}").strip()
-
+        description = agent_cfg.get(
+            "description", f"Specialist: {agent_name}"
+        ).strip()
         if not a2a_url:
             continue
-
+        a2a_name = agent_name.replace("-", "_")
         try:
-            a2a_name = agent_name.replace("-", "_")
-            logger.info(f"Wrapping remote agent '{a2a_name}' as AgentTool: {a2a_url}")
             remote = RemoteA2aAgent(
                 name=a2a_name,
                 description=description,
                 agent_card=f"{a2a_url.rstrip('/')}{AGENT_CARD_WELL_KNOWN_PATH}",
                 use_legacy=False,
             )
-            agent_tools.append(AgentTool(agent=remote))
-            logger.info(f"Successfully registered AgentTool for '{a2a_name}'")
+            if a2a_name in transfer_names:
+                transfer_subs.append(remote)
+                logger.info(
+                    f"[transfer-exp] '{a2a_name}' wired as sub_agent "
+                    f"(transfer), excluded from AgentTool: {a2a_url}"
+                )
+            else:
+                agent_tools.append(AgentTool(agent=remote))
+                logger.info(f"Registered AgentTool for '{a2a_name}'")
         except Exception:
-            logger.exception("Failed to wrap remote agent '%s' as AgentTool", agent_name)
+            logger.exception("Failed to wrap remote agent '%s'", agent_name)
 
-    return agent_tools
+    return agent_tools, transfer_subs
+
+
+def load_remote_agents_split():
+    """Public: (agent_tools, transfer_sub_agents) for agent.py wiring."""
+    return _load_remote_agents_split()
