@@ -10,6 +10,7 @@ from .models import selected_model
 from .instruction import build_instruction
 from .skills import load_all_skills
 from .sub_agents import load_remote_agents_split
+from .progress_inject import before_tool_callback
 
 tools = list(load_all_mcp_toolsets())
 tools.append(load_all_skills())
@@ -34,4 +35,7 @@ root_agent = LlmAgent(
     instruction=instruction,
     tools=tools,
     sub_agents=transfer_sub_agents,
+    # Deterministically forward the executor's [PROGRESS_CONTEXT] into
+    # sub-agent AgentTool requests (the Manager LLM drops it unreliably).
+    before_tool_callback=before_tool_callback,
 )

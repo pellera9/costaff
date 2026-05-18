@@ -1,0 +1,61 @@
+"""Deterministic PROGRESS_CONTEXT forwarding into sub-agent AgentTool calls.
+
+The executor feeds the Manager a spec that build_task_spec() already
+enriched with a [PROGRESS_CONTEXT] block. The Manager LLM is *instructed*
+to copy that block into the `business_analysis_agent(request="...")`
+call, but it drops it unreliably — so the A2A sub-agent never sees the
+task's real session_id/channel and cannot drive a live panel.
+
+This before_tool_callback removes the LLM from that hop: for any
+AgentTool call (anything with a string `request` arg), if the Manager's
+own input carried a [PROGRESS_CONTEXT] block and the outgoing request
+does not already contain one, append it verbatim. Pure text, no DB, no
+network — runs in the Manager (a normal local agent whose session IS the
+executor's `task_<id>` session), so it is fully deterministic.
+
+Fail-safe: never raises, returns None (must not skip the tool call).
+"""
+import logging
+import re
+
+logger = logging.getLogger(__name__)
+
+_BLOCK_RE = re.compile(
+    r"\[PROGRESS_CONTEXT\]\n"
+    r"user_id=[^\n]*\n"
+    r"channel=[^\n]*\n"
+    r"session_id=task_[^\n]*"
+)
+
+
+def _content_text(content) -> str:
+    try:
+        parts = getattr(content, "parts", None) or []
+        return "\n".join((getattr(p, "text", "") or "") for p in parts)
+    except Exception:
+        return ""
+
+
+async def before_tool_callback(tool, args, tool_context):
+    try:
+        if not isinstance(args, dict):
+            return None
+        req = args.get("request")
+        if not isinstance(req, str):
+            return None
+        if "[PROGRESS_CONTEXT]" in req:
+            return None
+
+        src = _content_text(getattr(tool_context, "user_content", None))
+        m = _BLOCK_RE.search(src)
+        if not m:
+            return None
+
+        args["request"] = req.rstrip() + "\n\n" + m.group(0)
+        logger.info(
+            "[pc-inject] appended PROGRESS_CONTEXT to %s request",
+            getattr(tool, "name", "?"),
+        )
+    except Exception:
+        logger.info("[pc-inject] failed", exc_info=True)
+    return None
