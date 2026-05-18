@@ -75,3 +75,22 @@ async def test_non_telegram_channel_is_noop():
 @pytest.mark.asyncio
 async def test_finalize_unknown_key_safe():
     await pp.panel_finalize("never_seen", "done")  # must not raise
+
+
+@pytest.mark.asyncio
+async def test_report_step_tool_maps_status_to_panel():
+    from mcp_servers.tools.progress_tool import report_step
+    K = "task_rs"
+    await report_step(session_id=K, step="generate charts", status="doing",
+                      channel="telegram", user_id="u1")
+    await report_step(session_id=K, step="generate charts", status="done",
+                      channel="telegram", user_id="u1")
+    await report_step(session_id=K, step="export pdf", status="failed",
+                      channel="telegram", user_id="u1")
+    st = pp._PANELS[K]
+    assert st["steps"] == [["generate charts", "Done"],
+                           ["export pdf", "Failed"]]
+    # unknown/blank status defaults to a "doing" start line
+    await report_step(session_id=K, step="cleanup", status="",
+                      channel="telegram", user_id="u1")
+    assert ["cleanup", "Doing"] in pp._PANELS[K]["steps"]
