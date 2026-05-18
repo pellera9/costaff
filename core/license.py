@@ -30,10 +30,25 @@ OSS_LIMITS = {
 def get_machine_id() -> str:
     """
     Returns a stable, hashed machine identifier.
-    macOS : IOPlatformUUID via ioreg
-    Linux : /etc/machine-id
-    The raw value is SHA-256 hashed so the actual system ID is never exposed.
+
+    `COSTAFF_MACHINE_ID` env wins if set: the MCP core runs INSIDE a
+    container whose /etc/machine-id is the container's, not the licensed
+    host's, so the host CLI persists its real id into the core .env (see
+    `costaff license apply`) and the container inherits it. This keeps a
+    machine-bound license valid in-container WITHOUT changing the signed
+    canonical payload (no re-issue needed).
     """
+    env_id = os.getenv("COSTAFF_MACHINE_ID", "").strip()
+    if env_id:
+        return env_id
+    return _raw_machine_id()
+
+
+def _raw_machine_id() -> str:
+    """Compute the machine id from the OS (no env override). Used on the
+    HOST to capture the true identifier to persist for containers.
+    macOS: IOPlatformUUID via ioreg. Linux: /etc/machine-id. SHA-256
+    hashed so the raw system id is never exposed."""
     try:
         system = platform.system()
         if system == "Darwin":
@@ -130,7 +145,11 @@ class LicenseManager:
         """
         license_path = path or os.getenv("COSTAFF_LICENSE_PATH") or cls.DEFAULT_PATH
 
-        if not os.path.exists(license_path):
+        # isfile (not exists): a docker bind-mount of a missing host file
+        # materialises as an empty DIR, and the "no license" placeholder
+        # mount is /dev/null (a char device) — both must degrade cleanly
+        # to OSS, never crash yaml parsing.
+        if not os.path.isfile(license_path):
             logger.info("No license file found. Running on OSS Plan.")
             cls._license = None
             return None

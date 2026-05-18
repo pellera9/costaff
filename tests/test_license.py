@@ -5,6 +5,7 @@ we monkeypatch it to a test-only public key whose private key the test
 holds, then sign known canonical payloads.
 """
 import base64
+import os
 from datetime import date, timedelta
 
 import pytest
@@ -329,3 +330,30 @@ def test_reeval_drops_expired_cached_license_same_day(monkeypatch, tmp_path):
     # And now over-OSS usage is blocked because of the expiry.
     msg = LicenseManager.usage_gate({"agents": 5, "users": 0, "skills": 0})
     assert msg is not None and "expired" in msg.lower()
+
+
+# ---------------------------------------------------------------------------
+# B: containerised licensing — machine-id env override + non-file path
+# ---------------------------------------------------------------------------
+
+def test_get_machine_id_honours_env_override(monkeypatch):
+    monkeypatch.setenv("COSTAFF_MACHINE_ID", "host-injected-id")
+    assert license_mod.get_machine_id() == "host-injected-id"
+
+
+def test_raw_machine_id_ignores_env_override(monkeypatch):
+    """The host must capture its TRUE id even if the env is already set
+    (otherwise `license apply` would persist the placeholder)."""
+    monkeypatch.setenv("COSTAFF_MACHINE_ID", "should-be-ignored")
+    assert license_mod._raw_machine_id() != "should-be-ignored"
+
+
+def test_load_treats_non_file_path_as_no_license(monkeypatch, tmp_path):
+    """A docker bind-mount of a missing file becomes an empty DIR, and the
+    no-license placeholder mount is /dev/null — both must degrade to OSS,
+    never raise."""
+    LicenseManager._license = None
+    # tmp_path is a directory → not a regular file
+    assert LicenseManager.load(str(tmp_path)) is None
+    if os.path.exists("/dev/null"):
+        assert LicenseManager.load("/dev/null") is None

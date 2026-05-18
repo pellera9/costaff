@@ -34,6 +34,19 @@ def license(
             info = LicenseManager.load(path)
             if info:
                 shutil.copy(path, dest)
+                # The MCP core runs in a container that can see neither the
+                # host license file nor the host's /etc/machine-id. Persist
+                # both into the core .env so the container (env_file: .env)
+                # inherits them and a machine-bound license stays valid
+                # in-container (compose mounts COSTAFF_LICENSE_HOST_PATH).
+                try:
+                    from dotenv import set_key
+                    from utils.paths import PATHS
+                    from core.license import _raw_machine_id
+                    set_key(PATHS["env"], "COSTAFF_LICENSE_HOST_PATH", dest, quote_mode="never")
+                    set_key(PATHS["env"], "COSTAFF_MACHINE_ID", _raw_machine_id(), quote_mode="never")
+                except Exception as e:
+                    console.print(f"[yellow]Warning: could not persist license env for containers: {e}[/yellow]")
                 console.print(Panel.fit(
                     f"[green]✔ License applied successfully[/green]\n\n"
                     f"  Plan          : [bold]{info.plan.upper()}[/bold]\n"
