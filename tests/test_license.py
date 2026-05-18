@@ -262,3 +262,70 @@ def test_check_skill_limit_uses_db_count(db_session):
     db_session.commit()
     with pytest.raises(ValueError, match="Skill limit reached"):
         LicenseManager.check_skill_limit(db_session)
+
+
+# ---------------------------------------------------------------------------
+# Decisions A+B+C: degrade-to-OSS-and-keep-serving + runtime usage gate +
+# same-day real-time expiry (no restart needed)
+# ---------------------------------------------------------------------------
+
+def _reset_license_state(monkeypatch, tmp_path):
+    """Point at a non-existent license file and clear all class state so
+    _reeval() resolves to 'no license' deterministically."""
+    monkeypatch.setenv("COSTAFF_LICENSE_PATH", str(tmp_path / "absent.yaml"))
+    LicenseManager._license = None
+    LicenseManager._loaded_path = None
+    LicenseManager._loaded_mtime = None
+    LicenseManager._degraded = False
+    LicenseManager._degraded_reason = ""
+
+
+def test_usage_gate_blocks_when_oss_and_over_limit(monkeypatch, tmp_path):
+    _reset_license_state(monkeypatch, tmp_path)
+    # Over OSS (agents 5 > 1) → blocked with an actionable message.
+    msg = LicenseManager.usage_gate({"agents": 5, "users": 0, "skills": 0})
+    assert msg is not None
+    assert "exceeds OSS limits" in msg
+    assert "agents 5/1" in msg
+
+
+def test_usage_gate_allows_when_within_oss(monkeypatch, tmp_path):
+    _reset_license_state(monkeypatch, tmp_path)
+    assert LicenseManager.usage_gate(
+        {"agents": 1, "users": 1, "skills": 10}
+    ) is None
+
+
+def test_usage_gate_never_blocks_a_valid_paid_license(monkeypatch, tmp_path):
+    _reset_license_state(monkeypatch, tmp_path)
+    # Inject a valid (non-expired) paid license; keep _reeval on the
+    # else-branch so it is preserved (path==loaded, mtime None==None).
+    LicenseManager._loaded_path = str(tmp_path / "absent.yaml")
+    LicenseManager._loaded_mtime = None
+    LicenseManager._license = LicenseInfo(
+        plan="enterprise", issued_to="Acme", expires_at=None,
+        limits={"max_agents": 5, "max_users": 5, "max_skills": 200},
+    )
+    # Way over OSS, but a valid paid license is not runtime-gated.
+    assert LicenseManager.usage_gate(
+        {"agents": 5, "users": 5, "skills": 50}
+    ) is None
+
+
+def test_reeval_drops_expired_cached_license_same_day(monkeypatch, tmp_path):
+    """Decision C: a running system whose cached license crosses its
+    expiry date degrades the same call — no restart required."""
+    _reset_license_state(monkeypatch, tmp_path)
+    LicenseManager._loaded_path = str(tmp_path / "absent.yaml")
+    LicenseManager._loaded_mtime = None
+    LicenseManager._license = LicenseInfo(
+        plan="enterprise", issued_to="Acme",
+        expires_at=date.today() - timedelta(days=1),  # expired yesterday
+        limits={"max_agents": 5, "max_users": 5, "max_skills": 200},
+    )
+    info = LicenseManager.get()
+    assert info.plan == "oss"
+    assert LicenseManager.is_degraded() is True
+    # And now over-OSS usage is blocked because of the expiry.
+    msg = LicenseManager.usage_gate({"agents": 5, "users": 0, "skills": 0})
+    assert msg is not None and "expired" in msg.lower()

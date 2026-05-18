@@ -109,6 +109,15 @@ class LicenseInfo:
 
 class LicenseManager:
     _license: Optional[LicenseInfo] = None
+    # Path/mtime of the file that produced _license, so a freshly applied
+    # license is picked up WITHOUT a restart (decision C: same-day effect).
+    _loaded_path: Optional[str] = None
+    _loaded_mtime: Optional[float] = None
+    # True when a license file exists but is expired / tampered / bound to
+    # another machine: we degrade to OSS and KEEP SERVING (never SystemExit),
+    # but block real work if usage exceeds OSS limits (decisions A + B).
+    _degraded: bool = False
+    _degraded_reason: str = ""
 
     DEFAULT_PATH = os.path.join(os.path.expanduser("~"), ".costaff", "costaff-license.yaml")
 
@@ -191,19 +200,101 @@ class LicenseManager:
         cls._license = info
         return info
 
-    @classmethod
-    def get(cls) -> LicenseInfo:
-        """
-        Returns active LicenseInfo. Falls back to OSS limits if no valid license.
-        Always call load() at startup; get() is for runtime limit checks.
-        """
-        if cls._license is not None:
-            return cls._license
+    @staticmethod
+    def _oss() -> LicenseInfo:
         return LicenseInfo(
             plan="oss",
             issued_to="OSS User",
             expires_at=None,
             limits=OSS_LIMITS.copy(),
+        )
+
+    @classmethod
+    def _reeval(cls) -> None:
+        """Cheap real-time re-evaluation so expiry takes effect the same day
+        and a freshly applied license is picked up without a restart
+        (decision C). Never raises — degrades to OSS on any problem.
+
+        Cost per call: one stat() + a date compare. The expensive
+        signature verification only re-runs when the file mtime changed.
+        """
+        path = os.getenv("COSTAFF_LICENSE_PATH") or cls.DEFAULT_PATH
+        try:
+            mtime = os.path.getmtime(path) if os.path.exists(path) else None
+        except OSError:
+            mtime = None
+
+        # File appeared / changed / disappeared since last load → reload.
+        if mtime != cls._loaded_mtime or path != cls._loaded_path:
+            cls._loaded_path = path
+            cls._loaded_mtime = mtime
+            try:
+                cls.load(path)
+                cls._degraded = False
+                cls._degraded_reason = ""
+            except ValueError as e:
+                cls._license = None
+                cls._degraded = True
+                cls._degraded_reason = str(e)
+            return
+
+        # Same file as before: only the date may have moved past expiry.
+        if cls._license is not None and cls._license.is_expired:
+            cls._degraded = True
+            cls._degraded_reason = f"License expired on {cls._license.expires_at}."
+            cls._license = None
+
+    @classmethod
+    def get(cls) -> LicenseInfo:
+        """
+        Returns the effective LicenseInfo for runtime limit checks.
+        Re-evaluates expiry/file changes in real time, then falls back to
+        OSS limits if there is no valid license. Never raises.
+        """
+        cls._reeval()
+        if cls._license is not None:
+            return cls._license
+        return cls._oss()
+
+    @classmethod
+    def is_degraded(cls) -> bool:
+        """True when a license file exists but is unusable (expired /
+        tampered / wrong machine). Distinct from 'no license at all'."""
+        cls._reeval()
+        return cls._degraded
+
+    @classmethod
+    def usage_gate(cls, usage: dict) -> Optional[str]:
+        """Runtime work gate (decisions A + B).
+
+        When running on effective OSS limits — whether because the license
+        is degraded (expired/tampered/wrong-machine) OR there is simply no
+        paid license — any resource count that EXCEEDS the OSS limit blocks
+        real work. Returns a user-facing denial string, or None to allow.
+
+        A *valid* paid license within its own limits never trips this gate
+        (paid limits are enforced only at creation, as before).
+        """
+        info = cls.get()
+        if info.plan != "oss":
+            return None
+        over = []
+        if usage.get("agents", 0) > OSS_LIMITS["max_agents"]:
+            over.append(f"agents {usage['agents']}/{OSS_LIMITS['max_agents']}")
+        if usage.get("users", 0) > OSS_LIMITS["max_users"]:
+            over.append(f"users {usage['users']}/{OSS_LIMITS['max_users']}")
+        if usage.get("skills", 0) > OSS_LIMITS["max_skills"]:
+            over.append(f"skills {usage['skills']}/{OSS_LIMITS['max_skills']}")
+        if not over:
+            return None
+        reason = cls._degraded_reason or "No active license (OSS plan)."
+        return (
+            f"Service unavailable: {reason} The system has reverted to the "
+            f"free OSS plan, but current usage exceeds OSS limits "
+            f"({', '.join(over)}). Renew the license or reduce usage to "
+            f"within OSS limits (max_agents={OSS_LIMITS['max_agents']}, "
+            f"max_users={OSS_LIMITS['max_users']}, "
+            f"max_skills={OSS_LIMITS['max_skills']}) to continue."
         )
 
     @classmethod

@@ -132,6 +132,40 @@ async def execute_project_task(task_id: str):
         if not channel:
             channel, recipient = get_user_channel_info(task.user_id, db)
 
+        # License gate (decisions A+B+C): if the license is degraded to OSS
+        # and usage exceeds OSS limits, refuse to execute. Fail the task with
+        # a clear message and notify the user instead of silently stalling.
+        from mcp_servers.tools._shared import require_within_license
+        license_block = require_within_license(db)
+        if license_block:
+            task.status = "failed"
+            task.updated_at = datetime.utcnow()
+            db.add(models.TaskComment(
+                id=str(uuid.uuid4()),
+                task_id=task_id,
+                user_id=task.user_id,
+                author=task.assigned_agent or "costaff_agent",
+                content=license_block,
+                type="result",
+                created_at=datetime.utcnow(),
+            ))
+            db.commit()
+            if channel and recipient:
+                try:
+                    await dispatch_notification(
+                        channel, recipient, license_block, task.session_id
+                    )
+                except Exception:
+                    logger.exception(
+                        "[execute_project_task] failed to notify license "
+                        "block for task %s", task_id
+                    )
+            logger.warning(
+                "[execute_project_task] task %s blocked by license gate",
+                task_id,
+            )
+            return
+
         task.status = "doing"
         task.updated_at = datetime.utcnow()
         db.commit()

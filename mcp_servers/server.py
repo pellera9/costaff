@@ -26,8 +26,12 @@ async def startup():
     try:
         LicenseManager.load()
     except ValueError as e:
-        logger.error(f"LICENSE ERROR: {e}")
-        raise SystemExit(1)
+        # Decisions A+B+C: a degraded license (expired / tampered / wrong
+        # machine) must NOT crash the core. Keep serving on OSS limits;
+        # the runtime usage gate (require_within_license) blocks real work
+        # only if usage exceeds OSS limits, and a freshly applied license
+        # is picked up without a restart.
+        logger.error(f"LICENSE DEGRADED → OSS limits, continuing to serve: {e}")
 
     init_db()
     if not scheduler.running:

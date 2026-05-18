@@ -15,7 +15,7 @@ from core import models
 from core.database import SessionLocal
 from mcp_servers.executors.project_task import execute_project_task
 from mcp_servers.setup import mcp
-from mcp_servers.tools._shared import require_approved
+from mcp_servers.tools._shared import require_approved, require_within_license
 
 logger = logging.getLogger("costaff-agent-engine")
 
@@ -93,6 +93,9 @@ async def create_project_task(
     db = SessionLocal()
     try:
         err = require_approved(user_id, db)
+        if err:
+            return err
+        err = require_within_license(db)
         if err:
             return err
         # Fallback spec if agent did not provide one
