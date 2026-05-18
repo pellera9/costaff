@@ -202,11 +202,30 @@ async def execute_project_task(task_id: str):
             # /a/outputs/b.csv) at the upstream agent's task boundary, rather
             # than letting the downstream agent in a chain trip over the missing
             # file 30+ seconds later.
+            # A file the sub-agent just wrote can lag becoming visible to
+            # THIS (executor) container: write flush + cross-container
+            # bind-mount visibility. A single eager check right after the
+            # A2A response returns false-fails successful tasks (observed
+            # on real BA/Coding runs — the file is on disk a second later).
+            # Re-check with a short grace before declaring failure.
             missing_outputs = _verify_declared_outputs(result_text, task.assigned_agent)
+            if missing_outputs:
+                for _attempt in range(5):  # up to ~10s grace
+                    await asyncio.sleep(2)
+                    missing_outputs = _verify_declared_outputs(
+                        result_text, task.assigned_agent
+                    )
+                    if not missing_outputs:
+                        logger.info(
+                            f"[execute_project_task] task {task_id} declared "
+                            f"outputs became visible after grace retry "
+                            f"(attempt {_attempt + 1})"
+                        )
+                        break
             if missing_outputs:
                 logger.error(
                     f"[execute_project_task] task {task_id} declared outputs "
-                    f"that do not exist on disk: {missing_outputs}"
+                    f"that do not exist on disk after grace retries: {missing_outputs}"
                 )
                 raise OutputVerificationError(
                     "Sub-agent declared output files that are not on disk: "
