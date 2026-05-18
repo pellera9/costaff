@@ -121,11 +121,19 @@ def build_task_spec(task, db) -> str:
         )
 
     # Resolve channel/recipient for PROGRESS_CONTEXT so the executing agent
-    # can stream live updates back to the user.
+    # can stream live updates back to the user. The Manager often sets
+    # channel + session_id but NOT recipient; the old `if not channel:`
+    # only filled when channel was ALSO empty, so a channel-set/
+    # recipient-empty task left recipient None → the `if channel and
+    # recipient:` guard below skipped the PROGRESS_CONTEXT block entirely
+    # and the sub-agent stayed silent for the whole run. Resolve whichever
+    # field is missing, independently (mirrors execute_project_task).
     channel = task.channel
     recipient = task.recipient
-    if not channel:
-        channel, recipient = get_user_channel_info(task.user_id, db)
+    if not channel or not recipient:
+        ch2, rc2 = get_user_channel_info(task.user_id, db)
+        channel = channel or ch2
+        recipient = recipient or rc2
 
     if channel and recipient:
         task_session_id = f"task_{task.id}"
