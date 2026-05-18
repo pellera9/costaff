@@ -34,6 +34,15 @@ logger = logging.getLogger("costaff-agent-engine")
 # tripping Telegram's edit rate limit (429 is handled benignly anyway).
 _TICK = float(os.getenv("COSTAFF_PANEL_TICK", "1.3"))
 
+# A section divider entry: ["\x00sec", text] — the sub-agent's
+# send_message_now narration, folded into the panel as a header line
+# with the following tool lines grouped under it.
+_SEC = "\x00sec"
+# Scrolling cap: keep the most recent N section blocks so a long task
+# never overflows Telegram's 4096-char single-message limit.
+_MAX_SECTIONS = int(os.getenv("COSTAFF_PANEL_MAX_SECTIONS", "6"))
+_MAX_CHARS = int(os.getenv("COSTAFF_PANEL_MAX_CHARS", "3500"))
+
 # Per-key in-process state. Key = the task session id ("task_<task_id>"),
 # which both the agent callback (from PROGRESS_CONTEXT) and the executor
 # finalize derive identically.
@@ -81,9 +90,40 @@ def _render(state: dict) -> str:
     lines = [f"[ {state['agent_disp']} ] {state['header']}"]
     dots = "." * (1 + state.get("phase", 0) % 3)
     for label, st in state["steps"]:
-        shown = f"Doing{dots}" if st == "Doing" else st
-        lines.append(f"{label} - {shown}")
+        if label == _SEC:
+            lines.append("")
+            lines.append(f"- {st}")
+        else:
+            shown = f"Doing{dots}" if st == "Doing" else st
+            lines.append(f"{label} - {shown}")
     return "\n".join(lines)
+
+
+def _ensure_state(key, recipient, session_id, agent) -> dict:
+    state = _PANELS.get(key)
+    if state is None:
+        state = {
+            "chat_id": _resolve_chat(recipient, session_id),
+            "message_id": None, "steps": [],
+            "agent_disp": _display_agent(agent),
+            "header": "Working", "last_text": None,
+            "phase": 0, "ticker": None,
+        }
+        _PANELS[key] = state
+    return state
+
+
+def _trim(state: dict):
+    """Scrolling cap: drop the oldest whole section blocks past
+    _MAX_SECTIONS, then a hard char-budget fallback so the rendered
+    panel always fits one Telegram message."""
+    steps = state["steps"]
+    sec = [i for i, e in enumerate(steps) if e[0] == _SEC]
+    while len(sec) > _MAX_SECTIONS:
+        del steps[:sec[1]]
+        sec = [i for i, e in enumerate(steps) if e[0] == _SEC]
+    while len(steps) > 1 and len(_render(state)) > _MAX_CHARS:
+        steps.pop(0)
 
 
 def _tg_send(token, chat_id, text):
@@ -132,7 +172,7 @@ async def _flush(key: str):
 
 
 def _has_doing(state) -> bool:
-    return any(s[1] == "Doing" for s in state["steps"])
+    return any(s[0] != _SEC and s[1] == "Doing" for s in state["steps"])
 
 
 async def _ticker(key: str):
@@ -177,21 +217,16 @@ async def panel_step(key, recipient, channel, session_id, agent,
         return
     lock = _LOCKS.setdefault(key, asyncio.Lock())
     async with lock:
-        state = _PANELS.get(key)
-        if state is None:
-            state = {
-                "chat_id": _resolve_chat(recipient, session_id),
-                "message_id": None, "steps": [],
-                "agent_disp": _display_agent(agent),
-                "header": "Working", "last_text": None,
-                "phase": 0, "ticker": None,
-            }
-            _PANELS[key] = state
+        state = _ensure_state(key, recipient, session_id, agent)
         label = (tool or "tool").strip()
-        # Match the most recent still-"Doing" line for this tool.
+        # Match the most recent still-"Doing" line for this tool
+        # (never a section divider).
         idx = None
         for i in range(len(state["steps"]) - 1, -1, -1):
-            if state["steps"][i][0] == label and state["steps"][i][1] == "Doing":
+            e = state["steps"][i]
+            if e[0] == _SEC:
+                continue
+            if e[0] == label and e[1] == "Doing":
                 idx = i
                 break
         if phase == "start":
@@ -203,7 +238,30 @@ async def panel_step(key, recipient, channel, session_id, agent,
                 state["steps"][idx][1] = new
             else:
                 state["steps"].append([label, new])
+        _trim(state)
         _ensure_ticker(key, state)
+        await _flush(key)
+
+
+async def panel_section(key, recipient, channel, session_id, agent, text):
+    """Fold a sub-agent's send_message_now narration into the panel as a
+    section divider; subsequent tool lines group under it. Telegram only."""
+    if (channel or "").lower() not in ("telegram", "tg"):
+        return
+    t = (text or "").strip()
+    if not key or not t:
+        return
+    lock = _LOCKS.setdefault(key, asyncio.Lock())
+    async with lock:
+        state = _ensure_state(key, recipient, session_id, agent)
+        # Skip a consecutive duplicate section (agent repeats itself).
+        for i in range(len(state["steps"]) - 1, -1, -1):
+            if state["steps"][i][0] == _SEC:
+                if state["steps"][i][1] == t:
+                    return
+                break
+        state["steps"].append([_SEC, t])
+        _trim(state)
         await _flush(key)
 
 

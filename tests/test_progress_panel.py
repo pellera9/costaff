@@ -114,3 +114,71 @@ async def test_report_step_tool_maps_status_to_panel():
     await report_step(session_id=K, step="cleanup", status="",
                       channel="telegram", user_id="u1")
     assert ["cleanup", "Doing"] in pp._PANELS[K]["steps"]
+
+
+def test_render_groups_tools_under_sections():
+    state = {
+        "agent_disp": "Coding Agent", "header": "Done", "phase": 0,
+        "steps": [
+            [pp._SEC, "[Coding] Started: write script"],
+            ["mkdir", "Done"],
+            ["write_file", "Done"],
+            [pp._SEC, "[Coding] Executing primes.py"],
+            ["run_python_file", "Done"],
+        ],
+    }
+    assert pp._render(state) == (
+        "[ Coding Agent ] Done\n"
+        "\n- [Coding] Started: write script\n"
+        "mkdir - Done\n"
+        "write_file - Done\n"
+        "\n- [Coding] Executing primes.py\n"
+        "run_python_file - Done"
+    )
+
+
+@pytest.mark.asyncio
+async def test_panel_section_appends_and_dedupes_consecutive():
+    K = "task_sec"
+    await pp.panel_section(K, "u1", "telegram", K, "coding_agent",
+                           "[Coding] step one")
+    await pp.panel_section(K, "u1", "telegram", K, "coding_agent",
+                           "[Coding] step one")  # consecutive dup → ignored
+    await pp.panel_step(K, "u1", "telegram", K, "coding_agent",
+                        "mkdir", "start", True)
+    await pp.panel_section(K, "u1", "telegram", K, "coding_agent",
+                           "[Coding] step two")
+    assert pp._PANELS[K]["steps"] == [
+        [pp._SEC, "[Coding] step one"],
+        ["mkdir", "Doing"],
+        [pp._SEC, "[Coding] step two"],
+    ]
+
+
+@pytest.mark.asyncio
+async def test_section_does_not_count_as_doing_for_ticker():
+    K = "task_secd"
+    await pp.panel_section(K, "u1", "telegram", K, "coding_agent", "narration")
+    assert pp._has_doing(pp._PANELS[K]) is False
+
+
+@pytest.mark.asyncio
+async def test_trim_scrolls_oldest_section_blocks(monkeypatch):
+    monkeypatch.setattr(pp, "_MAX_SECTIONS", 2)
+    K = "task_trim"
+    for n in range(4):
+        await pp.panel_section(K, "u1", "telegram", K, "coding_agent",
+                               f"sec {n}")
+        await pp.panel_step(K, "u1", "telegram", K, "coding_agent",
+                            f"tool{n}", "start", True)
+    secs = [e[1] for e in pp._PANELS[K]["steps"] if e[0] == pp._SEC]
+    assert secs == ["sec 2", "sec 3"]  # oldest two blocks scrolled off
+
+
+@pytest.mark.asyncio
+async def test_report_step_section_routes_to_panel_section():
+    from mcp_servers.tools.progress_tool import report_step
+    K = "task_rsec"
+    await report_step(session_id=K, step="[Coding] doing the thing",
+                      status="section", channel="telegram", user_id="u1")
+    assert pp._PANELS[K]["steps"] == [[pp._SEC, "[Coding] doing the thing"]]

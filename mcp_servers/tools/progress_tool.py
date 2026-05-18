@@ -22,6 +22,7 @@ logger = logging.getLogger("costaff-agent-engine")
 _START = {"start", "begin", "doing", "working", "in_progress", "running"}
 _OK = {"done", "ok", "complete", "completed", "success", "succeeded"}
 _FAIL = {"failed", "fail", "error", "errored"}
+_SECTION = {"section"}
 
 
 async def report_step(
@@ -48,8 +49,14 @@ async def report_step(
       user_id: PROGRESS_CONTEXT user_id (for chat resolution).
     """
     try:
-        from core.notifiers.progress_panel import panel_step
+        from core.notifiers.progress_panel import panel_step, panel_section
         s = (status or "").strip().lower()
+        if s in _SECTION:
+            await panel_section(
+                key=session_id, recipient=user_id, channel=channel,
+                session_id=session_id, agent=agent, text=step,
+            )
+            return f"section '{step[:40]}' shown"
         if s in _FAIL:
             phase, ok = "end", False
         elif s in _OK:
