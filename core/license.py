@@ -23,7 +23,7 @@ _PUBLIC_KEY_B64 = "L2TjTtry0aSRj9nEBXWZ7CwYRZHPn0teBVE5PgdWT2Y="
 # accept it. Enforced ONLY at activation (apply), never at runtime/load —
 # once activated the license runs until expires_at. A stale/leaked license
 # can therefore only be activated within this window of being issued.
-ACTIVATION_WINDOW_DAYS = 7
+ACTIVATION_WINDOW_DAYS = 30
 
 # --- OSS Plan limits ---
 OSS_LIMITS = {
