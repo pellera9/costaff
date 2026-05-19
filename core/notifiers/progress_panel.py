@@ -87,16 +87,44 @@ def _resolve_chat(recipient: str, session_id: str):
     return None
 
 
+def _resolve_task_title(key: str) -> str:
+    """The panel key is `task_<task_id>`; look up that task's title for
+    the structured header. Empty on any failure (fail-safe)."""
+    try:
+        if not key or not key.startswith("task_"):
+            return ""
+        tid = key[len("task_"):]
+        db = SessionLocal()
+        try:
+            t = (db.query(models.ProjectTask)
+                   .filter(models.ProjectTask.id == tid).first())
+            return (t.title or "").strip() if t else ""
+        finally:
+            db.close()
+    except Exception:
+        logger.exception("[panel] task title resolve failed")
+        return ""
+
+
 def _render(state: dict) -> str:
-    lines = [f"[ {state['agent_disp']} ] {state['header']}"]
-    dots = "." * (1 + state.get("phase", 0) % 3)
+    status = state["header"]
+    if status == "Working":
+        status = f"Working{'.' * (1 + state.get('phase', 0) % 3)}"
+    title = state.get("task_title") or "—"
+    lines = [
+        f"[ {state['agent_disp']} ]",
+        "-----",
+        f"1. task: {title}",
+        f"2. status: {status}",
+        "-----",
+        "",
+        "Working Process:",
+    ]
     for label, st in state["steps"]:
         if label == _SEC:
-            lines.append("")
             lines.append(f"- {st}")
         else:
-            shown = f"Doing{dots}" if st == "Doing" else st
-            lines.append(f"{label} - {shown}")
+            lines.append(f"  {label} - {st}")
     return "\n".join(lines)
 
 
@@ -122,6 +150,7 @@ def _ensure_state(key, recipient, session_id, agent) -> dict:
             "chat_id": _resolve_chat(recipient, session_id),
             "message_id": None, "steps": [],
             "agent_disp": _display_agent(agent),
+            "task_title": _resolve_task_title(key),
             "header": "Working", "last_text": None,
             "phase": 0, "ticker": None,
         }

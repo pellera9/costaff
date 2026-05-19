@@ -25,30 +25,47 @@ def _reset_and_mute(monkeypatch):
 
 def test_render_matches_spec_format():
     state = {
-        "agent_disp": "Business Analysis Agent", "header": "Working",
-        "phase": 0,
-        "steps": [["generate image", "Done"], ["generate report", "Doing"]],
+        "agent_disp": "Business Analysis Agent", "header": "Done",
+        "phase": 0, "task_title": "製作台北市居家醫療分布圖表並撰寫報告",
+        "steps": [[pp._SEC, "[Action] 分布統計"],
+                  ["generate_chart", "Done"],
+                  ["create_report_from_markdown", "Done"]],
     }
     assert pp._render(state) == (
-        "[ Business Analysis Agent ] Working\n"
-        "generate image - Done\n"
-        "generate report - Doing."
+        "[ Business Analysis Agent ]\n"
+        "-----\n"
+        "1. task: 製作台北市居家醫療分布圖表並撰寫報告\n"
+        "2. status: Done\n"
+        "-----\n"
+        "\n"
+        "Working Process:\n"
+        "- [Action] 分布統計\n"
+        "  generate_chart - Done\n"
+        "  create_report_from_markdown - Done"
     )
 
 
-def test_render_doing_dots_cycle():
+def test_render_status_breathing_dots_cycle():
     state = {
         "agent_disp": "Business Analysis Agent", "header": "Working",
-        "steps": [["write report", "Doing"]],
+        "task_title": "T", "steps": [["write_report", "Doing"]],
     }
     state["phase"] = 0
-    assert pp._render(state).endswith("write report - Doing.")
+    assert "2. status: Working." in pp._render(state)
     state["phase"] = 1
-    assert pp._render(state).endswith("write report - Doing..")
+    assert "2. status: Working.." in pp._render(state)
     state["phase"] = 2
-    assert pp._render(state).endswith("write report - Doing...")
+    assert "2. status: Working..." in pp._render(state)
     state["phase"] = 3  # wraps back to one dot
-    assert pp._render(state).endswith("write report - Doing.")
+    assert "2. status: Working." in pp._render(state)
+    # tool lines are static (the pulse lives on the status line)
+    assert "  write_report - Doing" in pp._render(state)
+
+
+def test_render_missing_title_falls_back():
+    state = {"agent_disp": "Coding Agent", "header": "Working",
+             "phase": 0, "steps": []}
+    assert "1. task: —" in pp._render(state)
 
 
 @pytest.mark.asyncio
@@ -79,8 +96,9 @@ async def test_failed_tool_marks_failed_and_finalize_failed():
     st = pp._PANELS[K]
     assert st["steps"] == [["export_pdf", "Failed"]]
     txt = pp._render(st)
-    assert txt.startswith("[ Business Analysis Agent ] Working")
-    assert "export_pdf - Failed" in txt
+    assert txt.startswith("[ Business Analysis Agent ]\n-----")
+    assert "2. status: Working" in txt
+    assert "  export_pdf - Failed" in txt
     await pp.panel_finalize(K, "failed")
     assert K not in pp._PANELS
 
@@ -119,21 +137,28 @@ async def test_report_step_tool_maps_status_to_panel():
 def test_render_groups_tools_under_sections():
     state = {
         "agent_disp": "Coding Agent", "header": "Done", "phase": 0,
+        "task_title": "write and run a prime script",
         "steps": [
-            [pp._SEC, "[Coding] Started: write script"],
+            [pp._SEC, "[Action] write script"],
             ["mkdir", "Done"],
             ["write_file", "Done"],
-            [pp._SEC, "[Coding] Executing primes.py"],
+            [pp._SEC, "[Action] Executing primes.py"],
             ["run_python_file", "Done"],
         ],
     }
     assert pp._render(state) == (
-        "[ Coding Agent ] Done\n"
-        "\n- [Coding] Started: write script\n"
-        "mkdir - Done\n"
-        "write_file - Done\n"
-        "\n- [Coding] Executing primes.py\n"
-        "run_python_file - Done"
+        "[ Coding Agent ]\n"
+        "-----\n"
+        "1. task: write and run a prime script\n"
+        "2. status: Done\n"
+        "-----\n"
+        "\n"
+        "Working Process:\n"
+        "- [Action] write script\n"
+        "  mkdir - Done\n"
+        "  write_file - Done\n"
+        "- [Action] Executing primes.py\n"
+        "  run_python_file - Done"
     )
 
 
