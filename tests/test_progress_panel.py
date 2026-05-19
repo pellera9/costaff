@@ -45,6 +45,26 @@ def test_render_matches_spec_format():
     )
 
 
+def test_render_caps_three_tools_and_no_collapse_but_keeps_failcount():
+    state = {
+        "agent_disp": "Coding Agent", "header": "Done", "phase": 0,
+        "task_title": "T",
+        "steps": [
+            [pp._SEC, "[Action] agg"],
+            ["write_file", "Done"], ["run_python_file", "Failed"],
+            ["head", "Done"], ["patch_file", "Done"], ["patch_file", "Done"],
+            ["read_file", "Done"], ["run_python_file", "Done"],
+        ],
+    }
+    out = pp._render(state)
+    # only the most recent 3 tool lines of the block
+    assert "  patch_file - Done\n  read_file - Done\n  run_python_file - Done" in out
+    assert "write_file - Done" not in out         # older, dropped
+    assert "×" not in out                          # no ×N collapse
+    # failure count counts ALL failed steps even if not displayed
+    assert "2. status: Done · 1 failed (recovered)" in out
+
+
 def test_render_status_breathing_dots_cycle():
     state = {
         "agent_disp": "Business Analysis Agent", "header": "Working",
@@ -157,6 +177,7 @@ def test_render_groups_tools_under_sections():
         "- [Action] write script\n"
         "  mkdir - Done\n"
         "  write_file - Done\n"
+        "\n"
         "- [Action] Executing primes.py\n"
         "  run_python_file - Done"
     )
@@ -220,30 +241,32 @@ async def test_report_step_section_routes_to_panel_section():
     assert pp._PANELS[K]["steps"] == [[pp._SEC, "[Action] doing the thing"]]
 
 
-def test_render_collapses_consecutive_dups_and_counts_failures():
+def test_render_blank_line_between_action_blocks():
     state = {
-        "agent_disp": "Coding Agent", "header": "Done", "phase": 0,
+        "agent_disp": "Coding Agent", "header": "Working", "phase": 0,
         "task_title": "T",
         "steps": [
-            [pp._SEC, "[Action] agg"],
-            ["patch_file", "Done"], ["patch_file", "Done"],
-            ["patch_file", "Done"], ["patch_file", "Done"],
-            ["run_python_file", "Failed"], ["run_python_file", "Failed"],
-            ["run_python_file", "Done"],
+            ["lead_tool", "Done"],
+            [pp._SEC, "[Action] one"], ["a", "Done"],
+            [pp._SEC, "[Action] two"], ["b", "Done"],
         ],
     }
     out = pp._render(state)
-    assert "  patch_file - Done ×4" in out
-    assert "  run_python_file - Failed ×2" in out
-    assert "  run_python_file - Done" in out
-    assert "run_python_file - Done ×" not in out  # run==1, no suffix
-    assert "2. status: Done · 2 failed (recovered)" in out
+    # leading tools directly under Working Process: (no header, no blank);
+    # a blank line precedes every subsequent Action block.
+    assert "Working Process:\n  lead_tool - Done\n\n- [Action] one" in out
+    assert "  a - Done\n\n- [Action] two" in out
 
 
 def test_render_status_failed_with_count():
     state = {"agent_disp": "BA", "header": "Failed", "phase": 0,
              "task_title": "T", "steps": [["export_pdf", "Failed"]]}
     assert "2. status: Failed · 1 failed" in pp._render(state)
+    # no-failure terminal stays plain
+    s2 = {"agent_disp": "BA", "header": "Done", "phase": 0,
+          "task_title": "T", "steps": [["x", "Done"]]}
+    assert "2. status: Done" in pp._render(s2)
+    assert "·" not in pp._render(s2)
 
 
 def test_mono_wraps_and_escapes():

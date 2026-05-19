@@ -107,6 +107,10 @@ def _resolve_task_title(key: str) -> str:
         return ""
 
 
+# At most this many tool lines shown per Action block (most recent).
+_MAX_TOOLS_PER_SECTION = int(os.getenv("COSTAFF_PANEL_MAX_TOOLS", "3"))
+
+
 def _render(state: dict) -> str:
     steps = state["steps"]
     nfail = sum(1 for e in steps if e[0] != _SEC and e[1] == "Failed")
@@ -127,23 +131,27 @@ def _render(state: dict) -> str:
         "",
         "Working Process:",
     ]
-    # Collapse consecutive identical tool lines into one "× N" line
-    # (purely visual — state stays full so step matching is unaffected).
+    # Group into [leading tool-run] then ([section] tool-run)*. Each block
+    # shows only its most recent _MAX_TOOLS_PER_SECTION tool lines; a blank
+    # line separates blocks.
     i = 0
     n = len(steps)
+    first = True
     while i < n:
-        label, st = steps[i]
-        if label == _SEC:
-            lines.append(f"- {st}")
+        if steps[i][0] == _SEC:
+            if not first:
+                lines.append("")
+            lines.append(f"- {steps[i][1]}")
+            first = False
             i += 1
-            continue
-        j = i + 1
-        while j < n and steps[j][0] == label and steps[j][1] == st:
-            j += 1
-        run = j - i
-        suffix = f" ×{run}" if run > 1 else ""
-        lines.append(f"  {label} - {st}{suffix}")
-        i = j
+        run = []
+        while i < n and steps[i][0] != _SEC:
+            run.append(steps[i])
+            i += 1
+        if run:
+            for label, st in run[-_MAX_TOOLS_PER_SECTION:]:
+                lines.append(f"  {label} - {st}")
+            first = False
     return "\n".join(lines)
 
 
