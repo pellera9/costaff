@@ -137,6 +137,17 @@ def test_render_groups_tools_under_sections():
     )
 
 
+def test_normalize_section_uniform_action_prefix():
+    f = pp._normalize_section
+    assert f("[BA] Started: 台北市居家醫療分布分析報告") == "[Action] 台北市居家醫療分布分析報告"
+    assert f("[Twinkle] Searching for X dataset.") == "[Action] Searching for X dataset."
+    assert f("[Coding] Done — primes/report.pdf") == "[Action] primes/report.pdf"
+    assert f("[Coding] Failed: pip timed out") == "[Action] pip timed out"
+    assert f("Failed: boom") == "[Action] boom"
+    assert f("plain narration") == "[Action] plain narration"
+    assert f("[BA]") == "[Action]"
+
+
 @pytest.mark.asyncio
 async def test_panel_section_appends_and_dedupes_consecutive():
     K = "task_sec"
@@ -149,9 +160,9 @@ async def test_panel_section_appends_and_dedupes_consecutive():
     await pp.panel_section(K, "u1", "telegram", K, "coding_agent",
                            "[Coding] step two")
     assert pp._PANELS[K]["steps"] == [
-        [pp._SEC, "[Coding] step one"],
+        [pp._SEC, "[Action] step one"],
         ["mkdir", "Doing"],
-        [pp._SEC, "[Coding] step two"],
+        [pp._SEC, "[Action] step two"],
     ]
 
 
@@ -172,7 +183,7 @@ async def test_trim_scrolls_oldest_section_blocks(monkeypatch):
         await pp.panel_step(K, "u1", "telegram", K, "coding_agent",
                             f"tool{n}", "start", True)
     secs = [e[1] for e in pp._PANELS[K]["steps"] if e[0] == pp._SEC]
-    assert secs == ["sec 2", "sec 3"]  # oldest two blocks scrolled off
+    assert secs == ["[Action] sec 2", "[Action] sec 3"]  # oldest scrolled off
 
 
 @pytest.mark.asyncio
@@ -181,4 +192,4 @@ async def test_report_step_section_routes_to_panel_section():
     K = "task_rsec"
     await report_step(session_id=K, step="[Coding] doing the thing",
                       status="section", channel="telegram", user_id="u1")
-    assert pp._PANELS[K]["steps"] == [[pp._SEC, "[Coding] doing the thing"]]
+    assert pp._PANELS[K]["steps"] == [[pp._SEC, "[Action] doing the thing"]]

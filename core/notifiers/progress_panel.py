@@ -22,6 +22,7 @@ try/except too — this is the second belt).
 import asyncio
 import logging
 import os
+import re
 
 import httpx
 
@@ -97,6 +98,21 @@ def _render(state: dict) -> str:
             shown = f"Doing{dots}" if st == "Doing" else st
             lines.append(f"{label} - {shown}")
     return "\n".join(lines)
+
+
+# Section text is normalized to a uniform "[Action] <substance>":
+# strip the agent's own tag ([BA]/[Coding]/[Twinkle]…) and any leading
+# status verb (Started:/Done —/Failed:/Selected) so every agent's
+# narration reads identically in the panel.
+_AGENT_TAG_RE = re.compile(r"^\s*\[[^\]]*\]\s*")
+_VERB_RE = re.compile(r"^(started|done|failed|selected)\b\s*[:：—\-]*\s*", re.I)
+
+
+def _normalize_section(text: str) -> str:
+    t = (text or "").strip()
+    t = _AGENT_TAG_RE.sub("", t, count=1)
+    t = _VERB_RE.sub("", t, count=1).strip()
+    return f"[Action] {t}" if t else "[Action]"
 
 
 def _ensure_state(key, recipient, session_id, agent) -> dict:
@@ -248,8 +264,8 @@ async def panel_section(key, recipient, channel, session_id, agent, text):
     section divider; subsequent tool lines group under it. Telegram only."""
     if (channel or "").lower() not in ("telegram", "tg"):
         return
-    t = (text or "").strip()
-    if not key or not t:
+    t = _normalize_section(text)
+    if not key or not (text or "").strip():
         return
     lock = _LOCKS.setdefault(key, asyncio.Lock())
     async with lock:
