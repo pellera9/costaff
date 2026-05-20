@@ -1,4 +1,5 @@
-google-adk[a2a]
+google-adk[a2a,extensions]==2.0.0
+google-cloud-storage
 litellm
 python-dotenv
 httpx
