@@ -3,6 +3,8 @@ import logging
 import os
 from dotenv import load_dotenv
 
+from core.notifiers.formatters import md_to_plain
+
 load_dotenv()
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,11 @@ async def send_line_notification(user_id: str, message: str):
     if not token:
         logger.error("LINE_CHANNEL_ACCESS_TOKEN not found")
         return
+
+    # LINE text messages render no Markdown — strip every sigil so the
+    # user does NOT see raw '##' / '**' / backticks. See
+    # core/notifiers/formatters.py for the conversion table.
+    message = md_to_plain(message)
 
     url = "https://api.line.me/v2/bot/message/push"
     headers = {

@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 from core import models
 from core.database import SessionLocal
+from core.notifiers.formatters import md_to_discord
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -35,11 +36,16 @@ def send_discord_notification(recipient_id: str, message: str, session_id: str =
     finally:
         db.close()
 
+    # Strip the [RESULT_START] / [RESULT_END] envelope; Discord renders
+    # Markdown (headings, bold, code, lists) natively, so nothing else
+    # needs converting. See core/notifiers/formatters.py for the rationale.
+    message = md_to_discord(message)
+
     headers = {
         "Authorization": f"Bot {token}",
         "Content-Type": "application/json"
     }
-    
+
     with httpx.Client(timeout=10.0) as client:
         try:
             # Try sending to the resolved channel/destination
