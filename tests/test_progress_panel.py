@@ -131,6 +131,30 @@ async def test_non_telegram_channel_is_noop():
 
 
 @pytest.mark.asyncio
+async def test_telegram_prefixed_channel_renders():
+    # The Manager LLM has been observed to dispatch tasks with
+    # channel="telegram_costaff_bot" (a per-bot suffixed variant).
+    # The panel must still render — otherwise live progress is silently
+    # dropped. Locks the helper introduced 2026-05-22 (commit fixing
+    # Iris EDA run where coding/BA panels never appeared).
+    K = "telegram_variant"
+    for ch in ("telegram_costaff_bot", "tg_main", "TELEGRAM", "Tg_X"):
+        pp._PANELS.pop(K, None)
+        pp._LOCKS.pop(K, None)
+        await pp.panel_step(K, "u1", ch, K, "coding_agent",
+                            "run", "start", True)
+        assert K in pp._PANELS, f"panel must render for channel={ch!r}"
+
+    # Sanity: anything that's not telegram-family is still a no-op.
+    pp._PANELS.pop(K, None)
+    pp._LOCKS.pop(K, None)
+    for ch in ("", None, "telegrammy", "tgrand", "tgmail"):
+        await pp.panel_step(K, "u1", ch, K, "coding_agent",
+                            "run", "start", True)
+        assert K not in pp._PANELS, f"panel must skip channel={ch!r}"
+
+
+@pytest.mark.asyncio
 async def test_finalize_unknown_key_safe():
     await pp.panel_finalize("never_seen", "done")  # must not raise
 

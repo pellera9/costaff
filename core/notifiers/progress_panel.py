@@ -58,6 +58,16 @@ _AGENT_DISPLAY = {
 }
 
 
+def _is_telegram_channel(channel) -> bool:
+    """True for the canonical 'telegram' / 'tg' and any prefixed variant
+    such as 'telegram_costaff_bot' or 'tg_main'. The Manager LLM has been
+    observed to set channel='telegram_<bot_suffix>' in dispatch_plan calls
+    (2026-05-22, Iris EDA run), so the panel must accept the whole
+    telegram-family rather than only the exact short forms."""
+    ch = (channel or "").lower()
+    return ch in ("telegram", "tg") or ch.startswith("telegram_") or ch.startswith("tg_")
+
+
 def _display_agent(agent: str) -> str:
     a = agent or ""
     return _AGENT_DISPLAY.get(a, (a or "Agent").replace("_", " ").title())
@@ -291,7 +301,7 @@ async def panel_step(key, recipient, channel, session_id, agent,
                      tool, phase, ok):
     """Record a tool step. phase='start' → '<tool> ... Doing';
     phase='end' → 'Done' (ok) / 'Failed'. Telegram only (MVP)."""
-    if (channel or "").lower() not in ("telegram", "tg"):
+    if not _is_telegram_channel(channel):
         return
     if not key:
         return
@@ -326,7 +336,7 @@ async def panel_step(key, recipient, channel, session_id, agent,
 async def panel_section(key, recipient, channel, session_id, agent, text):
     """Fold a sub-agent's send_message_now narration into the panel as a
     section divider; subsequent tool lines group under it. Telegram only."""
-    if (channel or "").lower() not in ("telegram", "tg"):
+    if not _is_telegram_channel(channel):
         return
     t = _normalize_section(text)
     if not key or not (text or "").strip():
