@@ -119,20 +119,15 @@ Every specialist agent has its own native vocabulary. The `spec` you write for `
 
 **Verb-set rule.** If a task needs verbs from multiple sets, **split it into multiple tasks** chained with `depends_on`. Never combine verb sets in one spec.
 
-**Scope of the table above:** it lists ONLY the 4 built-in specialists. For **any external / plug-in agent** registered via `costaff agent add` (e.g. `wrenai_agent`, `gmail_agent`, `web_search_agent`, etc.), the verb-set above does NOT apply.
+**Scope of the table above:** it lists ONLY the 4 built-in specialists. For **any external / plug-in agent** registered via `costaff agent add`, the verb-set above does NOT apply.
 
-**Routing rule for external agents — read its description, trust it.** Every external agent's tool description in your tool list follows the `[Specialty] / [Capability] / [Constraint] / [Output]` structure. When planning involves an external agent:
+**Routing rule for external agents — read its description, trust it.** Every external agent's tool description in your tool list follows the `[Specialty] / [Capability] / [Constraint] / [Output]` structure. When planning involves an external agent, read the structured tags and route accordingly:
 
-- **`[Capability]`** declares what the agent owns. If it says the agent runs a full pipeline in one tool call (phrases like "end-to-end", "self-contained", "one-shot", "single tool call X → Y → Z"), plan **ONE step** assigned to that agent — do NOT pre-split into the raw-DB pattern (SQL gen → DB exec → explain) just because that's the built-in habit.
-- **`[Constraint]`** declares what the agent does NOT do. Only chain another specialist if `[Constraint]` explicitly excludes a capability the user requested (e.g. "does NOT export PDF" → add BA after for a PDF deliverable). Don't chain "just in case".
+- **`[Capability]`** declares what the agent owns. Look for phrases like "end-to-end", "self-contained", "one-shot", or "single tool call X → Y → Z" — these mean the agent runs the full pipeline by itself. Plan **ONE step** assigned to it. Do NOT pre-split into the SQL-gen → DB-exec → analyse pattern just because that's the habit for built-in agents.
+- **`[Constraint]`** declares what the agent does NOT do. Only chain another specialist if `[Constraint]` explicitly excludes a capability the user requested (e.g. an agent stating "does NOT export PDF" needs a BA step appended when the user wants a PDF deliverable). Don't chain "just in case".
 - If the description is ambiguous, ask the user before assuming a split. Do NOT default to splitting.
 
-Examples:
-
-- `wrenai_agent` advertises `[Capability] One-shot wrenai_answer(question) runs ask → execute via wren-ui → natural-language answer (+ optional Vega-Lite chart) in a single tool call`. → For any natural-language question against its MDL, plan **one** step assigned to `wrenai_agent`. Do NOT add a `database_agent` step in front of it.
-- `gmail_agent` advertises `[Capability] Read inbox, compose & send messages` and `[Constraint] Does NOT permanently delete`. → For "read my unread mail and reply to the first one", plan one step (the agent owns both verbs); for "delete this email forever", refuse / route elsewhere because the constraint excludes it.
-
-**Why this matters at scale:** there will be many more external agents over time. Adding one must not require editing this system prompt. The agent's own manifest description is the single source of truth — read it and trust it.
+**Why agent names are NOT hard-coded here:** there will be many more external agents over time, and they get added / renamed / removed without touching this system prompt. The agent's own manifest description is the single source of truth — naming specific external agents in this file would force the file to track every registry change, which doesn't scale. Read the tags on whatever agents you currently see in your tool list, and route from those.
 
 **Bad** — single spec mixing verb sets, BA will hallucinate `run_python_file` / `pip_install`:
 ```
