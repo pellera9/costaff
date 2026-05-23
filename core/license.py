@@ -33,8 +33,11 @@ OSS_LIMITS = {
 }
 
 # --- Upgrade pitch (shown when a limit is hit) ---
-PRICING_URL = "https://costaffs.app/pricing"
-CONTACT_EMAIL = "[email protected]"
+# Single source of truth: drive all upgrade traffic to costaffs.app.
+# The landing page routes to DIY License pricing, FDE Engagement, and
+# Premium Agents accordingly — keeps contact channels flexible without
+# embedding them in deployed binaries.
+HOMEPAGE_URL = "https://costaffs.app"
 
 _TIER_SUMMARY = {
     "max_agents": "Starter: 10  /  Pro: 25  /  Enterprise: unlimited",
@@ -51,8 +54,7 @@ def _upgrade_pitch(resource: str) -> str:
     return (
         f"\n\nUpgrade options ({resource.replace('max_', '')}):\n"
         f"  {_TIER_SUMMARY.get(resource, '')}\n"
-        f"  → DIY License pricing: {PRICING_URL}\n"
-        f"  → FDE / Premium Agents: {CONTACT_EMAIL}"
+        f"  → {HOMEPAGE_URL}"
     )
 
 
@@ -352,8 +354,7 @@ class LicenseManager:
             f"The system reverted to the free OSS plan, but current usage exceeds OSS limits: "
             f"{', '.join(over)}.\n\n"
             f"To continue:\n"
-            f"  → Renew or upgrade your license: {PRICING_URL}\n"
-            f"  → Contact us: {CONTACT_EMAIL}\n"
+            f"  → Renew or upgrade your license: {HOMEPAGE_URL}\n"
             f"  → Or reduce usage to OSS limits "
             f"(agents: {OSS_LIMITS['max_agents']}, "
             f"users: {OSS_LIMITS['max_users']}, "
