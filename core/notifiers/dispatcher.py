@@ -17,7 +17,7 @@ from core.notifiers.telegram import (
     send_telegram_document,
     send_telegram_notification,
 )
-from core.notifiers.webchat import send_webchat_notification
+from core.notifiers.webchat import send_webchat_file, send_webchat_notification
 
 
 async def dispatch_notification(
@@ -64,5 +64,10 @@ async def dispatch_notification(
             # session_id from session_id arg + hashed_id fallback). Pass the
             # original recipient so the WebChat side can look up identity_maps.
             send_webchat_notification(recipient, message, session_id=session_id)
+            # Mirror the Telegram behaviour — extract /app/data/... paths
+            # from the message body and ship each as an agent_file frame so
+            # the user can actually download what the agent produced.
+            for fp in extract_file_paths(message):
+                send_webchat_file(recipient, fp, session_id=session_id)
     finally:
         db.close()

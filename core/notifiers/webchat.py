@@ -64,36 +64,12 @@ def _resolve_session_id(recipient: str, session_id: str | None) -> str | None:
     return None
 
 
-def send_webchat_notification(
-    recipient: str,
-    message: str,
-    session_id: str | None = None,
-    agent: str | None = None,
-    task_id: str | None = None,
-    step: str | None = None,
-    status: str | None = None,
-) -> bool:
-    """Push a message to the WebChat Enterprise channel. Returns True on
-    HTTP 2xx, False otherwise. Never raises."""
+def _post(payload: dict) -> bool:
+    """Shared HTTP POST to /api/internal/push. Returns True on 2xx."""
     secret = _shared_secret()
     if not secret:
         logger.warning("[webchat] WEBCHAT_ENT_INTERNAL_SECRET not set; skipping push")
         return False
-
-    sid = _resolve_session_id(recipient, session_id)
-    if not sid and not recipient:
-        logger.warning("[webchat] no session_id or recipient — dropping")
-        return False
-
-    payload = {
-        "session_id": sid,
-        "hashed_id": recipient if not sid else None,
-        "text": message,
-        "agent": agent,
-        "task_id": task_id,
-        "step": step,
-        "status": status,
-    }
     headers = {"X-Internal-Token": secret, "Content-Type": "application/json"}
     try:
         with httpx.Client(timeout=10.0) as client:
@@ -108,3 +84,51 @@ def send_webchat_notification(
     except Exception as e:
         logger.warning("[webchat] push failed: %s", e)
         return False
+
+
+def send_webchat_notification(
+    recipient: str,
+    message: str,
+    session_id: str | None = None,
+    agent: str | None = None,
+    task_id: str | None = None,
+    step: str | None = None,
+    status: str | None = None,
+) -> bool:
+    """Push a text message to the WebChat Enterprise channel."""
+    sid = _resolve_session_id(recipient, session_id)
+    if not sid and not recipient:
+        logger.warning("[webchat] no session_id or recipient — dropping")
+        return False
+    return _post({
+        "session_id": sid,
+        "hashed_id": recipient if not sid else None,
+        "text": message,
+        "agent": agent,
+        "task_id": task_id,
+        "step": step,
+        "status": status,
+    })
+
+
+def send_webchat_file(
+    recipient: str,
+    file_path: str,
+    session_id: str | None = None,
+    agent: str | None = None,
+    task_id: str | None = None,
+) -> bool:
+    """Deliver an /app/data/... file to the WebChat user. The WebChat side
+    issues a download token bound to this user and pushes an agent_file
+    frame the chat renders as a download card."""
+    sid = _resolve_session_id(recipient, session_id)
+    if not sid and not recipient:
+        return False
+    return _post({
+        "session_id": sid,
+        "hashed_id": recipient if not sid else None,
+        "text": "",
+        "file_path": file_path,
+        "agent": agent,
+        "task_id": task_id,
+    })
