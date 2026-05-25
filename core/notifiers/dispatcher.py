@@ -17,6 +17,7 @@ from core.notifiers.telegram import (
     send_telegram_document,
     send_telegram_notification,
 )
+from core.notifiers.webchat import send_webchat_notification
 
 
 async def dispatch_notification(
@@ -28,7 +29,8 @@ async def dispatch_notification(
     """Resolve identity mapping and dispatch notification to the correct channel.
 
     - channel is a free-form string; routing matches case-insensitive substrings:
-      tg/telegram → Telegram, dc/discord → Discord, line → LINE.
+      tg/telegram → Telegram, dc/discord → Discord, line → LINE,
+      webchat/webent/web_ → WebChat Enterprise (HTTP push to its internal endpoint).
     - recipient may be a hashed_id, a session_id, or already a real platform
       id; the IdentityMap is consulted to translate the first two.
     """
@@ -56,5 +58,11 @@ async def dispatch_notification(
             send_discord_notification(target_id, message, session_id=session_id)
         elif "line" in chan:
             await send_line_notification(target_id, message)
+        elif "webchat" in chan or "webent" in chan or "web_" in chan:
+            # `recipient` here is the hashed_id (post-IdentityMap translation
+            # above maps recipients to real_id, but WebChat resolves its own
+            # session_id from session_id arg + hashed_id fallback). Pass the
+            # original recipient so the WebChat side can look up identity_maps.
+            send_webchat_notification(recipient, message, session_id=session_id)
     finally:
         db.close()

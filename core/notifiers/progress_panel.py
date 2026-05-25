@@ -68,6 +68,14 @@ def _is_telegram_channel(channel) -> bool:
     return ch in ("telegram", "tg") or ch.startswith("telegram_") or ch.startswith("tg_")
 
 
+def _is_webchat_channel(channel) -> bool:
+    """Mirror of _is_telegram_channel for WebChat / WebChat Enterprise.
+    Phase A doesn't do edit-in-place; each step is fan-out as a separate
+    /api/internal/push call so the chat surface shows them inline."""
+    ch = (channel or "").lower()
+    return "webchat" in ch or "webent" in ch or ch.startswith("web_")
+
+
 def _display_agent(agent: str) -> str:
     a = agent or ""
     return _AGENT_DISPLAY.get(a, (a or "Agent").replace("_", " ").title())
@@ -300,7 +308,23 @@ def _ensure_ticker(key: str, state: dict):
 async def panel_step(key, recipient, channel, session_id, agent,
                      tool, phase, ok):
     """Record a tool step. phase='start' → '<tool> ... Doing';
-    phase='end' → 'Done' (ok) / 'Failed'. Telegram only (MVP)."""
+    phase='end' → 'Done' (ok) / 'Failed'.
+
+    Telegram: edit-in-place panel (rich UX).
+    WebChat: fan out each transition as a separate /api/internal/push
+    message (Phase A — no edit-in-place yet)."""
+    if _is_webchat_channel(channel):
+        try:
+            from core.notifiers.webchat import send_webchat_notification
+            status = ("done" if ok else "failed") if phase == "end" else "doing"
+            send_webchat_notification(
+                recipient, "",
+                session_id=session_id, agent=agent,
+                task_id=key, step=tool, status=status,
+            )
+        except Exception:
+            logger.exception("[webchat-panel] step push failed")
+        return
     if not _is_telegram_channel(channel):
         return
     if not key:
@@ -335,7 +359,22 @@ async def panel_step(key, recipient, channel, session_id, agent,
 
 async def panel_section(key, recipient, channel, session_id, agent, text):
     """Fold a sub-agent's send_message_now narration into the panel as a
-    section divider; subsequent tool lines group under it. Telegram only."""
+    section divider; subsequent tool lines group under it.
+
+    Telegram: panel section divider in the edit-in-place message.
+    WebChat: forwarded as a one-off message (the section text IS the
+    sub-agent's narration the user wants to read)."""
+    if _is_webchat_channel(channel):
+        try:
+            from core.notifiers.webchat import send_webchat_notification
+            send_webchat_notification(
+                recipient, text or "",
+                session_id=session_id, agent=agent,
+                task_id=key, step=None, status="section",
+            )
+        except Exception:
+            logger.exception("[webchat-panel] section push failed")
+        return
     if not _is_telegram_channel(channel):
         return
     t = _normalize_section(text)
