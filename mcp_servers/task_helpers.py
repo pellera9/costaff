@@ -139,6 +139,15 @@ def build_task_spec(task, db) -> str:
         channel = channel or ch2
         recipient = recipient or rc2
 
+    # Normalise channel against the user's IdentityMap. Manager LLM has
+    # been observed (2026-05-26) hardcoding channel='telegram' for users
+    # whose session_id is webent_* — that routes progress to the wrong
+    # notifier and the user sees nothing. The IdentityMap is the only
+    # ground truth for which surface the user is currently on.
+    actual_channel, _ = get_user_channel_info(task.user_id, db)
+    if actual_channel and channel and actual_channel != channel:
+        channel = actual_channel
+
     if channel and recipient:
         task_session_id = f"task_{task.id}"
         lines.append(

@@ -140,6 +140,22 @@ async def execute_project_task(task_id: str):
             channel = channel or ch2
             recipient = recipient or rc2
 
+        # Normalise channel against the user's actual session prefix. The
+        # Manager LLM is unreliable here — it sometimes hardcodes 'telegram'
+        # in create_project_task even when the user is on WebChat (observed
+        # 2026-05-26, tasks 2a149d6e / 3809fd21). Override: if the user's
+        # most recent identity_maps row maps to a channel that disagrees
+        # with task.channel, trust the IdentityMap. The IdentityMap is the
+        # only ground truth for which surface the user is actually on.
+        actual_channel, _ = get_user_channel_info(task.user_id, db)
+        if actual_channel and channel and actual_channel != channel:
+            logger.warning(
+                f"ProjectTask {task_id}: overriding task.channel={channel!r} "
+                f"with session-derived channel={actual_channel!r} "
+                f"(Manager LLM mis-set the channel)"
+            )
+            channel = actual_channel
+
         # License gate (decisions A+B+C): if the license is degraded to OSS
         # and usage exceeds OSS limits, refuse to execute. Fail the task with
         # a clear message and notify the user instead of silently stalling.
