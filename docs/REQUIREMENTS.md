@@ -1,9 +1,9 @@
 # System Requirements
 
 > **Status**: Draft. Numbers below are based on observed running
-> footprints on the developer's Mac Mini (the canonical reference
-> deployment) plus the contents of the docker images. They have **not**
-> yet been validated by fresh-install testing on clean VMs — see
+> footprints from internal reference deployments plus the contents of
+> the docker images. They have **not** yet been validated by
+> fresh-install testing on clean VMs — see
 > `docs/DEPLOYMENT_STRATEGY.md` §5 for the open ship-ready items.
 >
 > Once those validations are done, we'll fill in real numbers and

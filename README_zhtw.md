@@ -285,4 +285,11 @@ costaff dashboard
 
 本專案採用 **AGPL v3 + 商業授權**雙授權模式。詳見 `LICENSE`。
 
-如需商業授權洽詢，請聯絡：simonliuyuwei@gmail.com
+商業授權洽詢請至：https://costaffs.app
+
+## 支援管道
+
+- 文件：[`docs/`](./docs) 目錄
+- Issues：https://github.com/costaff-ai/costaff/issues
+- Discussions：https://github.com/costaff-ai/costaff/discussions
+- 安全性回報：見 [`SECURITY.md`](./SECURITY.md)

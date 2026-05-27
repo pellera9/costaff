@@ -430,7 +430,7 @@ Dual-licensed under **AGPL v3** + **commercial license**.
 
 See [`LICENSE`](./LICENSE) for the full text.
 
-For commercial licensing inquiries: **simonliuyuwei@gmail.com**
+For commercial licensing inquiries: **https://costaffs.app**
 
 ---
 
@@ -438,4 +438,5 @@ For commercial licensing inquiries: **simonliuyuwei@gmail.com**
 
 - **Documentation**: see the [`docs/`](./docs) folder
 - **Issues**: [github.com/costaff-ai/costaff/issues](https://github.com/costaff-ai/costaff/issues)
-- **Email**: simonliuyuwei@gmail.com
+- **Discussions**: [github.com/costaff-ai/costaff/discussions](https://github.com/costaff-ai/costaff/discussions)
+- **Security**: see [`SECURITY.md`](./SECURITY.md) for private disclosure

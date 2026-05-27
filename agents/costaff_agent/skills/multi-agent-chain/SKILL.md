@@ -139,7 +139,7 @@ Classify the request before planning. **An iteration is anything that touches a 
             （任務編號：f12d8d10）。完成後我會立即通知您。"
             [no dispatch_task call — user waits forever for work that never starts]
    ```
-   Reproduced 2026-05-15 on costaff-prod-test: manager promised an update to a *done* task, never dispatched, user spent minutes asking "有在做事嗎？". The DB had zero new rows.
+   Observed regression 2026-05-15: manager promised an update to a *done* task, never dispatched, user spent minutes asking "有在做事嗎？". The DB had zero new rows.
 
    ✅ **CORRECT — dispatch first, then reply:**
    ```

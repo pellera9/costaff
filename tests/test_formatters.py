@@ -8,11 +8,10 @@ Three converters, one rule each:
 - md_to_plain:         strips ALL Markdown for transports that render none
                        (LINE text messages)
 
-Locks the behaviour added 2026-05-22 after the sin/cos EDA run on
-costaff-prod-test, where specialist completion comments produced by
-build_task_spec ('## task complete' / '### acceptance' / '- bullet')
-arrived in Telegram unconverted because parse_mode=HTML does NOT parse
-Markdown.
+Locks the behaviour added 2026-05-22 after specialist completion
+comments produced by build_task_spec ('## task complete' /
+'### acceptance' / '- bullet') were observed arriving in Telegram
+unconverted because parse_mode=HTML does NOT parse Markdown.
 """
 from core.notifiers.formatters import (
     md_to_discord,

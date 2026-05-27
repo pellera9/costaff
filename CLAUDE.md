@@ -85,7 +85,7 @@ costaff/
 
 ### 2.1 通用層次
 - **CLI → services/**：CLI 命令只負責參數解析與輸出，業務邏輯在 `services/` 層；`services/runtime/` 是 docker 抽象，CLI 不該直接 `subprocess.run(["docker", ...])`。
-- **`config.json` 由 `services/config.py` 讀寫**，gitignored、Mac Mini 上的 `.env` 與 `config.json` 不會被 `git reset` 覆蓋。
+- **`config.json` 由 `services/config.py` 讀寫**，gitignored；`.env` 與 `config.json` 不會被 `git reset` 覆蓋，所以可以放心 `git pull` / `git reset --hard` 而不弄丟 secrets。
 - **MCP 工具命名**：`mcp_servers/tools/` 下的工具命名規範同 `skill/costaff-agent/MCP_TOOLS_SKILL.md`（檔名不得與 Python 標準庫或 sub-agent 自己的 MCP tool 衝突；之前踩過 `list_workspace`，已改名 `list_data_files`）。
 - **通知器**：`core/notifiers/` 各平台通知器；`core/notifiers/dispatcher.py` 統一 dispatch 介面，executor 與 manager agent 都從這個 dispatcher 出。
 
@@ -108,7 +108,7 @@ When changing the four core tools' signatures or adding a new core tool, **bump 
 
 ### 2.3 MCP Whitelist (`agent_mcp_filters`)
 
-`config.json` schema（gitignored，Mac Mini 上手動維護）：
+`config.json` schema（gitignored，install host 上手動維護；範例見 `config.json.example`）：
 
 ```json
 {
@@ -127,10 +127,11 @@ When changing the four core tools' signatures or adding a new core tool, **bump 
 
 **注意 key 命名**：`agent_mcp_filters` 的 key 用底線（`business_analysis`），對齊 `services/config.py` 的 `agent_key = ext_name.replace("-", "_")` 慣例；config.json 的 `external_agents` key 仍用連字號（`business-analysis`）。
 
-修 `agent_mcp_filters` 後執行：
+修 `agent_mcp_filters` 後（在 install host 上執行）：
 ```bash
-ssh Simon-Mac-Mini-Remote 'cd ~/.costaff/costaff && python3 -c "from services.config import ConfigManager; ConfigManager.update_mcp_urls()"'
-ssh Simon-Mac-Mini-Remote 'costaff agent rebuild coding && costaff agent rebuild business-analysis'
+cd ~/.costaff/costaff
+python3 -c "from services.config import ConfigManager; ConfigManager.update_mcp_urls()"
+costaff agent rebuild coding && costaff agent rebuild business-analysis
 ```
 （agent restart 不夠，需要 rebuild 才會讓 plugin 重讀新的 `<NAME>_AGENT_MCP_URLS` 環境變數）
 
@@ -166,10 +167,10 @@ python3 -m pytest tests/ -q
 
 | 改動位置 | 部署方式 |
 |---|---|
-| `cli/`、`server/`、`utils/`、`services/`、`tests/`（host-side） | `git push` → Mac Mini `git reset --hard origin/main` + `pip install -e .` |
+| `cli/`、`server/`、`utils/`、`services/`、`tests/`（host-side） | `git push` → install host `git reset --hard origin/main` + `pip install -e .` |
 | `mcp_servers/`、`agents/costaff_agent/` | 同上 + `docker compose up -d --build --force-recreate costaff-agent-costaff costaff-mcp-costaff` |
-| `config.json`（`agent_mcp_filters` 等） | 直接編輯 Mac Mini `~/.costaff/costaff/config.json` + `ConfigManager.update_mcp_urls()` |
-| Plugin agent (coding/BA) 的程式碼 | 各自的 git repo `git push` → Mac Mini reset 對應的 src/ → `costaff agent rebuild <name>` |
+| `config.json`（`agent_mcp_filters` 等） | 直接編輯 `~/.costaff/costaff/config.json` + `ConfigManager.update_mcp_urls()` |
+| Plugin agent (coding/BA) 的程式碼 | 各自的 git repo `git push` → host 上 reset 對應的 src/ → `costaff agent rebuild <name>` |
 
 **`restart` vs `rebuild`**：
 - `costaff agent restart <name>` — 只重啟容器，**不**重 build image，跑的是舊 code。

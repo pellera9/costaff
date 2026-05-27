@@ -101,7 +101,7 @@ def license(
                 f"  max_agents    : {OSS_LIMITS['max_agents']}\n"
                 f"  max_users     : {OSS_LIMITS['max_users']}\n"
                 f"  max_skills    : {OSS_LIMITS['max_skills']}\n\n"
-                f"  To upgrade, contact: simonliuyuwei@gmail.com",
+                f"  To upgrade, visit: https://costaffs.app",
                 title="CoStaff License"
             ))
     else:

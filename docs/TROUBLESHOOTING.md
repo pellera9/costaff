@@ -214,8 +214,8 @@ URL is wrong or unreachable, you see offline.
 ```bash
 # Inspect the configured URL
 python3 -c "
-import json
-print(json.load(open('/Users/simonliuyuwei/.costaff/costaff/config.json'))['external_agents']['<agent-name>']['a2a_url'])
+import json, os
+print(json.load(open(os.path.expanduser('~/.costaff/costaff/config.json')))['external_agents']['<agent-name>']['a2a_url'])
 "
 
 # Try reaching it from inside the manager
@@ -265,7 +265,8 @@ re-run the env regeneration:
 
 ```bash
 python3 -c "
-import sys; sys.path.insert(0, '/Users/simonliuyuwei/.costaff/costaff')
+import sys, os
+sys.path.insert(0, os.path.expanduser('~/.costaff/costaff'))
 from services.config import ConfigManager
 ConfigManager.update_mcp_urls()
 "
@@ -318,42 +319,29 @@ costaff start
 Loses: chat history, identity table, reminders, recurring tasks.
 Survives: bot tokens, API keys (everything in `.env` files).
 
-### Remote SSH to my Mac Mini stopped working
+### Remote SSH to my home install host stopped working
 
-Common when running CoStaff on a home Mac Mini. Two near-certain
-causes:
+Common when CoStaff lives on a home machine reached over your residential
+WAN. Two near-certain causes:
 
-1. **WAN IP changed.** Most home ISPs hand out dynamic IPs that change
-   every few hours to days. Your `~/.ssh/config` is pinned to the old
-   one.
+1. **WAN IP changed.** Most consumer ISPs hand out dynamic IPs that
+   change every few hours to days. Your `~/.ssh/config` is pinned to
+   the old one.
 
-   Fix: set up Dynamic DNS in your router (UniFi → Settings → Internet
-   → WAN1 → Dynamic DNS). Free providers: DuckDNS, No-IP. Update your
-   ssh config to use the hostname instead of the IP.
+   Fix: set up Dynamic DNS at the router. Free providers: DuckDNS,
+   No-IP, Cloudflare Dynamic DNS. Then point `~/.ssh/config` at the
+   hostname instead of the IP.
 
 2. **From inside the same LAN, hairpin NAT not enabled.** If you SSH
-   from a laptop on the same home network using the public IP, your
-   router has to "loopback" the packet to itself. Many routers (UniFi
-   included) don't do this by default.
+   from a laptop on the same home network using the public IP, the
+   router has to "loopback" the packet to itself. Many routers don't
+   do this by default.
 
-   Fix in UniFi: **Settings → Security → Port Forwarding** → your SSH
-   rule → enable **Hairpin NAT** (sometimes called NAT Loopback or
-   NAT Reflection).
+   Fix: enable **Hairpin NAT** (sometimes called NAT Loopback or NAT
+   Reflection) on the port-forwarding rule.
 
    Or: add a separate ssh config entry that uses the LAN IP when at
    home.
-
-### `git: 'credential-LIUYUWEI' is not a git command` warning on every push
-
-You set `credential.helper` to a username string by mistake. The
-helper is supposed to be a program name — `osxkeychain` on macOS.
-
-```bash
-git config --global credential.helper osxkeychain
-```
-
-This affects nothing but the warning. `user.name` / `user.email` are
-separate fields and unrelated.
 
 ---
 
@@ -376,7 +364,7 @@ service triggers source-disclosure of your modifications under AGPL v3.
 Either:
 
 - Release your CoStaff fork (and any modifications) under AGPL v3, or
-- Acquire a commercial license: simonliuyuwei@gmail.com
+- Acquire a commercial license — see https://costaffs.app
 
 ---
 
@@ -385,4 +373,5 @@ Either:
 - **`costaff doctor`** writes a timestamped report — attach it when
   asking for help.
 - **GitHub Issues**: https://github.com/costaff-ai/costaff/issues
-- **Email**: simonliuyuwei@gmail.com
+- **GitHub Discussions**: https://github.com/costaff-ai/costaff/discussions
+- **Security**: see [SECURITY.md](../SECURITY.md) for private disclosure.
