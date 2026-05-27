@@ -158,35 +158,25 @@ def build_task_spec(task, db) -> str:
         #   • WebChat Enterprise (post-thread refactor): `webent_<hash>` is
         #     thread-scoped because real_id includes conversation_id, so
         #     progress reaches the same thread the task was launched from
-        # When Manager LLM omits `session_id` at create_project_task time
-        # (it does this more often than not), OR passes the user_id /
-        # hashed_id by mistake (also common — Manager has been observed
-        # putting the 16-char hash in the session_id slot because it
-        # looks "session-like"), recover the user's real session by
-        # querying IdentityMap with user_id — same source of truth
-        # `get_user_channel_info` already uses above. The synthetic
-        # `task_<id>` fallback exists only as a last-ditch and was
-        # previously hit on every WebChat task, making WebChat
-        # `/api/internal/push` log "could not resolve session/hashed id"
-        # for every sub-agent progress frame.
-        # A valid session_id starts with a known channel prefix
-        # (webent_, tg_, dc_, line_, web_). Anything else — empty string,
-        # the raw user_id Manager sometimes pastes by accident, an ADK
-        # session UUID without context — needs the IdentityMap lookup.
-        _KNOWN_PREFIXES = ("tg_", "dc_", "line_", "web_", "webent_")
-        candidate = task.session_id or ""
-        deliver_session = candidate if candidate.startswith(_KNOWN_PREFIXES) else None
-        if not deliver_session:
-            mp = (
-                db.query(models.IdentityMap)
-                .filter(models.IdentityMap.hashed_id == task.user_id)
-                .order_by(models.IdentityMap.created_at.desc())
-                .first()
-            )
-            if mp and mp.session_id:
-                deliver_session = mp.session_id
-        if not deliver_session:
-            deliver_session = f"task_{task.id}"
+        # PROGRESS_CONTEXT.session_id is the **panel key** — it must be
+        # UNIQUE PER TASK so concurrent tasks for the same user don't
+        # merge into one panel. We always use `task_<task_id>` here;
+        # what Manager LLM passed in `task.session_id` may or may not be
+        # a real session id, but it's never per-task-unique.
+        #
+        # Delivery routing is a separate concern handled downstream by
+        # the channel notifier: `core/notifiers/webchat.py` falls back
+        # to IdentityMap lookup by recipient (PROGRESS_CONTEXT.user_id /
+        # hashed_id) whenever session_id doesn't have a known channel
+        # prefix — see `_resolve_session_id`. So `task_<id>` arrives at
+        # the WebChat backend, gets matched via IdentityMap, and lands
+        # in the right user's chat surface.
+        #
+        # The sub-agent's `progress.py` before_model_callback also
+        # explicitly requires `session_id.startswith("task_")` to arm
+        # the panel — anything else and the callback returns silently,
+        # so no tool steps get reported.
+        deliver_session = f"task_{task.id}"
         lines.append(
             f"\n[PROGRESS_CONTEXT]\n"
             f"user_id={task.user_id}\n"
