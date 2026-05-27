@@ -158,9 +158,26 @@ def build_task_spec(task, db) -> str:
         #   • WebChat Enterprise (post-thread refactor): `webent_<hash>` is
         #     thread-scoped because real_id includes conversation_id, so
         #     progress reaches the same thread the task was launched from
-        # When no origin session is recorded we fall back to a per-task
-        # synthetic id so the notifier's IdentityMap fallback still works.
-        deliver_session = task.session_id or f"task_{task.id}"
+        # When Manager LLM omits `session_id` at create_project_task time
+        # (it does this more often than not), recover the user's real
+        # session by querying IdentityMap with user_id — same source of
+        # truth `get_user_channel_info` already uses above. The synthetic
+        # `task_<id>` fallback exists only as a last-ditch and was
+        # previously hit on every WebChat task, making WebChat
+        # `/api/internal/push` log "could not resolve session/hashed id"
+        # for every sub-agent progress frame.
+        deliver_session = task.session_id
+        if not deliver_session:
+            mp = (
+                db.query(models.IdentityMap)
+                .filter(models.IdentityMap.hashed_id == task.user_id)
+                .order_by(models.IdentityMap.created_at.desc())
+                .first()
+            )
+            if mp and mp.session_id:
+                deliver_session = mp.session_id
+        if not deliver_session:
+            deliver_session = f"task_{task.id}"
         lines.append(
             f"\n[PROGRESS_CONTEXT]\n"
             f"user_id={task.user_id}\n"
