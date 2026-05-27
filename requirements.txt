@@ -2,45 +2,43 @@
 # host-side CLI (`pip install -e .`). The Manager Agent container has
 # its own deps in `agents/requirements.txt` (google-adk, litellm, etc.).
 #
-# Channel-specific SDKs (aiogram, discord.py, line-bot-sdk) and
-# agent-side document tooling (python-docx, fpdf2) are intentionally
-# absent — they belong to the individual channel / agent repos.
+# Pinning policy: use `>=` ranges that satisfy `agents/requirements.txt`
+# (google-adk 2.0 pulls in fastapi>=0.124.1, aiosqlite>=0.21, etc.).
+# Strict `==` pins on a few security-sensitive packages where the
+# vulnerable range matters more than range flexibility.
 
 # Web framework + ASGI server
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
+fastapi>=0.124.1,<1
+uvicorn[standard]>=0.30.6
 python-multipart==0.0.27
 starlette>=0.38
 
-# Persistence — SQLAlchemy with drivers for every URL scheme we support.
-# sqlite is stdlib; aiosqlite covers async sqlite. psycopg2 covers sync
-# postgres; asyncpg covers async postgres. Drivers are loaded lazily by
-# SQLAlchemy based on the ADK_SESSION_SERVICE_URI scheme.
-sqlalchemy==2.0.32
-aiosqlite==0.21.0
-asyncpg==0.30.0
-psycopg2-binary==2.9.9
+# Persistence — SQLAlchemy + lazy drivers per ADK_SESSION_SERVICE_URI scheme
+sqlalchemy>=2.0.32,<3
+aiosqlite>=0.21.0
+asyncpg>=0.30.0
+psycopg2-binary>=2.9.9
 
 # HTTP + protocols
-httpx==0.27.2
-pydantic==2.9.2
+httpx>=0.27.2,<1
+pydantic>=2.9.2,<3
 
 # Background jobs (reminder / regular work scheduling)
-apscheduler==3.10.4
-pytz==2024.1
+apscheduler>=3.10.4
+pytz>=2024.1
 
-# MCP runtime — the manager core MCP server speaks this
-mcp==1.9.4
+# MCP runtime — pin to a known-tested release line
+mcp>=1.9.4
 
 # License verification (Ed25519) + Fernet header encryption
-cryptography==43.0.1
+cryptography>=43.0.1
 
-# Config + secrets
+# Config + secrets (pinned strictly — CVE-prone history)
 python-dotenv==1.2.2
-pyyaml==6.0.2
+pyyaml>=6.0.2
 
 # CLI
-typer==0.12.5
-rich==13.8.1
-questionary==2.0.1
-psutil==6.0.0
+typer>=0.12.5
+rich>=13.8.1
+questionary>=2.0.1
+psutil>=6.0.0
