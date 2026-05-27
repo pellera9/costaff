@@ -17,7 +17,7 @@ starlette>=0.38
 # postgres; asyncpg covers async postgres. Drivers are loaded lazily by
 # SQLAlchemy based on the ADK_SESSION_SERVICE_URI scheme.
 sqlalchemy==2.0.32
-aiosqlite==0.20.0
+aiosqlite==0.21.0
 asyncpg==0.30.0
 psycopg2-binary==2.9.9
 
