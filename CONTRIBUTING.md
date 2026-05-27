@@ -48,6 +48,29 @@ your authorship intact.
 - **Tests**: add tests for new behaviour. We don't enforce coverage %,
   but new code without any test is unlikely to merge.
 
+## Pre-commit hooks (gitleaks)
+
+We use [`pre-commit`](https://pre-commit.com/) with
+[`gitleaks`](https://github.com/gitleaks/gitleaks) to block secret
+leaks at commit time. Install once after cloning:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+From that point on, every `git commit` runs the hooks in
+`.pre-commit-config.yaml`. If gitleaks flags something:
+
+1. Read the finding — it shows the rule ID + file + line.
+2. If it's a real secret, remove it and use an env var instead.
+3. If it's a known-safe placeholder (e.g. `xxxx`, `<your-key>`, a test
+   fixture), add it to the `allowlists` section of `.gitleaks.toml`
+   with a short comment explaining why.
+
+Don't bypass with `--no-verify` unless you're sure. Bypass is the only
+reason we've had real leaks land — see Incident #33211417.
+
 ## Reporting bugs
 
 File an issue with: what you expected, what actually happened, how to
