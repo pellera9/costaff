@@ -1,6 +1,6 @@
 """Pydantic schema for config.json — catches typos and structural drift early.
 
-Why: config.json is hand-edited on Mac Mini (gitignored). Typos in keys like
+Why: config.json is hand-edited on the install host (gitignored). Typos in keys like
 `external_agents` vs `external_agent` only surface at runtime when something
 reads the wrong key and silently gets nothing back. This schema validates the
 structure on load and via `costaff config validate`.
