@@ -131,9 +131,12 @@ def _prompt_and_write_plugin_env(manifest: dict, fragment_dir: str, predefined_e
         f.write(f"COSTAFF_SHARED_DIR_{NAME_UPPER}=/app/data/shared/costaff-agent-{name}\n")
         f.write(f"AGENT_WORKSPACE_DIR_{NAME_UPPER}=/app/data\n")
 
-    # Also write required vars to core .env for YAML variable substitution
+    # Also write required vars to core .env for YAML variable substitution.
+    # Use quote_mode="never" (matching services/config.py): the default
+    # quote_mode mangles values with shell-style escaping on rewrite, which
+    # corrupts secrets like GOOGLE_API_KEY and breaks docker compose's .env parse.
     for k in env_required:
         if plugin_envs.get(k):
-            set_key(PATHS["env"], k, plugin_envs[k])
+            set_key(PATHS["env"], k, plugin_envs[k], quote_mode="never")
 
     return plugin_env_path
