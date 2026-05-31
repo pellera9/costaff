@@ -31,14 +31,46 @@ async def execute_reminder(reminder_id: str):
             chan = resolved_chan
             recipient = resolved_recipient or recipient
 
-        logger.info(f"Sending reminder {reminder_id} via {chan}")
+        logger.info(f"Executing reminder {reminder_id} via {chan}")
+
+        # Auto-execute: run the agent on the reminder's task text and deliver
+        # the RESULT, instead of just posting the text and waiting for the user
+        # to reply "OK". A "1 分鐘後讀信列 To-Do" reminder thus actually runs and
+        # returns the finished To-Do — no human-in-the-loop. Mirrors the
+        # automated-execution directive used by execute_regular_work.
+        import os
+        from core.adk_client import run_adk_prompt
+
+        app_name = reminder.app_name or os.getenv("ADK_APP_NAME", "costaff_agent")
+        run_session = f"rmd_{reminder_id}_{(reminder.user_id or '')[:8]}"
+        prompt = (
+            f"(System Context: Your ADK session user_id is '{reminder.user_id}'. "
+            "Use this EXACT value whenever a tool requires a user_id parameter.)\n\n"
+            "(AUTOMATED EXECUTION — nobody is watching this session to approve "
+            "anything. This is a scheduled one-time task firing NOW. Carry out the "
+            "request below immediately and return the finished result. Do NOT emit a "
+            "plan / '執行計劃', do NOT ask the user to reply 'OK' or for any "
+            "confirmation, and do NOT create another reminder or scheduled job. Just "
+            "DO it now and report the result.)\n\n"
+            f"{reminder.message}"
+        )
 
         success = False
         try:
-            await dispatch_notification(chan, recipient, reminder.message, session_id=reminder.session_id)
+            result_text = await run_adk_prompt(app_name, reminder.user_id, run_session, prompt)
+            await dispatch_notification(chan, recipient, result_text or reminder.message,
+                                        session_id=reminder.session_id)
             success = True
         except Exception as e:
-            logger.error(f"Reminder send error {reminder_id}: {e}")
+            logger.error(f"Reminder execute error {reminder_id}: {e}")
+            # Fall back to just delivering the reminder text so the user is at
+            # least notified even if the agent run failed.
+            try:
+                await dispatch_notification(chan, recipient, reminder.message,
+                                            session_id=reminder.session_id)
+                success = True
+            except Exception:
+                pass
 
         reminder.status = "sent" if success else "failed"
         db.commit()
