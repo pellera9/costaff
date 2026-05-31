@@ -2,33 +2,39 @@
 # This list is consumed by the Manager Agent image (built from the
 # agents/ tree), NOT the root-level `requirements.txt` (which is for
 # the MCP core container + host-side CLI install).
+#
+# litellm / mcp / httpx below are TRANSITIVE deps of google-adk[a2a,extensions].
+# We pin them explicitly anyway: leaving them to float let the build drift over
+# time (prod-test's cached image froze a working set, so a fresh rebuild on a
+# clean index broke on too-old/incompatible versions). Keep them pinned to the
+# verified-good set below. Verified on a fresh GCE build 2026-05-30 (E2E pass).
 
-# Google ADK 2.0 with A2A + extensions — the Manager Agent runtime.
-google-adk[a2a,extensions]==2.0.0
+# Google ADK 2.1.0 with A2A + extensions — the Manager Agent runtime.
+google-adk[a2a,extensions]==2.1.0
 
-# GCS — used for shared workspace artifact upload by some skills.
+# GCS — shared workspace artifact upload by some skills.
 google-cloud-storage==2.18.2
 
 # Multipart upload support (file attachments in chat).
 python-multipart==0.0.27
 
 # Model Context Protocol — manager agent consumes MCP tools.
-# Must be >=1.27 (the version prod-test runs): google-adk 2.0.0's
-# mcp_tool/__init__.py imports StreamableHTTPConnectionParams etc. from this
-# package inside a try/except — too-old mcp (e.g. 1.9.4) makes that import fail
-# silently, so McpToolset is never re-exported and the Manager fails to load.
+# google-adk[extensions] requires mcp>=1.16.0; its mcp_tool/__init__.py imports
+# StreamableHTTPConnectionParams etc. inside a try/except, so anything below
+# 1.16.0 (e.g. 1.9.4) makes that import fail silently → McpToolset is never
+# re-exported → the Manager fails to load. 1.27.1 = the version prod-test runs.
 mcp==1.27.1
 
 # LiteLLM — pluggable non-Google LLM backend.
-# Must stay within google-adk[extensions]==2.0.0's range (>=1.83.7,<=1.83.14).
+# google-adk[extensions]==2.1.0 requires litellm>=1.83.7,<=1.83.14; pin the top.
 litellm==1.83.14
 
-# Config + HTTP + DB drivers (loaded lazily by ADK / chatbot SDK based
-# on ADK_SESSION_SERVICE_URI scheme).
+# HTTP + DB drivers.
 python-dotenv==1.2.2
-# httpx 0.28.1: required exactly by litellm 1.83.14 (==0.28.1) and accepted by
-# google-adk 2.0.0 (<1,>=0.27) + mcp 1.27.1 (>=0.27). Pinning 0.27.2 collided
-# with litellm and made the Manager image unbuildable (pip ResolutionImpossible).
+# litellm 1.83.14 requires httpx==0.28.1 exactly; google-adk (<1,>=0.27) and
+# mcp (>=0.27) both accept it. An older pin (0.27.2) made the image unbuildable
+# (pip ResolutionImpossible).
 httpx==0.28.1
+# Session-service drivers for ADK_SESSION_SERVICE_URI (sqlite / postgres).
 aiosqlite==0.21.0
 asyncpg==0.30.0
