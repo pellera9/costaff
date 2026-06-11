@@ -27,8 +27,37 @@ def _wait_for_containers(container_names: list, timeout: int = 30):
     console.print("[yellow]Warning: Some services may still be initializing.[/yellow]")
 
 
-def start(build: bool = typer.Option(True, "--build/--no-build")):
+def _run_preflight():
+    """Validate .env before touching Docker; abort on fatal issues."""
+    from services.preflight import check_env
+
+    issues = check_env()
+    if not issues:
+        return
+    fatal = [i for i in issues if i.fatal]
+    for i in issues:
+        tag = "[red]✖[/red]" if i.fatal else "[yellow]⚠[/yellow]"
+        console.print(f"{tag} {i.message}")
+        console.print(f"   [dim]→ {i.fix}[/dim]")
+    if fatal:
+        console.print(
+            "\n[red]Aborting — fix the issue(s) above, or re-run with "
+            "--no-preflight to skip this check.[/red]"
+        )
+        raise typer.Exit(1)
+
+
+def start(
+    build: bool = typer.Option(True, "--build/--no-build"),
+    preflight: bool = typer.Option(
+        True, "--preflight/--no-preflight",
+        help="Validate .env (API key, DB URI, secrets) before starting containers.",
+    ),
+):
     """Start CoStaff services with fine-grained tiered sequence."""
+    if preflight:
+        _run_preflight()
+
     conf = ConfigManager.get_config()
     runtime = get_runtime()
 

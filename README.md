@@ -107,8 +107,18 @@ costaff start
 costaff dashboard
 ```
 
-The dashboard opens at **http://localhost:8501**. Click **Chat** and
-start talking to the assistant — no bot tokens needed.
+`costaff start` first runs a **preflight check** on your `.env` (API
+key, database URI, secrets) and tells you exactly what to fix and how —
+instead of letting a container crash-loop on a missing key.
+
+The dashboard opens at **http://localhost:8501**. Log in with the admin
+account from the setup wizard (or create one right in the browser on
+first visit). Click **Chat** and start talking to the assistant — no
+bot tokens needed.
+
+If anything looks wrong at any point, run **`costaff doctor`** — it
+checks containers, network, env vars, and the database, and ends with a
+**Suggested fixes** list.
 
 To add a Telegram / Discord / LINE bot later, go to **Dashboard →
 Channels**, paste the token, and apply. The core platform doesn't need
@@ -256,6 +266,10 @@ You're back to the state you were in before installing.
 ---
 
 ## Troubleshooting
+
+**First reflex: `costaff doctor`.** It diagnoses containers, network,
+env vars, and the database in one shot, prints a **Suggested fixes**
+list, and saves a timestamped report you can attach to a GitHub issue.
 
 ### `costaff: command not found` after install
 

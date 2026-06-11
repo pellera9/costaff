@@ -30,7 +30,7 @@ def bootstrap(
         help="Google Gemini API key. Falls back to the GOOGLE_API_KEY env var if unset.",
     ),
     gemini_model: str = typer.Option(
-        "gemini-2.5-flash",
+        "gemini-3-flash-preview",
         "--gemini-model",
         help="Gemini model name.",
     ),
@@ -78,6 +78,14 @@ def bootstrap(
     set_key(PATHS["env"], "GOOGLE_API_KEY", gemini_key, quote_mode="never")
     set_key(PATHS["env"], "COSTAFF_AGENT_GEMINI_MODEL", gemini_model, quote_mode="never")
     set_key(PATHS["env"], "COSTAFF_PREFERRED_LANGUAGE", language)
+
+    # Same secrets `costaff onboard` generates — a CI deploy must not run
+    # with the template ID_SALT or unauthenticated internal APIs.
+    from services.preflight import ensure_security_keys
+    generated = ensure_security_keys(PATHS["env"])
+    if generated:
+        console.print(f"[green]✔ Generated secrets:[/green] {', '.join(generated)}")
+
     console.print(
         f"[green]✔ Environment configured[/green] (provider=gemini, "
         f"model={gemini_model}, lang={language})."

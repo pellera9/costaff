@@ -7,6 +7,14 @@ from dotenv import load_dotenv, set_key
 
 from utils.paths import PATHS
 
+# The four manager-core MCP tools every plugin agent needs (Agent Protocol
+# v1.x): progress notify / task comment / file hand-off / file listing.
+# `costaff agent add` seeds agent_mcp_filters with exactly this set so a
+# fresh sub-agent doesn't inherit the manager's full ~40-tool spec.
+CORE_PLUGIN_MCP_TOOLS = (
+    "send_message_now", "add_task_comment", "move_to_shared", "list_data_files",
+)
+
 
 class ConfigManager:
     @staticmethod
@@ -105,7 +113,7 @@ class ConfigManager:
                             custom_url = pkg.get("transport", {}).get("url")
                     except Exception:
                         pass
-            
+
             # Check if this MCP belongs to an external agent to get its custom port
             ext_agent = conf.get("external_agents", {}).get(m)
             default_port = 8081 if m == "costaff" else 8080
@@ -116,7 +124,7 @@ class ConfigManager:
             elif m == "business-analysis": default_port = 8083
 
             url = custom_url or f"http://costaff-mcp-{m}:{default_port}/mcp"
-            
+
             if mcp_secret:
                 urls[m] = {
                     "url": url,

@@ -64,7 +64,7 @@ def _mcp_healthcheck(console: Console, mcp_secret: str):
     cmd_auth = probe_script + f"probe('http://costaff-mcp-costaff:8081/mcp', '{mcp_secret}')\n"
     r = _run(["docker", "exec", "costaff-agent-costaff", "python3", "-c", cmd_auth])
     code = (r.stdout or r.stderr).strip()
-    
+
     # Any 2xx or 4xx (like 400 Bad Request) indicates the server is alive and talking
     if code.isdigit() and int(code) < 500:
         console.print(f"[green]✔[/green] MCP /mcp Bearer → {code}")
@@ -77,6 +77,11 @@ def doctor():
     console = Console(record=True)
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     console.print(Panel.fit(f"[bold blue]CoStaff Doctor[/bold blue]", subtitle=f"{ts}"))
+
+    # (problem, fix) pairs collected along the way, replayed as a
+    # "Suggested fixes" section at the end so the user doesn't have to
+    # scroll back through the full report.
+    suggestions: list[tuple[str, str]] = []
 
     # 0. Version / git rev ─────────────────────────────────────────────────────
     console.print("\n[bold]0. Version[/bold]")
@@ -121,6 +126,10 @@ def doctor():
         console.print(t)
     else:
         console.print(f"[red]docker compose ps failed:[/red] {r.stderr.strip()}")
+        suggestions.append((
+            "Docker is unreachable",
+            "Start Docker Desktop (macOS) or `sudo systemctl start docker` (Linux), then re-run `costaff doctor`.",
+        ))
 
     # 2. Docker network ────────────────────────────────────────────────────────
     console.print("\n[bold]2. Network[/bold]")
@@ -130,6 +139,10 @@ def doctor():
         console.print("[green]✔[/green] costaff_default exists")
     else:
         console.print("[red]✖[/red] costaff_default not found — run 'costaff start'")
+        suggestions.append((
+            "Docker network costaff_default missing (services never started)",
+            "Run `costaff start`.",
+        ))
 
     # 3. HTTP healthcheck ──────────────────────────────────────────────────────
     console.print("\n[bold]3. HTTP Healthcheck[/bold]")
@@ -145,11 +158,23 @@ def doctor():
         console.print(f"[{color}]Agent http://localhost:{agent_port}/ → {r.status_code}[/{color}]")
     except Exception as e:
         console.print(f"[red]✖[/red] Agent port {agent_port} unreachable: {e}")
+        suggestions.append((
+            f"Manager agent not responding on localhost:{agent_port}",
+            "Run `costaff start`, then check `costaff logs costaff-agent-costaff` for crash output.",
+        ))
 
     _mcp_healthcheck(console, mcp_secret)
 
     # 4. .env variables ────────────────────────────────────────────────────────
     console.print("\n[bold]4. .env Variables[/bold]")
+    try:
+        from services.preflight import check_env
+        for issue in check_env(env):
+            tag = "[red]✖[/red]" if issue.fatal else "[yellow]⚠[/yellow]"
+            console.print(f"{tag} {issue.message}")
+            suggestions.append((issue.message, issue.fix))
+    except Exception as e:
+        console.print(f"[yellow]env preflight skipped: {e}[/yellow]")
     keys = [
         "COSTAFF_AGENT_MODEL_PROVIDER", "COSTAFF_AGENT_GEMINI_MODEL",
         "COSTAFF_PREFERRED_LANGUAGE", "ADK_SESSION_SERVICE_URI",
@@ -198,8 +223,16 @@ def doctor():
         src = entry.get("source_path", "")
         if frag and not Path(frag).exists():
             console.print(f"  [red]✖[/red] {name}: fragment missing at {frag}")
+            suggestions.append((
+                f"Channel '{name}' fragment file missing",
+                f"Re-deploy with `costaff channel remove {name}` then `costaff channel add {name}`.",
+            ))
         if src and not Path(src).exists():
             console.print(f"  [red]✖[/red] {name}: source missing at {src}")
+            suggestions.append((
+                f"Channel '{name}' source directory missing",
+                f"Re-deploy with `costaff channel remove {name}` then `costaff channel add {name}`.",
+            ))
 
     # 6. identity_maps ─────────────────────────────────────────────────────────
     console.print("\n[bold]6. identity_maps (last 10 rows)[/bold]")
@@ -227,6 +260,12 @@ def doctor():
             console.print("[yellow]ADK_SESSION_SERVICE_URI not set[/yellow]")
     except Exception as e:
         console.print(f"[red]DB error:[/red] {e}")
+        suggestions.append((
+            "PostgreSQL not reachable from the host",
+            "Is the postgres container up? `costaff status`, then `costaff start` if missing. "
+            "If credentials changed after first start, the old data volume still holds the old "
+            "password — see README §Reset.",
+        ))
 
     # 7. Core container logs (agent + mcp) ────────────────────────────────────
     console.print("\n[bold]7. Core Logs (last 50 lines)[/bold]")
@@ -245,6 +284,19 @@ def doctor():
                 console.print(f"\n[cyan]── {cname} (channel {name}) ──[/cyan]")
                 r = _run(["docker", "logs", "--tail", "40", cname])
                 _print_logs(console, r.stdout + r.stderr)
+
+    # Suggested fixes ──────────────────────────────────────────────────────────
+    if suggestions:
+        console.print("\n[bold]Suggested fixes[/bold]")
+        seen = set()
+        for problem, fix in suggestions:
+            if problem in seen:
+                continue
+            seen.add(problem)
+            console.print(f"[yellow]•[/yellow] {problem}")
+            console.print(f"  [dim]→ {fix}[/dim]")
+    else:
+        console.print("\n[bold green]No actionable issues detected.[/bold green]")
 
     # Save log file ────────────────────────────────────────────────────────────
     log_dir = Path(_runtime_root) / "logs"

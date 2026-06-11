@@ -98,14 +98,37 @@ install_mac() {
         echo "Installing Docker Desktop via Homebrew..."
         brew install --cask docker
         success "Docker Desktop installed."
-        warn "Docker Desktop needs to be launched manually once."
-        add_manual "Open Docker Desktop from Launchpad and wait until the whale icon appears in the menu bar, then come back here."
     else
         success "Docker already installed."
     fi
+    ensure_docker_running_mac
 
     PYTHON_BIN="python${PYTHON_VERSION}"
     SHELL_RC="$HOME/.zshrc"
+}
+
+# Launch Docker Desktop and wait for the daemon so the user doesn't hit
+# "Cannot connect to Docker daemon" on their very first `costaff start`.
+ensure_docker_running_mac() {
+    if docker info &>/dev/null; then
+        success "Docker daemon is running."
+        return
+    fi
+    echo "Launching Docker Desktop..."
+    open -a Docker 2>/dev/null || open -a "Docker Desktop" 2>/dev/null || true
+    echo -n "Waiting for the Docker daemon (up to 90s)"
+    for _ in $(seq 1 45); do
+        if docker info &>/dev/null; then
+            echo ""
+            success "Docker daemon is ready."
+            return
+        fi
+        echo -n "."
+        sleep 2
+    done
+    echo ""
+    warn "Docker daemon did not come up automatically (first launch may need you to accept the Docker Desktop terms)."
+    add_manual "Open Docker Desktop from Launchpad and wait until the whale icon appears in the menu bar, then come back here."
 }
 
 # =============================================================================
@@ -122,7 +145,15 @@ install_ubuntu() {
         sudo apt-get install -y software-properties-common
         sudo add-apt-repository -y ppa:deadsnakes/ppa
         sudo apt-get update -q
-        sudo apt-get install -y python${PYTHON_VERSION} python${PYTHON_VERSION}-venv python${PYTHON_VERSION}-distutils
+        sudo apt-get install -y python${PYTHON_VERSION} python${PYTHON_VERSION}-venv
+        # python3.x-distutils no longer exists on Ubuntu 24.04+ (Python 3.12
+        # dropped distutils); installing it unconditionally aborts the whole
+        # script under `set -e`. Install only where the package still exists.
+        if apt-cache show python${PYTHON_VERSION}-distutils &>/dev/null; then
+            sudo apt-get install -y python${PYTHON_VERSION}-distutils
+        else
+            warn "python${PYTHON_VERSION}-distutils not available — OK on Ubuntu 24.04+ (setuptools replaces it)."
+        fi
         success "Python ${PYTHON_VERSION} installed."
     else
         success "Python ${PYTHON_VERSION} already installed."
@@ -147,6 +178,17 @@ install_ubuntu() {
         add_manual "Log out and log back in (or run 'newgrp docker' in a new terminal) so Docker can run without sudo."
     else
         success "Docker already installed."
+    fi
+    # Make sure the daemon itself is up (a reboot or fresh VM often leaves it stopped).
+    if ! sudo docker info &>/dev/null; then
+        echo "Starting Docker daemon..."
+        sudo systemctl enable --now docker 2>/dev/null || true
+        if sudo docker info &>/dev/null; then
+            success "Docker daemon started."
+        else
+            warn "Could not start the Docker daemon automatically."
+            add_manual "Start Docker with 'sudo systemctl start docker' before running 'costaff start'."
+        fi
     fi
 
     PYTHON_BIN="python${PYTHON_VERSION}"

@@ -1,5 +1,4 @@
 import os
-import secrets
 import shutil
 import subprocess
 
@@ -10,10 +9,83 @@ from rich.console import Console
 from rich.panel import Panel
 
 from services.config import ConfigManager
+from services.preflight import ensure_security_keys
 from services.runtime import get_runtime
 from utils.paths import PATHS, _project_root, _runtime_root, _base_dir
 
 console = Console()
+
+DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview"
+
+
+def _existing(env: dict, key: str) -> str:
+    return (env.get(key) or "").strip().strip("'\"")
+
+
+def _verify_gemini_key(api_key: str) -> None:
+    """Live-check the key against the Gemini API. Warn-only — never blocks."""
+    try:
+        import httpx
+        r = httpx.get(
+            "https://generativelanguage.googleapis.com/v1beta/models",
+            params={"key": api_key, "pageSize": 1}, timeout=8.0,
+        )
+        if r.status_code == 200:
+            console.print("[green]✔ Gemini API key verified.[/green]")
+        elif r.status_code in (400, 401, 403):
+            console.print(
+                f"[yellow]⚠ Gemini rejected this key (HTTP {r.status_code}). "
+                "Double-check it at https://aistudio.google.com/apikey — "
+                "you can re-run `costaff onboard` to fix it.[/yellow]"
+            )
+        else:
+            console.print(f"[yellow]⚠ Could not verify key (HTTP {r.status_code}); continuing.[/yellow]")
+    except Exception as e:
+        console.print(f"[yellow]⚠ Key verification skipped (network issue: {e}).[/yellow]")
+
+
+def _setup_dashboard_admin() -> None:
+    """Create the operator-dashboard login if it doesn't exist yet."""
+    from services.auth import AuthManager
+
+    if AuthManager.get_auth() is not None:
+        return
+    console.print(Panel.fit("🔐 [bold blue]Dashboard Admin Account[/bold blue]"))
+    console.print(
+        "[dim]Used to log into the web dashboard (costaff dashboard). "
+        "Skip to set it up in the browser on first visit instead.[/dim]"
+    )
+    if not questionary.confirm("Create the dashboard admin account now?", default=True).ask():
+        return
+    username = questionary.text("Admin username:", default="admin").ask()
+    if not username:
+        return
+    while True:
+        password = questionary.password("Admin password:").ask()
+        if password is None:
+            return
+        if len(password) < 8:
+            console.print("[yellow]Password must be at least 8 characters.[/yellow]")
+            continue
+        confirm = questionary.password("Confirm password:").ask()
+        if password == confirm:
+            break
+        console.print("[yellow]Passwords do not match — try again.[/yellow]")
+    AuthManager.save_auth(username, password)
+    console.print(f"[green]✔ Dashboard admin '{username}' created.[/green]")
+
+
+def _print_next_steps() -> None:
+    console.print(Panel.fit(
+        "[bold]1.[/bold] [green]costaff start[/green]        — boot Postgres → agents → manager → channels\n"
+        "[bold]2.[/bold] [green]costaff dashboard[/green]    — open http://localhost:8501 and click [bold]Chat[/bold]\n"
+        "[bold]3.[/bold] Say hi! Try: [italic]\"Remind me to drink water at 3 PM every day\"[/italic]\n"
+        "\n"
+        "[dim]Something off? `costaff doctor` writes a full diagnostic report.\n"
+        "Re-run `costaff onboard` anytime — existing settings are kept as defaults.[/dim]",
+        title="🎉 Setup complete — next steps",
+        border_style="green",
+    ))
 
 
 def onboard():
@@ -30,56 +102,84 @@ def onboard():
                 pass
             console.print(f"[yellow]Warning: {template_path} not found. Created a blank {PATHS['env']}.[/yellow]")
 
+    # Re-running onboard must never wipe a working setup: every prompt below
+    # defaults to the value already in .env.
+    env = dotenv_values(PATHS["env"])
+
     console.print(Panel.fit("🤖 [bold blue]CoStaff Onboarding[/bold blue]"))
     db_uri = questionary.text(
         "PostgreSQL URI:",
-        default="postgresql+asyncpg://costaff:costaff_pass@postgres:5432/costaff_db"
+        default=_existing(env, "ADK_SESSION_SERVICE_URI")
+        or "postgresql+asyncpg://costaff:costaff_pass@postgres:5432/costaff_db"
     ).ask()
 
     console.print(Panel.fit("🤖 [bold blue]Model Configuration[/bold blue]"))
+    provider_choices = [
+        questionary.Choice("Google Gemini (free tier works — recommended)", value="gemini"),
+        questionary.Choice("LiteLLM (for OpenAI, Anthropic, Ollama, etc.)", value="litellm"),
+    ]
+    current_provider = _existing(env, "COSTAFF_AGENT_MODEL_PROVIDER")
+    default_choice = next((c for c in provider_choices if c.value == current_provider), None)
     model_provider = questionary.select(
-        "Select Model Provider:",
-        choices=[
-            questionary.Choice("Google Gemini", value="gemini"),
-            questionary.Choice("LiteLLM (for OpenAI, Anthropic, Ollama, etc.)", value="litellm"),
-        ]
+        "Select Model Provider:", choices=provider_choices, default=default_choice,
     ).ask()
 
     if model_provider == "gemini":
         set_key(PATHS["env"], "COSTAFF_AGENT_MODEL_PROVIDER", "gemini")
-        api_key = questionary.password("Google API Key:").ask()
+        existing_key = _existing(env, "GOOGLE_API_KEY")
+        prompt = "Google API Key (https://aistudio.google.com/apikey):"
+        if existing_key:
+            prompt = f"Google API Key (Enter to keep current ****{existing_key[-4:]}):"
+        api_key = questionary.password(prompt).ask()
         if api_key:
             set_key(PATHS["env"], "GOOGLE_API_KEY", api_key)
-        model_name = questionary.text("Gemini Model Name:", default="gemini-2.5-flash").ask()
+        effective_key = api_key or existing_key
+        if effective_key:
+            _verify_gemini_key(effective_key)
+        else:
+            console.print(
+                "[yellow]⚠ No API key set — `costaff start` will refuse to launch "
+                "until one is configured.[/yellow]"
+            )
+        model_name = questionary.text(
+            "Gemini Model Name:",
+            default=_existing(env, "COSTAFF_AGENT_GEMINI_MODEL") or DEFAULT_GEMINI_MODEL,
+        ).ask()
         if model_name:
             set_key(PATHS["env"], "COSTAFF_AGENT_GEMINI_MODEL", model_name)
 
     elif model_provider == "litellm":
         set_key(PATHS["env"], "COSTAFF_AGENT_MODEL_PROVIDER", "litellm")
-        model_name = questionary.text("LiteLLM Model Name (e.g., ollama/llama3):", default="ollama/llama3").ask()
+        model_name = questionary.text(
+            "LiteLLM Model Name (e.g., ollama/llama3, openai/gpt-4o-mini):",
+            default=_existing(env, "LITELLM_MODEL_NAME") or "ollama/llama3",
+        ).ask()
         if model_name:
             set_key(PATHS["env"], "LITELLM_MODEL_NAME", model_name)
-        api_base = questionary.text("LiteLLM API Base URL (e.g., http://host.docker.internal:11434 for Ollama):").ask()
+        api_base = questionary.text(
+            "LiteLLM API Base URL (e.g., http://host.docker.internal:11434 for Ollama):",
+            default=_existing(env, "LITELLM_API_BASE"),
+        ).ask()
         if api_base:
             set_key(PATHS["env"], "LITELLM_API_BASE", api_base)
-        api_key = questionary.password("LiteLLM API Key (optional):").ask()
+        api_key = questionary.password("LiteLLM API Key (optional, Enter to keep/skip):").ask()
         if api_key:
             set_key(PATHS["env"], "LITELLM_API_KEY", api_key)
         skip_special = questionary.confirm("Skip special tokens?", default=False).ask()
         set_key(PATHS["env"], "LITELLM_SKIP_SPECIAL_TOKENS", "True" if skip_special else "False")
 
     console.print(Panel.fit("🌏 [bold blue]System Configuration[/bold blue]"))
-    
+
     # Language Selection
+    lang_values = [
+        "Traditional Chinese (繁體中文)", "English",
+        "Japanese (日本語)", "Simplified Chinese (简体中文)",
+    ]
+    current_lang = _existing(env, "COSTAFF_PREFERRED_LANGUAGE")
     lang_choice = questionary.select(
         "Preferred Response Language (回覆語系):",
-        choices=[
-            questionary.Choice("Traditional Chinese (繁體中文)", value="Traditional Chinese (繁體中文)"),
-            questionary.Choice("English", value="English"),
-            questionary.Choice("Japanese (日本語)", value="Japanese (日本語)"),
-            questionary.Choice("Simplified Chinese (简体中文)", value="Simplified Chinese (简体中文)"),
-        ],
-        default="Traditional Chinese (繁體中文)"
+        choices=lang_values,
+        default=current_lang if current_lang in lang_values else "Traditional Chinese (繁體中文)",
     ).ask()
     if lang_choice:
         set_key(PATHS["env"], "COSTAFF_PREFERRED_LANGUAGE", lang_choice)
@@ -90,41 +190,39 @@ def onboard():
         "America/Chicago", "Europe/London", "Europe/Paris", "Europe/Berlin",
         "Australia/Sydney", "Custom..."
     ]
-    tz_choice = questionary.select("Timezone:", choices=common_timezones, default="UTC").ask()
+    current_tz = _existing(env, "TIMEZONE")
+    tz_choice = questionary.select(
+        "Timezone:", choices=common_timezones,
+        default=current_tz if current_tz in common_timezones else "UTC",
+    ).ask()
     if tz_choice == "Custom...":
         tz_choice = questionary.text(
-            "Enter timezone (pytz format, e.g. America/Toronto):", default="UTC"
+            "Enter timezone (pytz format, e.g. America/Toronto):",
+            default=current_tz or "UTC",
         ).ask()
     if tz_choice:
         set_key(PATHS["env"], "TIMEZONE", tz_choice)
 
+    already_deployed = set(ConfigManager.get_config().get("dynamic_channels", {}).keys())
     platforms = questionary.checkbox(
         "Select Channels to enable (官方通訊頻道):",
         choices=[
-            questionary.Choice("Telegram", value="telegram"),
-            questionary.Choice("Discord", value="discord"),
-            questionary.Choice("Line", value="line"),
-            questionary.Choice("WebChat (網頁版對話)", value="webchat"),
+            questionary.Choice(
+                "WebChat (網頁版對話) — recommended: chat from the browser, no bot token needed",
+                value="webchat",
+                checked="webchat" in already_deployed or not already_deployed,
+            ),
+            questionary.Choice("Telegram", value="telegram", checked="telegram" in already_deployed),
+            questionary.Choice("Discord", value="discord", checked="discord" in already_deployed),
+            questionary.Choice("Line", value="line", checked="line" in already_deployed),
             questionary.Choice("Email (SMTP - 系統通知用)", value="email"),
         ]
     ).ask()
 
     set_key(PATHS["env"], "ADK_SESSION_SERVICE_URI", db_uri)
 
-    existing = dotenv_values(PATHS["env"])
-    if not existing.get("MCP_SECRET_KEY"):
-        set_key(PATHS["env"], "MCP_SECRET_KEY", secrets.token_hex(32))
-        console.print("[green]Generated MCP_SECRET_KEY[/green]")
-    if not existing.get("API_HEADERS_KEY"):
-        set_key(PATHS["env"], "API_HEADERS_KEY", secrets.token_hex(32))
-        console.print("[green]Generated API_HEADERS_KEY[/green]")
-    
-    # Security: Ensure ID_SALT is randomized
-    current_salt = existing.get("ID_SALT", "").strip("'\"")
-    if not current_salt or current_salt == "change-me-to-a-random-string":
-        new_salt = secrets.token_hex(32)
-        set_key(PATHS["env"], "ID_SALT", new_salt)
-        console.print("[green]Security: Generated a random ID_SALT.[/green]")
+    for key in ensure_security_keys(PATHS["env"]):
+        console.print(f"[green]Security: generated {key}.[/green]")
 
     # docker-compose.yaml lives in _project_root (= _runtime_root = ~/.costaff)
     # No copy or path-rewriting needed.
@@ -137,14 +235,17 @@ def onboard():
     if platforms:
         from cli.commands.channel import OFFICIAL_CHANNELS
         from utils.deploy import _deploy_local_channel
-        
+
         for p in platforms:
+            if p in already_deployed:
+                console.print(f"[dim]Channel '{p}' already deployed — keeping it.[/dim]")
+                continue
             if p == "email":
                 # Email is still a legacy system service for now
                 server_addr = questionary.text("SMTP Server (e.g. smtp.gmail.com):").ask()
                 # ... (rest of email setup)
                 continue
-            
+
             # For Official Dynamic Channels:
             if p in OFFICIAL_CHANNELS:
                 console.print(f"\n🚀 [bold]Configuring {p.capitalize()} Channel...[/bold]")
@@ -160,7 +261,7 @@ def onboard():
                     secret = questionary.password("Line Channel Secret:").ask()
                     if token: envs["LINE_CHANNEL_ACCESS_TOKEN"] = token
                     if secret: envs["LINE_CHANNEL_SECRET"] = secret
-                
+
                 # Auto-deploy via GitHub
                 repo_url = OFFICIAL_CHANNELS[p]
                 target_src = os.path.join(_base_dir, "costaff-channel", p, "src")
@@ -168,12 +269,15 @@ def onboard():
                 if not os.path.exists(target_src):
                     os.makedirs(os.path.dirname(target_src), exist_ok=True)
                     subprocess.run(["git", "clone", "--depth", "1", repo_url, target_src], check=True)
-                
+
                 try:
                     entry = _deploy_local_channel(p, target_src, conf, predefined_envs=envs, build_only=True)
                     conf["dynamic_channels"][p] = entry
                 except Exception as e:
                     console.print(f"[red]Failed to deploy {p}: {e}[/red]")
+                    console.print(
+                        f"[yellow]You can retry later with: costaff channel add {p}[/yellow]"
+                    )
 
     conf.update({
         "channels": [p for p in (platforms or []) if p not in ["email", "telegram", "line", "discord", "webchat"]], # legacy empty
@@ -186,6 +290,8 @@ def onboard():
     ConfigManager.update_external_agents_env()
     ConfigManager.update_mcp_urls()
 
+    _setup_dashboard_admin()
+
     console.print(Panel.fit("🤖 [bold blue]Docker Setup[/bold blue]"))
 
     if questionary.confirm("Do you want to build Docker images now?").ask():
@@ -196,4 +302,4 @@ def onboard():
             console.print(f"[red]Build failed: {e}[/red]")
             raise typer.Exit(1)
 
-    console.print("[bold green]Success! Run 'costaff start' to begin.[/bold green]")
+    _print_next_steps()

@@ -186,6 +186,19 @@ def agent_add(
         if agent_key not in am:
             am[agent_key] = ["costaff", name]
 
+        # 3. Seed the core-tool whitelist. Without it the sub-agent inherits
+        # the manager's full ~40-tool MCP spec → token bloat on every LLM
+        # call + tool mis-selection. Seed only if absent so operators can
+        # customise config.json afterwards.
+        from services.config import CORE_PLUGIN_MCP_TOOLS
+        filters = conf.setdefault("agent_mcp_filters", {})
+        if agent_key not in filters:
+            filters[agent_key] = {"costaff": list(CORE_PLUGIN_MCP_TOOLS)}
+            console.print(
+                f"[dim]Whitelisted the 4 core MCP tools for '{name}' "
+                f"(edit config.json → agent_mcp_filters.{agent_key} to change).[/dim]"
+            )
+
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
     ConfigManager.update_mcp_urls()

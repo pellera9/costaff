@@ -28,7 +28,9 @@ OFFICIAL_CHANNELS = {
     "telegram": "https://github.com/costaff-ai/costaff-channel-telegram.git",
     "line": "https://github.com/costaff-ai/costaff-channel-line.git",
     "discord": "https://github.com/costaff-ai/costaff-channel-discord.git",
-    "webchat": "https://github.com/costaff-ai/costaff-channel-webchat.git",
+    # Canonical repo name is *-oss (renamed on GitHub; the old name only
+    # works via redirect, which breaks if the old name is ever reused).
+    "webchat": "https://github.com/costaff-ai/costaff-channel-webchat-oss.git",
 }
 
 
@@ -42,7 +44,7 @@ def channel_add(
 ):
     """Add a communication channel (Auto-discovery, Local, or GitHub mode)."""
     name = name.strip().lower().replace(" ", "-")
-    
+
     # Auto-resolve GitHub URL for official channels if no source is provided
     if not local and not github:
         if name in OFFICIAL_CHANNELS:
@@ -51,9 +53,9 @@ def channel_add(
         else:
             console.print(f"[red]Error: '{name}' is not an official channel. Please provide --github or --local URL.[/red]")
             raise typer.Exit(1)
-    
+
     conf = ConfigManager.get_config()
-    
+
     if "dynamic_channels" not in conf:
         conf["dynamic_channels"] = {}
 
@@ -174,7 +176,7 @@ def channel_remove(name: str = typer.Argument(...)):
     if name not in conf.get("dynamic_channels", {}):
         console.print(f"[red]Error: Channel '{name}' not found.[/red]")
         raise typer.Exit(1)
-    
+
     if not questionary.confirm(f"Remove channel '{name}'?").ask():
         return
 

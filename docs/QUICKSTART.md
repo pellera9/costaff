@@ -31,10 +31,15 @@ curl -fsSL https://raw.githubusercontent.com/costaff-ai/costaff/main/install.sh 
 
 The installer is interactive. When the **setup wizard** appears:
 
-- Paste your **Gemini API key** when prompted
-- Pick a username + password for the operator dashboard
-- When asked which channels to add, press Enter to skip — we'll use the
-  built-in web chat first
+- Paste your **Gemini API key** when prompted — the wizard verifies it
+  live against the Gemini API and warns immediately if it's rejected
+- In the channel list, **WebChat is pre-selected** — just press Enter
+  to confirm (it's the zero-token way to chat from your browser)
+- Create a username + password for the operator dashboard (or skip —
+  the dashboard will prompt you on first visit)
+
+Re-running `costaff onboard` later is always safe: every prompt
+defaults to your existing settings.
 
 If the installer asks you to log out and back in (Linux Docker group
 membership), do that, then run `costaff onboard` to resume the wizard.
@@ -47,7 +52,11 @@ membership), do that, then run `costaff onboard` to resume the wizard.
 costaff start
 ```
 
-This boots, in order:
+A **preflight check** runs first: if your `.env` is missing anything
+critical (API key, database URI), `costaff start` aborts with the exact
+fix instead of letting containers crash-loop.
+
+It then boots, in order:
 
 1. Postgres (session + identity DB)
 2. The Manager Agent + core MCP server
@@ -56,7 +65,7 @@ This boots, in order:
 When `costaff start` returns, all containers are running. Verify:
 
 ```bash
-costaff ps
+costaff status
 ```
 
 Every row should show **Up** in the Status column. If anything's red,
@@ -71,7 +80,8 @@ costaff dashboard
 ```
 
 A browser tab opens at **http://localhost:8501**. Log in with the
-credentials you set in Step 1.
+credentials you set in Step 1 (if you skipped that step, the page
+prompts you to create them now).
 
 Click the **Chat** tab in the left sidebar.
 

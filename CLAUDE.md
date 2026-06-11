@@ -22,6 +22,7 @@ costaff/
 │   └── update.py            # costaff update
 ├── services/                # 核心邏輯層（CLI 之下、容器之上）
 │   ├── config.py            # config.json 讀寫；包含 MCP env var 自動產生 + agent_mcp_filters 白名單
+│   ├── preflight.py         # `costaff start` 前的 .env 驗證 + secrets 自動產生（onboard/bootstrap 共用）
 │   ├── auth.py              # AuthManager — bearer session token + auth.json
 │   ├── database.py          # Postgres 連線
 │   ├── audit.py             # 審計日誌

@@ -10,6 +10,50 @@ This repository is **private** — for internal / paid-tier consumption only.
 
 ### Added
 
+- **`costaff start` preflight check** — validates `.env` (model API
+  key, DB URI, security secrets, workspace dir) before touching
+  Docker; fatal issues abort with the exact fix instead of letting
+  containers crash-loop. Skippable via `--no-preflight`. Logic lives
+  in `services/preflight.py` (12 unit tests in
+  `tests/test_preflight.py`); `costaff doctor` reuses it for its
+  `.env` section.
+- **`costaff doctor` Suggested fixes** — problems detected during the
+  run (Docker unreachable, network missing, agent port dead, env
+  issues, missing channel sources, DB unreachable) are replayed at the
+  end as a deduplicated problem → fix list.
+- **Onboard wizard upgrades** — re-running `costaff onboard` now
+  defaults every prompt to the existing `.env` value (safe re-entry);
+  the Gemini API key is live-verified against the Gemini API with an
+  immediate warning on rejection; WebChat is pre-selected in the
+  channel list; already-deployed channels are kept instead of
+  re-cloned; the wizard can create the dashboard admin account
+  (previously only possible in the browser); a "next steps" panel
+  closes the wizard.
+- **`costaff agent add` seeds `agent_mcp_filters`** — new
+  `mcp_configurable` agents get the 4-core-tool whitelist
+  (`send_message_now` / `add_task_comment` / `move_to_shared` /
+  `list_data_files`) automatically, so fresh sub-agents no longer
+  inherit the manager's full ~40-tool MCP spec (token bloat +
+  mis-selection). Seed-only-if-absent; constant exported as
+  `services.config.CORE_PLUGIN_MCP_TOOLS`.
+
+### Fixed (onboarding)
+
+- `install.sh` no longer aborts on Ubuntu 24.04 — installs
+  `python3.12-distutils` only where the package still exists.
+- `install.sh` on macOS now launches Docker Desktop and waits for the
+  daemon (up to 90s) instead of always deferring to a manual step; on
+  Ubuntu it starts the Docker daemon via systemd when stopped.
+- `costaff bootstrap` now generates `MCP_SECRET_KEY` /
+  `API_HEADERS_KEY` / `ID_SALT` like the interactive wizard — CI
+  deploys no longer run with the template salt and unauthenticated
+  internal APIs. Default Gemini model bumped `gemini-2.5-flash` →
+  `gemini-3-flash-preview` (2.5-flash function-calling is unreliable;
+  onboard wizard default bumped likewise).
+- `.env.template` documents `COSTAFF_WORKSPACE_DIR` (manual installs
+  silently fell back to an anonymous Docker volume) and adds worked
+  LiteLLM examples for Ollama / OpenAI / Anthropic.
+
 - **Tag-aware CLI** — `costaff agent add` / `channel add` accept
   `--tag` (alias `--ref`) to pin clones to a release tag, branch, or
   commit. `costaff agent rebuild` / `channel rebuild` read the

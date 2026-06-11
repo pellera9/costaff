@@ -220,7 +220,11 @@ costaff start
 costaff dashboard
 ```
 
+`costaff start` 會先做 **preflight 檢查**（API Key、資料庫連線、密鑰），
+缺什麼會直接告訴你怎麼修，而不是讓容器無聲地 crash-loop。
+
 開啟 **http://localhost:8501**，進入 **Chat**，即可立即開始與 Agent 對話。
+若有任何異常，先跑 `costaff doctor` —— 它會逐項診斷並在結尾列出**建議修復步驟**。
 
 之後想新增 Bot Channel，只需前往 **儀表板 → Channels** 輸入 Token——無需重啟核心平台。
 
