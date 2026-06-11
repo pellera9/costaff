@@ -10,6 +10,7 @@ from cli.commands.agent import agent_app
 from cli.commands.channel import channel_app
 from cli.commands.config import config_app
 from cli.commands.database import db_app
+from cli.commands.platform import platform_app
 from cli.commands.doctor import doctor
 from cli.commands.update import update
 
@@ -34,5 +35,6 @@ app.add_typer(agent_app, name="agent")
 app.add_typer(channel_app, name="channel")
 app.add_typer(config_app, name="config")
 app.add_typer(db_app, name="database")
+app.add_typer(platform_app, name="platform")
 app.command()(doctor)
 app.command()(update)

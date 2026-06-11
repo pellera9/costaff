@@ -10,8 +10,9 @@ agent loop.
 """
 from core import models
 from core.database import SessionLocal
-from core.notifiers.discord import send_discord_notification
+from core.notifiers.discord import send_discord_file, send_discord_notification
 from core.notifiers.line_notifier import send_line_notification
+from core.notifiers.slack_notifier import send_slack_file, send_slack_notification
 from core.notifiers.telegram import (
     extract_file_paths,
     send_telegram_document,
@@ -30,6 +31,7 @@ async def dispatch_notification(
 
     - channel is a free-form string; routing matches case-insensitive substrings:
       tg/telegram → Telegram, dc/discord → Discord, line → LINE,
+      slack → Slack,
       webchat/webent/web_ → WebChat Enterprise (HTTP push to its internal endpoint).
     - recipient may be a hashed_id, a session_id, or already a real platform
       id; the IdentityMap is consulted to translate the first two.
@@ -56,6 +58,15 @@ async def dispatch_notification(
                 send_telegram_document(target_id, fp)
         elif "dc" in chan or "discord" in chan:
             send_discord_notification(target_id, message, session_id=session_id)
+            # Same rationale as the Telegram branch — without this the
+            # async callback path delivers prose only and the user never
+            # receives the PDF / CSV the agent produced.
+            for fp in extract_file_paths(message):
+                send_discord_file(target_id, fp, session_id=session_id)
+        elif "slack" in chan:
+            send_slack_notification(target_id, message)
+            for fp in extract_file_paths(message):
+                send_slack_file(target_id, fp)
         elif "line" in chan:
             await send_line_notification(target_id, message)
         elif "webchat" in chan or "webent" in chan or "web_" in chan:

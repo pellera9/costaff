@@ -124,8 +124,10 @@ async def test_failed_tool_marks_failed_and_finalize_failed():
 
 
 @pytest.mark.asyncio
-async def test_non_telegram_channel_is_noop():
-    await pp.panel_step("k", "u1", "discord", "k", "coding_agent",
+async def test_unsupported_channel_is_noop():
+    # Discord/Slack now have their own panel transports; LINE has no
+    # message-edit API so it stays unsupported.
+    await pp.panel_step("k", "u1", "line", "k", "coding_agent",
                         "run", "start", True)
     assert "k" not in pp._PANELS
 

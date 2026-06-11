@@ -11,7 +11,8 @@ from core.notifiers.telegram import (
     send_telegram_notification,
 )
 from core.notifiers.line_notifier import send_line_notification
-from core.notifiers.discord import send_discord_notification
+from core.notifiers.discord import send_discord_file, send_discord_notification
+from core.notifiers.slack_notifier import send_slack_file, send_slack_notification
 from mcp_servers.setup import mcp, tz
 
 
@@ -29,12 +30,16 @@ async def send_message_now(
     chan = (channel or "").lower()
     if "tg" in chan or "telegram" in chan: chan = "telegram"
     elif "dc" in chan or "discord" in chan: chan = "discord"
+    elif "slack" in chan: chan = "slack"
     elif "line" in chan: chan = "line"
     elif "web" in chan: chan = "webchat"
     elif chan == "default" or not chan:
         if session_id:
+            # `discord_` / `dc_` both accepted — the channel adapter's
+            # platform_prefix is "discord", legacy sessions used "dc".
             if session_id.startswith("tg_"): chan = "telegram"
-            elif session_id.startswith("dc_"): chan = "discord"
+            elif session_id.startswith(("dc_", "discord_")): chan = "discord"
+            elif session_id.startswith("slack_"): chan = "slack"
             elif session_id.startswith("line_"): chan = "line"
             elif session_id.startswith("web_"): chan = "webchat"
             else: chan = "telegram"  # fallback
@@ -58,7 +63,14 @@ async def send_message_now(
         success = send_telegram_notification(target_id, body, session_id=session_id)
         for fp in _extract_file_paths(body):
             send_telegram_document(target_id, fp)
-    elif chan == "discord": success = send_discord_notification(target_id, body, session_id=session_id)
+    elif chan == "discord":
+        success = send_discord_notification(target_id, body, session_id=session_id)
+        for fp in _extract_file_paths(body):
+            send_discord_file(target_id, fp, session_id=session_id)
+    elif chan == "slack":
+        success = send_slack_notification(target_id, body)
+        for fp in _extract_file_paths(body):
+            send_slack_file(target_id, fp)
     elif chan == "line": success = await send_line_notification(target_id, body)
     elif chan == "webchat":
         # Webchat uses the regular notification flow (events)

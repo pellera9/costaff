@@ -187,3 +187,31 @@ def test_plain_preserves_underscored_paths():
 def test_plain_empty_and_none():
     assert md_to_plain("") == ""
     assert md_to_plain(None) is None
+
+
+# -------------------------------------------------------- Slack (mrkdwn)
+
+
+def test_slack_bold_and_heading_use_single_asterisk():
+    from core.notifiers.formatters import md_to_slack
+    out = md_to_slack("## Title\n**bold** text")
+    assert "*Title*" in out
+    assert "*bold* text" in out
+    assert "**" not in out
+
+
+def test_slack_links_become_angle_form():
+    from core.notifiers.formatters import md_to_slack
+    assert md_to_slack("see [docs](https://x.y/z)") == "see <https://x.y/z|docs>"
+
+
+def test_slack_code_content_untouched():
+    from core.notifiers.formatters import md_to_slack
+    out = md_to_slack("`**not bold**` and ```\n## not a heading\n```")
+    assert "`**not bold**`" in out
+    assert "## not a heading" in out
+
+
+def test_slack_strips_result_envelope():
+    from core.notifiers.formatters import md_to_slack
+    assert md_to_slack("[RESULT_START]done[RESULT_END]") == "done"

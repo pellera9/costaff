@@ -149,6 +149,45 @@ def md_to_discord(text: str) -> str:
     return strip_result_envelope(text)
 
 
+# ----- Slack (mrkdwn) -----------------------------------------------------
+
+_MD_LINK_RE = re.compile(r'\[([^\]]+)\]\(([^)]+)\)')
+_SLACK_MASK_TOKEN = "\x00SLACKCODE{i}\x00"
+
+
+def md_to_slack(text: str) -> str:
+    """Convert agent-style Markdown to Slack mrkdwn.
+
+    Slack's mrkdwn differs from standard Markdown: bold is single
+    `*asterisk*`, there are no headings, and links are `<url|text>`.
+    Code spans and fences render as-is, so they're masked first to keep
+    the bold/heading passes from corrupting code content.
+    """
+    if not text:
+        return text
+    out = strip_result_envelope(text)
+
+    # Mask code (fenced first, then inline) so the transforms below
+    # never touch code content.
+    blocks: list[str] = []
+
+    def _mask(m: re.Match) -> str:
+        blocks.append(m.group(0))
+        return _SLACK_MASK_TOKEN.format(i=len(blocks) - 1)
+
+    out = re.sub(r'```.*?```', _mask, out, flags=re.DOTALL)
+    out = _MD_CODE_INLINE_RE.sub(_mask, out)
+
+    out = _MD_HEADING_RE.sub(r'*\1*', out)
+    out = _MD_BOLD_RE.sub(r'*\1*', out)
+    out = _MD_BULLET_RE.sub(r'\1• ', out)
+    out = _MD_LINK_RE.sub(r'<\2|\1>', out)
+
+    for i, block in enumerate(blocks):
+        out = out.replace(_SLACK_MASK_TOKEN.format(i=i), block)
+    return out
+
+
 # ----- LINE / generic plain text -----------------------------------------
 
 

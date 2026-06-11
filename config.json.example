@@ -1,17 +1,13 @@
 {
   "_comment": "Sample config.json. Copy to ~/.costaff/costaff/config.json and edit. The real file is gitignored. The CoStaff CLI manages most of these via `agent add`/`channel add`/`agent rebuild`; you'll rarely hand-edit beyond the top-level toggles and `agent_mcp_filters`.",
-
   "channels": [],
-
-  "mcp": ["costaff"],
-
+  "mcp": [
+    "costaff"
+  ],
   "external_mcp": {},
-
   "gateways_config": {},
-
   "require_approval": true,
   "coding_agent_enabled": true,
-
   "external_agents": {
     "_example-business-analysis": {
       "type": "github",
@@ -22,29 +18,44 @@
       "description": "Business analysis specialist: PDF reports, PPTX, charts.",
       "version": "0.1.0-alpha-1",
       "enabled": true,
-      "container_names": ["costaff-agent-business-analysis", "costaff-mcp-business-analysis"],
+      "container_names": [
+        "costaff-agent-business-analysis",
+        "costaff-mcp-business-analysis"
+      ],
       "mcp_configurable": true,
       "mcp_env_var": "BUSINESS_ANALYSIS_AGENT_MCP_URLS",
       "ref": "v0.1.0-alpha-1"
     }
   },
-
   "agent_mcps": {
     "_comment": "Maps each agent (key uses underscores) to the MCP servers it can see. costaff_agent is the Manager.",
-    "costaff_agent": ["costaff"],
-    "business_analysis": ["costaff", "business-analysis"]
+    "costaff_agent": [
+      "costaff"
+    ],
+    "business_analysis": [
+      "costaff",
+      "business-analysis"
+    ]
   },
-
   "agent_mcp_filters": {
     "_comment": "Whitelist of Manager Core MCP tools each plugin agent can see. Without a filter the plugin sees ALL ~42 tools — token bloat and tool-selection noise. Keys are agent names with underscores (matches services/config.py's `ext_name.replace('-', '_')` convention).",
     "business_analysis": {
-      "costaff": ["send_message_now", "add_task_comment", "move_to_shared", "list_data_files"]
+      "costaff": [
+        "send_message_now",
+        "add_task_comment",
+        "move_to_shared",
+        "list_data_files"
+      ]
     },
     "coding": {
-      "costaff": ["send_message_now", "add_task_comment", "move_to_shared", "list_data_files"]
+      "costaff": [
+        "send_message_now",
+        "add_task_comment",
+        "move_to_shared",
+        "list_data_files"
+      ]
     }
   },
-
   "dynamic_channels": {
     "_example-telegram": {
       "type": "github",
@@ -53,8 +64,11 @@
       "public_port": 18090,
       "description": "Telegram bot channel.",
       "enabled": true,
-      "container_names": ["costaff-channel-telegram"],
+      "container_names": [
+        "costaff-channel-telegram"
+      ],
       "ref": "v0.1.0-alpha-1"
     }
-  }
+  },
+  "platforms": {}
 }

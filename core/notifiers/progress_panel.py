@@ -76,6 +76,31 @@ def _is_webchat_channel(channel) -> bool:
     return "webchat" in ch or "webent" in ch or ch.startswith("web_")
 
 
+def _is_discord_channel(channel) -> bool:
+    ch = (channel or "").lower()
+    return ch in ("discord", "dc") or ch.startswith("discord_") or ch.startswith("dc_")
+
+
+def _is_slack_channel(channel) -> bool:
+    ch = (channel or "").lower()
+    return ch == "slack" or ch.startswith("slack_")
+
+
+def _panel_transport(channel) -> str | None:
+    """Map a channel string to an edit-in-place panel transport.
+
+    Telegram, Discord and Slack all support editing a sent message, so
+    they share the same panel lifecycle and differ only in the HTTP
+    send/edit pair. Returns None for channels without panel support."""
+    if _is_telegram_channel(channel):
+        return "telegram"
+    if _is_discord_channel(channel):
+        return "discord"
+    if _is_slack_channel(channel):
+        return "slack"
+    return None
+
+
 def _display_agent(agent: str) -> str:
     a = agent or ""
     return _AGENT_DISPLAY.get(a, (a or "Agent").replace("_", " ").title())
@@ -188,7 +213,7 @@ def _normalize_section(text: str) -> str:
     return f"[Action] {t}" if t else "[Action]"
 
 
-def _ensure_state(key, recipient, session_id, agent) -> dict:
+def _ensure_state(key, recipient, session_id, agent, transport="telegram") -> dict:
     state = _PANELS.get(key)
     if state is None:
         state = {
@@ -198,6 +223,7 @@ def _ensure_state(key, recipient, session_id, agent) -> dict:
             "task_title": _resolve_task_title(key),
             "header": "Working", "last_text": None,
             "phase": 0, "ticker": None,
+            "transport": transport,
         }
         _PANELS[key] = state
     return state
@@ -250,23 +276,142 @@ def _tg_edit(token, chat_id, message_id, text):
         logger.exception("[panel] editMessageText failed")
 
 
+# --- Discord transport ---------------------------------------------------
+# Same panel, rendered inside a ``` code block. The IdentityMap real_id
+# for Discord may be either a channel id or a user id — the first send
+# tries the id as a channel and falls back to opening a DM, then the
+# resolved channel id is cached on the state for edits.
+
+
+def _dc_block(text: str) -> str:
+    return f"```\n{text}\n```"
+
+
+def _dc_send(token, state, text):
+    headers = {"Authorization": f"Bot {token}"}
+    try:
+        with httpx.Client(timeout=10.0) as c:
+            r = c.post(
+                f"https://discord.com/api/v10/channels/{state['chat_id']}/messages",
+                headers=headers, json={"content": _dc_block(text)})
+            if r.status_code != 200:
+                dm = c.post("https://discord.com/api/v10/users/@me/channels",
+                            headers=headers,
+                            json={"recipient_id": state["chat_id"]})
+                if dm.status_code != 200:
+                    logger.warning(f"[panel] discord DM open {dm.status_code}")
+                    return None
+                state["chat_id"] = dm.json().get("id")
+                r = c.post(
+                    f"https://discord.com/api/v10/channels/{state['chat_id']}/messages",
+                    headers=headers, json={"content": _dc_block(text)})
+            if r.status_code == 200:
+                return r.json().get("id")
+            logger.warning(f"[panel] discord send {r.status_code}: {r.text[:200]}")
+    except Exception:
+        logger.exception("[panel] discord send failed")
+    return None
+
+
+def _dc_edit(token, state, text):
+    try:
+        with httpx.Client(timeout=10.0) as c:
+            url = (f"https://discord.com/api/v10/channels/{state['chat_id']}"
+                   f"/messages/{state['message_id']}")
+            r = c.patch(url, headers={"Authorization": f"Bot {token}"},
+                        json={"content": _dc_block(text)})
+            if r.status_code not in (200, 429):
+                logger.warning(f"[panel] discord edit {r.status_code}: {r.text[:200]}")
+    except Exception:
+        logger.exception("[panel] discord edit failed")
+
+
+# --- Slack transport -------------------------------------------------------
+# chat.postMessage returns the message `ts`, chat.update edits it. A U…
+# user id is resolved to its D… DM channel once and cached on the state.
+
+
+def _slack_block(text: str) -> str:
+    return f"```\n{text}\n```"
+
+
+def _slack_send(token, state, text):
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        with httpx.Client(timeout=10.0) as c:
+            chat = state["chat_id"]
+            if chat and chat[0] not in ("C", "D", "G"):
+                r = c.post("https://slack.com/api/conversations.open",
+                           headers=headers, json={"users": chat})
+                data = r.json()
+                if not data.get("ok"):
+                    logger.warning(f"[panel] slack DM open: {data.get('error')}")
+                    return None
+                state["chat_id"] = data["channel"]["id"]
+            r = c.post("https://slack.com/api/chat.postMessage",
+                       headers=headers,
+                       json={"channel": state["chat_id"],
+                             "text": _slack_block(text)})
+            data = r.json()
+            if data.get("ok"):
+                return data.get("ts")
+            logger.warning(f"[panel] slack send: {data.get('error')}")
+    except Exception:
+        logger.exception("[panel] slack send failed")
+    return None
+
+
+def _slack_edit(token, state, text):
+    try:
+        with httpx.Client(timeout=10.0) as c:
+            r = c.post("https://slack.com/api/chat.update",
+                       headers={"Authorization": f"Bearer {token}"},
+                       json={"channel": state["chat_id"],
+                             "ts": state["message_id"],
+                             "text": _slack_block(text)})
+            data = r.json()
+            if not data.get("ok") and data.get("error") != "ratelimited":
+                logger.warning(f"[panel] slack edit: {data.get('error')}")
+    except Exception:
+        logger.exception("[panel] slack edit failed")
+
+
+_TRANSPORT_TOKEN_ENV = {
+    "telegram": "TELEGRAM_BOT_TOKEN",
+    "discord": "DISCORD_BOT_TOKEN",
+    "slack": "SLACK_BOT_TOKEN",
+}
+
+
 async def _flush(key: str):
     state = _PANELS.get(key)
     if not state:
         return
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    transport = state.get("transport", "telegram")
+    token = os.getenv(_TRANSPORT_TOKEN_ENV.get(transport, "TELEGRAM_BOT_TOKEN"))
     if not token or not state.get("chat_id"):
         return
     text = _render(state)
     if text == state.get("last_text"):
         return
     state["last_text"] = text
-    if state.get("message_id") is None:
-        state["message_id"] = await asyncio.to_thread(
-            _tg_send, token, state["chat_id"], text)
+    if transport == "discord":
+        if state.get("message_id") is None:
+            state["message_id"] = await asyncio.to_thread(_dc_send, token, state, text)
+        else:
+            await asyncio.to_thread(_dc_edit, token, state, text)
+    elif transport == "slack":
+        if state.get("message_id") is None:
+            state["message_id"] = await asyncio.to_thread(_slack_send, token, state, text)
+        else:
+            await asyncio.to_thread(_slack_edit, token, state, text)
     else:
-        await asyncio.to_thread(
-            _tg_edit, token, state["chat_id"], state["message_id"], text)
+        if state.get("message_id") is None:
+            state["message_id"] = await asyncio.to_thread(
+                _tg_send, token, state["chat_id"], text)
+        else:
+            await asyncio.to_thread(
+                _tg_edit, token, state["chat_id"], state["message_id"], text)
 
 
 def _has_doing(state) -> bool:
@@ -310,7 +455,7 @@ async def panel_step(key, recipient, channel, session_id, agent,
     """Record a tool step. phase='start' → '<tool> ... Doing';
     phase='end' → 'Done' (ok) / 'Failed'.
 
-    Telegram: edit-in-place panel (rich UX).
+    Telegram / Discord / Slack: edit-in-place panel (rich UX).
     WebChat: fan out each transition as a separate /api/internal/push
     message (Phase A — no edit-in-place yet)."""
     if _is_webchat_channel(channel):
@@ -325,13 +470,14 @@ async def panel_step(key, recipient, channel, session_id, agent,
         except Exception:
             logger.exception("[webchat-panel] step push failed")
         return
-    if not _is_telegram_channel(channel):
+    transport = _panel_transport(channel)
+    if transport is None:
         return
     if not key:
         return
     lock = _LOCKS.setdefault(key, asyncio.Lock())
     async with lock:
-        state = _ensure_state(key, recipient, session_id, agent)
+        state = _ensure_state(key, recipient, session_id, agent, transport)
         label = (tool or "tool").strip()
         # Match the most recent still-"Doing" line for this tool
         # (never a section divider).
@@ -361,7 +507,8 @@ async def panel_section(key, recipient, channel, session_id, agent, text):
     """Fold a sub-agent's send_message_now narration into the panel as a
     section divider; subsequent tool lines group under it.
 
-    Telegram: panel section divider in the edit-in-place message.
+    Telegram / Discord / Slack: panel section divider in the
+    edit-in-place message.
     WebChat: forwarded as a one-off message (the section text IS the
     sub-agent's narration the user wants to read)."""
     if _is_webchat_channel(channel):
@@ -375,14 +522,15 @@ async def panel_section(key, recipient, channel, session_id, agent, text):
         except Exception:
             logger.exception("[webchat-panel] section push failed")
         return
-    if not _is_telegram_channel(channel):
+    transport = _panel_transport(channel)
+    if transport is None:
         return
     t = _normalize_section(text)
     if not key or not (text or "").strip():
         return
     lock = _LOCKS.setdefault(key, asyncio.Lock())
     async with lock:
-        state = _ensure_state(key, recipient, session_id, agent)
+        state = _ensure_state(key, recipient, session_id, agent, transport)
         # Skip a consecutive duplicate section (agent repeats itself).
         for i in range(len(state["steps"]) - 1, -1, -1):
             if state["steps"][i][0] == _SEC:

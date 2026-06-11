@@ -38,6 +38,8 @@ def test_returns_none_when_no_identity_map(db_session):
 @pytest.mark.parametrize("prefix,expected_channel", [
     ("tg_", "telegram"),
     ("dc_", "discord"),
+    ("discord_", "discord"),  # the adapter's actual platform_prefix
+    ("slack_", "slack"),
     ("line_", "line"),
     ("web_", "webchat"),
 ])

@@ -15,11 +15,12 @@ def get_user_channel_info(user_id: str, db) -> tuple:
 
     Returns (channel, hashed_id) or (None, None) if no mapping exists.
     The channel is inferred from the session_id prefix:
-        tg_*     → telegram
-        dc_*     → discord
-        line_*   → line
-        web_*    → webchat       (legacy OSS WebChat)
-        webent_* → webchat       (WebChat Enterprise — same notifier path)
+        tg_*               → telegram
+        dc_* / discord_*   → discord  (adapter prefix is "discord"; "dc" is legacy)
+        slack_*            → slack
+        line_*             → line
+        web_*              → webchat  (legacy OSS WebChat)
+        webent_*           → webchat  (WebChat Enterprise — same notifier path)
     The recipient is always the hashed_id so dispatch_notification can
     resolve it back to a real platform id.
     """
@@ -45,8 +46,10 @@ def get_user_channel_info(user_id: str, db) -> tuple:
     sid = mapping.session_id or ""
     if sid.startswith("tg_"):
         return "telegram", user_id
-    if sid.startswith("dc_"):
+    if sid.startswith(("dc_", "discord_")):
         return "discord", user_id
+    if sid.startswith("slack_"):
+        return "slack", user_id
     if sid.startswith("line_"):
         return "line", user_id
     # Both `web_` (OSS) and `webent_` (Enterprise) route through the

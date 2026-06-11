@@ -101,9 +101,20 @@ def start(
             console.print(f"🚀 [bold]Step 4: Starting Channel {name}...[/bold]")
             runtime.up(container_names, fragment=fragment_path, build=build)
 
+    # Tier 5: Business Platforms (self-contained compose projects).
+    # Ordered db → account-manager → rest inside platform_start; failures
+    # there never block the core stack.
+    if conf.get("platforms"):
+        console.print("🚀 [bold]Step 5: Starting Business Platforms...[/bold]")
+        from cli.commands.platform import platform_start
+        try:
+            platform_start(build=False)
+        except Exception as e:
+            console.print(f"[yellow]Platform start failed ({e}) — core stack is unaffected.[/yellow]")
+
     console.print(
         "[bold green]SUCCESS: CoStaff started in tiered sequence "
-        "(Agents -> Manager -> Channels)![/bold green]"
+        "(Agents -> Manager -> Channels -> Platforms)![/bold green]"
     )
 
 
@@ -141,6 +152,14 @@ def stop():
         runtime.down(remove_orphans=False)
     except Exception as e:
         console.print(f"[yellow]Failed to stop core compose: {e}[/yellow]")
+
+    # Business platforms (separate compose projects, reverse dependency order)
+    if conf.get("platforms"):
+        from cli.commands.platform import platform_stop
+        try:
+            platform_stop()
+        except Exception as e:
+            console.print(f"[yellow]Platform stop failed: {e}[/yellow]")
 
     # Kill any dashboard process holding port 8501
     kill_port(8501)
