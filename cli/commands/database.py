@@ -74,6 +74,62 @@ def restore(file_path: str):
     console.print("Restore complete.")
 
 
+def _host_alembic_config():
+    """Build an alembic Config pointed at the host-reachable DB URL.
+
+    Returns None when no database is configured. The host can't resolve the
+    ``postgres`` compose hostname, so we reuse DatabaseManager's localhost
+    rewrite and hand the URL to alembic via COSTAFF_ALEMBIC_URL.
+    """
+    import os
+
+    from alembic.config import Config
+
+    from utils.paths import _project_root
+
+    engine = DatabaseManager.get_engine()
+    if engine is None:
+        return None
+    os.environ["COSTAFF_ALEMBIC_URL"] = engine.url.render_as_string(hide_password=False)
+    cfg = Config(os.path.join(_project_root, "alembic.ini"))
+    cfg.set_main_option("script_location", os.path.join(_project_root, "migrations"))
+    return cfg
+
+
+@db_app.command("migrate")
+def migrate():
+    """Apply pending schema migrations (alembic upgrade head)."""
+    from alembic import command
+
+    cfg = _host_alembic_config()
+    if cfg is None:
+        console.print("[red]No database configured (ADK_SESSION_SERVICE_URI missing in .env).[/red]")
+        raise typer.Exit(1)
+    try:
+        command.upgrade(cfg, "head")
+    except Exception as e:  # noqa: BLE001
+        console.print(f"[red]Migration failed: {e}[/red]")
+        console.print("[dim]Is the postgres container running? Try 'costaff start'.[/dim]")
+        raise typer.Exit(1)
+    console.print("[green]Database is at head.[/green]")
+
+
+@db_app.command("history")
+def history():
+    """Show migration history with the current revision marked."""
+    from alembic import command
+
+    cfg = _host_alembic_config()
+    if cfg is None:
+        console.print("[red]No database configured (ADK_SESSION_SERVICE_URI missing in .env).[/red]")
+        raise typer.Exit(1)
+    try:
+        command.history(cfg, indicate_current=True)
+    except Exception as e:  # noqa: BLE001
+        console.print(f"[red]Could not read history: {e}[/red]")
+        raise typer.Exit(1)
+
+
 @db_app.command("clean")
 def clean():
     """Wipe database data."""

@@ -13,6 +13,7 @@ from cli.commands.database import db_app
 from cli.commands.platform import platform_app
 from cli.commands.doctor import doctor
 from cli.commands.update import update
+from cli.commands.backup import backup, restore
 
 app = typer.Typer(help=f"CoStaff Agent Ecosystem CLI v{VERSION}", rich_markup_mode="rich")
 
@@ -38,3 +39,5 @@ app.add_typer(db_app, name="database")
 app.add_typer(platform_app, name="platform")
 app.command()(doctor)
 app.command()(update)
+app.command()(backup)
+app.command()(restore)

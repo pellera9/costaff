@@ -177,8 +177,10 @@ operation. Back them up like you'd back up SSH keys.
 | `~/.costaff/workspace/shared/` | Files agents produced for you (CSVs, PDFs, reports) |
 | `~/.costaff/workspace/agent-<name>/` | Per-agent scratch space |
 
-To back up everything: stop CoStaff, then archive `~/.costaff/` together
-with the Postgres volume — see **`costaff database backup`**.
+To back up everything in one shot — `.env`, `config.json`, the database,
+and the workspace — run **`costaff backup`** (writes a single `.tar.gz`);
+**`costaff restore <file>`** brings it all back, which is also the easiest
+way to move an install to another machine.
 
 ---
 
@@ -198,7 +200,10 @@ with the Postgres volume — see **`costaff database backup`**.
 | `costaff doctor` | Diagnose common issues; writes a timestamped report |
 | `costaff update` | Pull the latest CoStaff release from GitHub |
 | `costaff update --tag <ref>` | Pin the core to a specific release tag (or roll back) |
+| `costaff update --all --tag <ref>` | Also re-pin + rebuild every agent and channel to that tag |
 | `costaff core-rebuild` | Rebuild + recreate just the core stack (after a core update) |
+| `costaff backup` | Snapshot the whole install (.env, config, DB, workspace) to one archive |
+| `costaff restore <file>` | Restore a full install from a backup archive |
 
 ### Managing agents
 
@@ -249,6 +254,8 @@ costaff platform remove <name>   # Remove a platform (add --purge to drop its vo
 ```bash
 costaff config validate          # Validate config.json against the schema
 costaff database info            # Show the database connection + a table summary
+costaff database migrate         # Apply pending schema migrations (alembic upgrade head)
+costaff database history         # Show migration history + the current revision
 costaff database backup          # Dump the Postgres database to a file
 costaff database restore <file>  # Restore the database from a dump
 costaff database clean           # Drop + recreate the schema (destructive)
@@ -279,6 +286,7 @@ costaff agent add business-analysis \
 costaff agent rebuild business-analysis --tag v0.1.0-alpha-2   # Re-pin + rebuild
 costaff channel tags telegram                       # Same flow for channels
 costaff update --tag v0.1.0-alpha-2                 # Pin the core itself
+costaff update --all --tag v0.1.0-alpha-2           # Align the core + every plugin in one shot
 ```
 
 `agent list` / `channel list` show each plugin's current pinned **Ref**.

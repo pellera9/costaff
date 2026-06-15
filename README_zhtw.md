@@ -264,7 +264,10 @@ costaff dashboard
 | `costaff doctor` | 診斷常見問題，結尾列出建議修復步驟 |
 | `costaff update` | 從 GitHub 拉取最新 core 版本 |
 | `costaff update --tag <ref>` | 將 core 釘選到指定 release tag（或回退） |
+| `costaff update --all --tag <ref>` | 連同所有 agent / channel 一起重新釘選並重建到該 tag |
 | `costaff core-rebuild` | 只重建並重新建立 core stack |
+| `costaff backup` | 將整個安裝（.env、config、資料庫、workspace）打包成單一封存檔 |
+| `costaff restore <file>` | 從備份封存檔還原整個安裝 |
 
 ### 管理 Agent
 
@@ -309,6 +312,8 @@ costaff platform remove <name>    # 移除平台（加 --purge 連 volume 一起
 ```bash
 costaff config validate           # 依 schema 驗證 config.json
 costaff database info             # 顯示資料庫連線與資料表摘要
+costaff database migrate          # 套用待處理的 schema migration（alembic upgrade head）
+costaff database history          # 顯示 migration 歷史與目前版本
 costaff database backup           # 匯出 PostgreSQL 資料庫
 costaff database restore <file>   # 從 dump 還原資料庫
 costaff database clean            # 刪除並重建 schema（破壞性）

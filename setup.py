@@ -15,6 +15,7 @@ setup(
         "fastapi",
         "uvicorn",
         "sqlalchemy",
+        "alembic",
         "cryptography",
         "pyyaml",
         "psutil",

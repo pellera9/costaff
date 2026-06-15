@@ -8,6 +8,28 @@ This repository is **private** — for internal / paid-tier consumption only.
 
 ## [Unreleased]
 
+### Added
+
+- **`costaff update --all`** — after pinning the core, re-pins and rebuilds
+  every source-based agent and channel to the same `--tag` (or pulls latest
+  when no tag). Reuses the per-plugin `agent rebuild` / `channel rebuild`
+  semantics; each plugin is isolated so one failure doesn't abort the batch,
+  and remote (`type: "url"`) agents are skipped. (`tests/test_update_all.py`)
+- **Alembic database migrations** — the core schema is now managed by
+  alembic instead of ad-hoc boot-time `create_all` + `ALTER`s. `init_db()`
+  bootstraps via `_bootstrap_schema`: fresh DBs run `upgrade head`,
+  pre-alembic deployments are brought to the baseline by the historical
+  fixups and then stamped, SQLite/unit-tests fall back to `create_all`.
+  New `costaff database migrate` (upgrade head from the host) and
+  `costaff database history`. Baseline lives in `migrations/versions/`.
+  (`tests/test_migrations.py`)
+- **`costaff backup` / `costaff restore`** — whole-install snapshot &
+  recovery into a single `.tar.gz` (core `.env`, `config.json`, `auth.json`,
+  a `pg_dump` of the database, and the shared `workspace/`). The DB is
+  dumped inside the running postgres container (consistent snapshot, no host
+  Postgres client needed, no need to stop services). Logic in
+  `services/backup.py`. (`tests/test_backup.py`)
+
 ## [0.1.0-alpha-2] - 2026-06-14
 
 ### Added
