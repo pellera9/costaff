@@ -48,13 +48,23 @@ def _db_url() -> str:
 config.set_main_option("sqlalchemy.url", _db_url())
 target_metadata = Base.metadata
 
+# Dedicated version table so the core never collides with another alembic
+# environment that may share the same database (e.g. webchat-enterprise,
+# which owns the default `alembic_version`). MUST match
+# core.database.CORE_VERSION_TABLE.
+VERSION_TABLE = "costaff_alembic_version"
+
 
 def run_migrations_online() -> None:
     # When driven from core.database (stamp / upgrade at boot) a live
     # connection is handed in via attributes, so we don't open a second one.
     existing = config.attributes.get("connection")
     if existing is not None:
-        context.configure(connection=existing, target_metadata=target_metadata)
+        context.configure(
+            connection=existing,
+            target_metadata=target_metadata,
+            version_table=VERSION_TABLE,
+        )
         with context.begin_transaction():
             context.run_migrations()
         return
@@ -62,7 +72,11 @@ def run_migrations_online() -> None:
     section = config.get_section(config.config_ini_section) or {}
     connectable = engine_from_config(section, prefix="sqlalchemy.", poolclass=pool.NullPool)
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            version_table=VERSION_TABLE,
+        )
         with context.begin_transaction():
             context.run_migrations()
 

@@ -37,6 +37,11 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASELINE_REVISION = "0001_baseline"
+# Dedicated alembic version table — keeps the core's migration bookkeeping
+# separate from any other alembic environment sharing the same database
+# (e.g. webchat-enterprise owns the default `alembic_version`). MUST match
+# migrations/env.py VERSION_TABLE.
+CORE_VERSION_TABLE = "costaff_alembic_version"
 
 
 def _legacy_fixups(conn, inspector, existing):
@@ -145,7 +150,7 @@ def _bootstrap_schema():
         Base.metadata.create_all(bind=engine)
         return
 
-    has_alembic = "alembic_version" in existing
+    has_alembic = CORE_VERSION_TABLE in existing
     has_core = "identity_maps" in existing
 
     if not has_alembic and has_core:

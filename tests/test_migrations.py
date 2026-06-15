@@ -33,7 +33,29 @@ def test_upgrade_head_creates_core_schema(tmp_path, monkeypatch):
     command.upgrade(_cfg(url, monkeypatch), "head")
 
     tables = set(inspect(create_engine(url)).get_table_names())
-    assert {"identity_maps", "reminders", "project_tasks", "alembic_version"} <= tables
+    assert {"identity_maps", "reminders", "project_tasks", "costaff_alembic_version"} <= tables
+
+
+def test_core_uses_dedicated_version_table(tmp_path, monkeypatch):
+    """A foreign alembic_version (e.g. webchat-enterprise sharing the DB) must
+    not block the core: we track our own `costaff_alembic_version` and leave
+    the other environment's table untouched. Reproduces the asst-core crash."""
+    from alembic import command
+    from sqlalchemy import text
+
+    url = f"sqlite:///{tmp_path / 'shared.db'}"
+    eng = create_engine(url)
+    with eng.begin() as c:
+        c.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32))"))
+        c.execute(text("INSERT INTO alembic_version VALUES ('0002_totp_2fa')"))
+
+    command.upgrade(_cfg(url, monkeypatch), "head")  # must not raise
+
+    tables = set(inspect(eng).get_table_names())
+    assert "costaff_alembic_version" in tables
+    assert "identity_maps" in tables
+    with eng.connect() as c:
+        assert c.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0002_totp_2fa"
 
 
 def test_downgrade_to_base_drops_core_schema(tmp_path, monkeypatch):
@@ -60,3 +82,4 @@ def test_bootstrap_sqlite_skips_alembic(tmp_path, monkeypatch):
     tables = set(inspect(eng).get_table_names())
     assert "identity_maps" in tables
     assert "alembic_version" not in tables
+    assert "costaff_alembic_version" not in tables
