@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from services.auth import AuthManager
 from services.config import ConfigManager
+from services.cores import active_core
 from services.docker import DockerManager
 from services.database import DatabaseManager
 from server.schemas import ServiceActionRequest
@@ -120,7 +121,7 @@ def get_license(auth: bool = Depends(AuthManager.verify_token)):
 
 @router.post("/api/services/{service}/action")
 def service_action(service: str, req: ServiceActionRequest, auth: bool = Depends(AuthManager.verify_token)):
-    if req.action == "stop" and service in ["costaff-mcp-costaff", "costaff-agent-costaff", "postgres"]:
+    if req.action == "stop" and service in active_core().core_containers:
         raise HTTPException(status_code=400, detail="Cannot stop core service.")
     try:
         DockerManager.run_action(service, req.action)

@@ -8,6 +8,7 @@ from dotenv import load_dotenv, set_key
 
 from services.auth import AuthManager
 from services.config import ConfigManager
+from services.cores import active_core
 from services.docker import DockerManager
 from server.schemas import GatewayUpdateRequest, AddMCPRequest, AgentMCPConfigRequest
 from utils.paths import PATHS, _project_root, _runtime_root
@@ -17,7 +18,7 @@ router = APIRouter()
 
 @router.get("/api/config")
 def get_api_config(auth: bool = Depends(AuthManager.verify_token)):
-    conf = ConfigManager.get_config()
+    conf = active_core().core_config()  # active core's external_mcp / channels / agent_mcps
     load_dotenv(PATHS["env"])
     # Sync environment tokens to the config object for UI
     if "gateways_config" not in conf:
@@ -118,7 +119,7 @@ def add_mcp(req: AddMCPRequest, auth: bool = Depends(AuthManager.verify_token)):
 
 @router.get("/api/mcp/{name}/config")
 def get_mcp_config(name: str, auth: bool = Depends(AuthManager.verify_token)):
-    conf = ConfigManager.get_config()
+    conf = active_core().core_config()
     # External MCP: return Dive-format object
     if name in conf.get("external_mcp", {}):
         val = conf["external_mcp"][name]
@@ -176,7 +177,7 @@ def delete_mcp(name: str, auth: bool = Depends(AuthManager.verify_token)):
 
 @router.get("/api/agent-mcp-config")
 def get_agent_mcp_config(auth: bool = Depends(AuthManager.verify_token)):
-    conf = ConfigManager.get_config()
+    conf = active_core().core_config()
     all_mcp_names = list(conf.get("mcp", []))
     for name, val in conf.get("external_mcp", {}).items():
         enabled = val.get("enabled", True) if isinstance(val, dict) else True

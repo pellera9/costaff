@@ -90,7 +90,8 @@ const App = {
         if (sidebar) sidebar.classList.remove('hidden');
         if (main) main.classList.remove('hidden');
 
-        // Initial tab load
+        // Core switcher (multi-CoStaff) + initial tab load
+        if (typeof Cores !== 'undefined') Cores.init();
         await this.switchMainTab('dashboard');
 
         // Polling sync — skip sessions tab (user-driven, not auto-refreshed)

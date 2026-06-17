@@ -8,19 +8,11 @@ from utils.paths import PATHS
 class DatabaseManager:
     @staticmethod
     def get_engine():
+        # Resolve via the active CoStaff core (single-core install falls back to
+        # the host .env's ADK_SESSION_SERVICE_URI — identical to the old behaviour).
+        from services.cores import active_core
         load_dotenv(PATHS["env"])
-        uri = os.getenv("ADK_SESSION_SERVICE_URI", "")
-        if not uri:
-            return None
-        # Strip async driver for sync SQLAlchemy usage in dashboard
-        uri = uri.replace("postgresql+asyncpg://", "postgresql://")
-        # Allow dashboard running on host to reach postgres container
-        if "postgres:5432" in uri:
-            uri = uri.replace("postgres:5432", "localhost:5432")
-        try:
-            return create_engine(uri, pool_pre_ping=True)
-        except Exception:
-            return None
+        return active_core().engine()
 
     @staticmethod
     def get_table_counts():

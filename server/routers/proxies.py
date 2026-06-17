@@ -19,14 +19,15 @@ from fastapi.responses import StreamingResponse
 
 from services.auth import AuthManager
 from services.config import ConfigManager
+from services.cores import active_core
 
 router = APIRouter()
 
 
 @router.get("/api/logs/{service}")
 def get_service_logs(service: str, tail: int = 100, auth: bool = Depends(AuthManager.verify_token)):
-    conf = ConfigManager.get_config()
-    ext_agents = conf.get("external_agents", {})
+    core = active_core()
+    ext_agents = core.core_config().get("external_agents", {})
 
     # Resolve external agent config key (e.g. "costaff-agent-coding") → actual Docker container name
     # Docker Compose adds project prefix + replica suffix, so use `docker ps --filter` to find it
@@ -43,7 +44,7 @@ def get_service_logs(service: str, tail: int = 100, auth: bool = Depends(AuthMan
                 actual_service = matches[0]
 
     # Validate resolved name to prevent command injection
-    allowed_prefixes = ("costaff", "bot-", "postgres", "gpt-vis")
+    allowed_prefixes = ("costaff", "bot-", "postgres", "gpt-vis", "channel", f"{core.prefix}-")
     ext_containers = {c for a in ext_agents.values() for c in a.get("container_names", [])}
     if not any(actual_service.startswith(p) for p in allowed_prefixes) and actual_service not in ext_containers:
         raise HTTPException(status_code=400, detail="Invalid service name.")
@@ -57,7 +58,7 @@ def get_service_logs(service: str, tail: int = 100, auth: bool = Depends(AuthMan
 async def proxy_run_sse(req: dict = Body(...), auth: bool = Depends(AuthManager.verify_token)):
     async def gen():
         async with httpx.AsyncClient(timeout=None) as client:
-            async with client.stream("POST", f"http://localhost:{os.getenv('COSTAFF_AGENT_PORT', '18080')}/run_sse", json=req) as r:
+            async with client.stream("POST", f"{active_core().manager_url()}/run_sse", json=req) as r:
                 async for line in r.aiter_lines():
                     if line:
                         yield f"{line}\n\n"
@@ -67,5 +68,5 @@ async def proxy_run_sse(req: dict = Body(...), auth: bool = Depends(AuthManager.
 @router.post("/api/proxy/sessions/{app_name}/{user_id}/{session_id}")
 async def proxy_create_session(app_name: str, user_id: str, session_id: str, auth: bool = Depends(AuthManager.verify_token)):
     async with httpx.AsyncClient() as client:
-        res = await client.post(f"http://localhost:{os.getenv('COSTAFF_AGENT_PORT', '18080')}/apps/{app_name}/users/{user_id}/sessions/{session_id}", json={"state": {}})
+        res = await client.post(f"{active_core().manager_url()}/apps/{app_name}/users/{user_id}/sessions/{session_id}", json={"state": {}})
         return res.json()

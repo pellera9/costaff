@@ -2,7 +2,7 @@ Object.assign(UI, {
     renderAgents(svcs) {
         // Cache svcs so onclick handlers can retrieve by name without embedding JSON in HTML
         App.state.cachedSvcs = svcs;
-        const agents = svcs.filter(s => s.name.includes('costaff-agent-costaff'));
+        const agents = svcs.filter(s => s.name.includes('agent-costaff'));
         const list = document.getElementById('agents-list'); if (!list) return;
         list.innerHTML = agents.map(a => {
             const up = a.status.includes('Up');

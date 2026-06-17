@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from services.auth import AuthManager
 from services.audit import audit
 from services.config import ConfigManager
+from services.cores import active_core
 from services.docker import DockerManager
 from server.schemas import ExternalAgentAddRequest, ExternalAgentUpdateRequest
 from utils.validators import _validate_a2a_url
@@ -21,14 +22,14 @@ router = APIRouter()
 def get_available_agents(auth: bool = Depends(AuthManager.verify_token)):
     try:
         with httpx.Client(timeout=5.0) as client:
-            return client.get(f"http://localhost:{os.getenv('COSTAFF_AGENT_PORT', '18080')}/list-apps").json()
+            return client.get(f"{active_core().manager_url()}/list-apps").json()
     except Exception:
         return []
 
 
 @router.get("/api/external-agents")
 def list_external_agents(auth: bool = Depends(AuthManager.verify_token)):
-    conf = ConfigManager.get_config()
+    conf = active_core().core_config()  # the active core's own external_agents
     result = []
     for name, agent in conf.get("external_agents", {}).items():
         # Skip legacy migrated entries that have no public_port (old compose-managed costaff-agent-coding)
@@ -84,7 +85,7 @@ def add_external_agent(req: ExternalAgentAddRequest, auth: bool = Depends(AuthMa
     }
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
-    threading.Thread(target=DockerManager.run_action, args=("costaff-agent-costaff", "restart"), daemon=True).start()
+    threading.Thread(target=DockerManager.run_action, args=(active_core().cn("agent-costaff"), "restart"), daemon=True).start()
     audit("agent.add", name=name, url=req.a2a_url)
     return {"status": "ok", "name": name}
 
@@ -109,7 +110,7 @@ def update_external_agent(name: str, req: ExternalAgentUpdateRequest, auth: bool
             conf["coding_agent_enabled"] = req.enabled
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
-    threading.Thread(target=DockerManager.run_action, args=("costaff-agent-costaff", "restart"), daemon=True).start()
+    threading.Thread(target=DockerManager.run_action, args=(active_core().cn("agent-costaff"), "restart"), daemon=True).start()
     audit("agent.update", name=name, changes={k: v for k, v in req.dict(exclude_unset=True).items()})
     return {"status": "ok"}
 
@@ -124,7 +125,7 @@ def remove_external_agent(name: str, auth: bool = Depends(AuthManager.verify_tok
     del conf["external_agents"][name]
     ConfigManager.save_config(conf)
     ConfigManager.update_external_agents_env()
-    threading.Thread(target=DockerManager.run_action, args=("costaff-agent-costaff", "restart"), daemon=True).start()
+    threading.Thread(target=DockerManager.run_action, args=(active_core().cn("agent-costaff"), "restart"), daemon=True).start()
     audit("agent.delete", name=name)
     return {"status": "ok"}
 
