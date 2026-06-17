@@ -27,7 +27,7 @@ router = APIRouter()
 @router.get("/api/status")
 def get_status(auth: bool = Depends(AuthManager.verify_token)):
     res = subprocess.run(["docker", "ps", "-a", "--format", "{{.Names}}\t{{.Status}}\t{{.Image}}"], capture_output=True, text=True)
-    return [{"name": p[0], "status": p[1], "image": p[2]} for line in res.stdout.splitlines() if (p := line.split("\t")) and len(p) >= 3 and any(k in p[0] for k in ["costaff", "mcp", "bot", "postgres", "gpt-vis"])]
+    return [{"name": p[0], "status": p[1], "image": p[2]} for line in res.stdout.splitlines() if (p := line.split("\t")) and len(p) >= 3 and any(k in p[0] for k in ["costaff", "mcp", "bot", "postgres", "gpt-vis", "channel"])]
 
 
 @router.get("/api/os-stats")
