@@ -1,4 +1,35 @@
 Object.assign(UI, {
+    // --- tool call / result rendering (collapsed chip + deep-parsed JSON) ---
+    _escapeHtml(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    },
+    _deepParse(v) {
+        // Tool results are often double-encoded ({result:"[...json...]"}); unwrap them.
+        if (typeof v === 'string') {
+            const s = v.trim();
+            if ((s.startsWith('{') && s.endsWith('}')) || (s.startsWith('[') && s.endsWith(']'))) {
+                try { return this._deepParse(JSON.parse(s)); } catch (e) { return v; }
+            }
+            return v;
+        }
+        if (Array.isArray(v)) return v.map(x => this._deepParse(x));
+        if (v && typeof v === 'object') { const o = {}; for (const k in v) o[k] = this._deepParse(v[k]); return o; }
+        return v;
+    },
+    _toolHtml(kind, name, payload) {
+        const icon = kind === 'call' ? '🔧' : '✅';
+        const label = kind === 'call' ? 'args' : 'result';
+        let body = '';
+        const empty = payload == null || (typeof payload === 'object' && !Array.isArray(payload) && Object.keys(payload).length === 0);
+        if (!empty) {
+            let pretty;
+            try { pretty = JSON.stringify(this._deepParse(payload), null, 2); } catch (e) { pretty = String(payload); }
+            body = `<details class="mt-1"><summary class="cursor-pointer text-[11px] opacity-60 select-none hover:opacity-100">show ${label}</summary>`
+                 + `<pre class="mt-1 text-[11px] whitespace-pre-wrap break-all max-h-72 overflow-auto bg-black/5 rounded-lg p-2 m-0">${this._escapeHtml(pretty)}</pre></details>`;
+        }
+        return `<div class="font-mono text-[12px]"><span class="font-bold">${icon} ${this._escapeHtml(name || (kind === 'call' ? 'tool call' : 'tool result'))}</span>${body}</div>`;
+    },
+
     renderChatSessions(sessions, adminOnly = true) {
         const list = document.getElementById('chat-session-list');
         if (!list) return;
@@ -119,10 +150,11 @@ Object.assign(UI, {
                             if (p.functionCall) {
                                 removeT();
                                 currentAgentMsgId = null; currentText = "";
-                                this.appendMessage('agent', `🔧 **Tool Call:** \`${p.functionCall.name}\``, null, 'tool-call');
+                                this.appendMessage('agent', this._toolHtml('call', p.functionCall.name, p.functionCall.args), null, 'tool-call');
                             } else if (p.functionResponse) {
                                 currentAgentMsgId = null; currentText = "";
-                                this.appendMessage('agent', `✅ **Tool Result:** \n\`\`\`json\n${JSON.stringify(p.functionResponse.response.structuredContent||p.functionResponse.response.content, null, 2)}\n\`\`\``, null, 'tool-res');
+                                const r = p.functionResponse.response || {};
+                                this.appendMessage('agent', this._toolHtml('res', p.functionResponse.name, r.structuredContent ?? r.content ?? r), null, 'tool-res');
                             } else if (p.text) {
                                 removeT();
                                 if (!currentAgentMsgId || data.partial === false) {
@@ -147,7 +179,7 @@ Object.assign(UI, {
             : isToolCall ? 'bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl shadow-sm'
             : isToolRes  ? 'bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-2xl shadow-sm'
             : 'bg-white text-slate-900 border border-slate-200 shadow-sm rounded-2xl rounded-tl-none';
-        const content = this.parseMarkdown(text);
+        const content = (isToolCall || isToolRes) ? text : this.parseMarkdown(text);
         const div = document.createElement('div');
         div.className = `flex flex-col ${author === 'user' ? 'items-end' : 'items-start'} mb-4 w-full`;
         div.innerHTML = `
@@ -167,10 +199,15 @@ Object.assign(UI, {
         const div = document.createElement('div');
         div.className = `flex flex-col ${author==='user'?'items-end':'items-start'} ${extraClass} mb-8 w-full`;
         if (id) div.id = id;
+        const isToolCall = extraClass.includes('tool-call');
+        const isToolRes = extraClass.includes('tool-res');
         const bubbleClass = author === 'user'
             ? 'bg-blue-600 text-white rounded-2xl rounded-tr-none shadow-lg'
+            : isToolCall ? 'bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl shadow-sm'
+            : isToolRes ? 'bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-2xl shadow-sm'
             : 'bg-white text-black border border-slate-200 shadow-sm';
-        const content = (author === 'agent' && !text.includes('typing-dots')) ? this.parseMarkdown(text) : text;
+        const content = (isToolCall || isToolRes) ? text
+            : (author === 'agent' && !text.includes('typing-dots')) ? this.parseMarkdown(text) : text;
         div.innerHTML = `
             <div class="px-6 py-4 max-w-[85%] ${bubbleClass} break-words">
                 <div class="chat-content text-[15px] leading-relaxed">${content}</div>
@@ -208,16 +245,10 @@ Object.assign(UI, {
                 if (p.text && p.text.trim()) {
                     this._appendHistoryMessage(container, author, p.text, '', timestamp);
                 } else if (funcCall) {
-                    const argsStr = Object.keys(funcCall.args || {}).length
-                        ? '\n```json\n' + JSON.stringify(funcCall.args, null, 2) + '\n```'
-                        : '';
-                    this._appendHistoryMessage(container, 'agent', `🔧 **${funcCall.name}**${argsStr}`, 'tool-call', timestamp);
+                    this._appendHistoryMessage(container, 'agent', this._toolHtml('call', funcCall.name, funcCall.args), 'tool-call', timestamp);
                 } else if (funcResp) {
                     const resp = funcResp.response || {};
-                    const content = resp.structuredContent || resp.content || resp;
-                    this._appendHistoryMessage(container, 'agent',
-                        `✅ **${funcResp.name}**\n\`\`\`json\n${JSON.stringify(content, null, 2)}\n\`\`\``,
-                        'tool-res', timestamp);
+                    this._appendHistoryMessage(container, 'agent', this._toolHtml('res', funcResp.name, resp.structuredContent ?? resp.content ?? resp), 'tool-res', timestamp);
                 }
             });
         });
