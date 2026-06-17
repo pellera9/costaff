@@ -5,6 +5,10 @@ const Cores = {
         if (!wrap) return;
         let cores;
         try { cores = await API.fetch('/api/cores'); } catch (e) { wrap.innerHTML = ''; return; }
+        // Remember the active core's container prefix so other tabs (e.g. Agents)
+        // can scope host-wide /api/status to THIS core's manager only.
+        const active = (cores || []).find(c => c.active);
+        if (active) App.state.activeCorePrefix = active.prefix;
         if (!cores || cores.length <= 1) { wrap.innerHTML = ''; return; }  // single core → no switcher
         wrap.innerHTML = `
             <div class="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200" title="Switch CoStaff core">

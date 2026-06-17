@@ -2,7 +2,9 @@ Object.assign(UI, {
     renderAgents(svcs) {
         // Cache svcs so onclick handlers can retrieve by name without embedding JSON in HTML
         App.state.cachedSvcs = svcs;
-        const agents = svcs.filter(s => s.name.includes('agent-costaff'));
+        // Only THIS core's manager (host-wide /api/status also lists other cores' managers).
+        const prefix = App.state.activeCorePrefix || 'costaff';
+        const agents = svcs.filter(s => s.name.includes(prefix + '-agent-costaff'));
         const list = document.getElementById('agents-list'); if (!list) return;
         list.innerHTML = agents.map(a => {
             const up = a.status.includes('Up');
